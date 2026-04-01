@@ -6,7 +6,7 @@ namespace FactorioMCP.Services;
 /// <summary>
 /// High-level service for controlling a Factorio game instance via RCON Lua commands.
 /// All operations execute Lua scripts through the /c console command and return
-/// the text output from rcon.print().
+/// JSON-formatted output from rcon.print() for reliable AI parsing.
 /// </summary>
 internal sealed class FactorioService(RconClient rcon)
 {
@@ -17,9 +17,12 @@ internal sealed class FactorioService(RconClient rcon)
     public Task<string> WalkAsync(string direction, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(direction);
-        return rcon.ExecuteLuaAsync(
-            $"game.player.walking_state = {{walking = true, direction = defines.direction.{direction}}}",
-            cancellationToken);
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            game.player.walking_state = {walking = true, direction = defines.direction.{{direction}}}
+            local p = game.player.position
+            rcon.print('{"status":"walking","direction":"{{direction}}","x":'..p.x..',"y":'..p.y..'}')
+            """);
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
 
     /// <summary>
@@ -27,8 +30,11 @@ internal sealed class FactorioService(RconClient rcon)
     /// </summary>
     public Task<string> StopWalkingAsync(CancellationToken cancellationToken = default)
     {
-        return rcon.ExecuteLuaAsync(
-            "game.player.walking_state = {walking = false, direction = defines.direction.north}",
+        return rcon.ExecuteLuaAsync("""
+            game.player.walking_state = {walking = false, direction = defines.direction.north}
+            local p = game.player.position
+            rcon.print('{"status":"stopped","x":'..p.x..',"y":'..p.y..'}')
+            """,
             cancellationToken);
     }
 
@@ -37,13 +43,15 @@ internal sealed class FactorioService(RconClient rcon)
     /// </summary>
     public Task<string> GetPlayerPositionAsync(CancellationToken cancellationToken = default)
     {
-        return rcon.ExecuteLuaAsync(
-            "rcon.print(serpent.line(game.player.position))",
+        return rcon.ExecuteLuaAsync("""
+            local p = game.player.position
+            rcon.print('{"x":'..p.x..',"y":'..p.y..'}')
+            """,
             cancellationToken);
     }
 
     /// <summary>
-    /// Get the contents of the player's main inventory as a list of item names and counts.
+    /// Get the contents of the player's main inventory as a JSON array of items.
     /// </summary>
     public Task<string> GetInventoryAsync(CancellationToken cancellationToken = default)
     {
@@ -56,11 +64,11 @@ internal sealed class FactorioService(RconClient rcon)
                     items[stack.name] = (items[stack.name] or 0) + stack.count
                 end
             end
-            local result = ""
+            local parts = {}
             for name, count in pairs(items) do
-                result = result .. name .. ": " .. count .. "\n"
+                parts[#parts+1] = '{"name":"'..name..'","count":'..count..'}'
             end
-            rcon.print(result)
+            rcon.print('{"items":['..table.concat(parts, ",")..']}')
             """, cancellationToken);
     }
 
@@ -72,9 +80,11 @@ internal sealed class FactorioService(RconClient rcon)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(recipe);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(count);
-        return rcon.ExecuteLuaAsync(
-            $"local crafted = game.player.begin_crafting{{count={count}, recipe=\"{recipe}\"}} rcon.print(\"Queued \" .. crafted .. \" {recipe}\")",
-            cancellationToken);
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local crafted = game.player.begin_crafting{count={{count}}, recipe="{{recipe}}"}
+            rcon.print('{"status":"crafting","recipe":"{{recipe}}","requested":{{count}},"queued":'..crafted..'}')
+            """);
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
 
     /// <summary>
@@ -85,13 +95,13 @@ internal sealed class FactorioService(RconClient rcon)
         return rcon.ExecuteLuaAsync("""
             local queue = game.player.crafting_queue
             if queue then
-                local result = ""
+                local parts = {}
                 for _, item in pairs(queue) do
-                    result = result .. item.recipe .. " x" .. item.count .. "\n"
+                    parts[#parts+1] = '{"recipe":"'..item.recipe..'","count":'..item.count..'}'
                 end
-                rcon.print(result)
+                rcon.print('{"queue":['..table.concat(parts, ",")..']}')
             else
-                rcon.print("No items in crafting queue")
+                rcon.print('{"queue":[]}')
             end
             """, cancellationToken);
     }
@@ -120,20 +130,20 @@ internal sealed class FactorioService(RconClient rcon)
             local dy = pos[2] - player_pos.y
             local distance = math.sqrt(dx*dx + dy*dy)
             if distance > game.player.build_distance then
-                rcon.print("Out of range: " .. string.format("%.1f", distance) .. " tiles away (build distance: " .. game.player.build_distance .. ")")
+                rcon.print('{"success":false,"error":"out_of_range","distance":'..string.format("%.1f", distance)..',"limit":'..game.player.build_distance..'}')
                 return
             end
             if not surface.can_place_entity{name=name, position=pos, force=game.player.force, direction=dir} then
-                rcon.print("Cannot place " .. name .. " at " .. serpent.line(pos))
+                rcon.print('{"success":false,"error":"invalid_position","entity":"'..name..'","x":'..pos[1]..',"y":'..pos[2]..'}')
                 return
             end
             if game.player.get_item_count(name) < 1 then
-                rcon.print("No " .. name .. " in inventory")
+                rcon.print('{"success":false,"error":"missing_item","entity":"'..name..'"}')
                 return
             end
             game.player.remove_item{name=name, count=1}
             surface.create_entity{name=name, position=pos, force=game.player.force, player=game.player, direction=dir}
-            rcon.print("Placed " .. name .. " at " .. serpent.line(pos))
+            rcon.print('{"success":true,"entity":"'..name..'","x":'..pos[1]..',"y":'..pos[2]..'}')
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -151,7 +161,7 @@ internal sealed class FactorioService(RconClient rcon)
             local dy = {{y}} - player_pos.y
             local distance = math.sqrt(dx*dx + dy*dy)
             if distance > game.player.reach_distance then
-                rcon.print("Out of range: " .. string.format("%.1f", distance) .. " tiles away (reach distance: " .. game.player.reach_distance .. ")")
+                rcon.print('{"success":false,"error":"out_of_range","distance":'..string.format("%.1f", distance)..',"limit":'..game.player.reach_distance..'}')
                 return
             end
             local entities = game.player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
@@ -159,9 +169,9 @@ internal sealed class FactorioService(RconClient rcon)
                 local e = entities[1]
                 local name = e.name
                 e.mine{inventory=game.player.get_main_inventory()}
-                rcon.print("Mined " .. name)
+                rcon.print('{"success":true,"entity":"'..name..'"}')
             else
-                rcon.print("No entity found at position")
+                rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
             end
             """);
 
@@ -179,11 +189,11 @@ internal sealed class FactorioService(RconClient rcon)
             local entities = game.player.surface.find_entities_filtered{
                 position=game.player.position, radius={{radius}}
             }
-            local result = ""
+            local parts = {}
             for _, e in pairs(entities) do
-                result = result .. e.name .. " at " .. serpent.line(e.position) .. "\n"
+                parts[#parts+1] = '{"name":"'..e.name..'","x":'..e.position.x..',"y":'..e.position.y..'}'
             end
-            rcon.print(result)
+            rcon.print('{"entities":['..table.concat(parts, ",")..']}')
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -202,9 +212,7 @@ internal sealed class FactorioService(RconClient rcon)
             local distance = math.sqrt(dx*dx + dy*dy)
             local build_ok = distance <= game.player.build_distance
             local reach_ok = distance <= game.player.reach_distance
-            rcon.print("Distance: " .. string.format("%.1f", distance) .. " tiles"
-                .. " | Build: " .. (build_ok and "in range" or "OUT OF RANGE") .. " (" .. game.player.build_distance .. ")"
-                .. " | Reach: " .. (reach_ok and "in range" or "OUT OF RANGE") .. " (" .. game.player.reach_distance .. ")")
+            rcon.print('{"distance":'..string.format("%.1f", distance)..',"build_in_range":'..tostring(build_ok)..',"build_limit":'..game.player.build_distance..',"reach_in_range":'..tostring(reach_ok)..',"reach_limit":'..game.player.reach_distance..'}')
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -218,10 +226,9 @@ internal sealed class FactorioService(RconClient rcon)
         return rcon.ExecuteLuaAsync("""
             local tech = game.player.force.current_research
             if tech then
-                rcon.print("Researching: " .. tech.name .. " (" ..
-                    string.format("%.1f", tech.research_progress * 100) .. "%)")
+                rcon.print('{"researching":true,"technology":"'..tech.name..'","progress":'..string.format("%.3f", tech.research_progress)..'}')
             else
-                rcon.print("No active research")
+                rcon.print('{"researching":false}')
             end
             """, cancellationToken);
     }

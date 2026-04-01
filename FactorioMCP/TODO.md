@@ -113,7 +113,7 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-- [ ] **Structured Lua Responses** — Return JSON from Lua scripts instead of plain text so the AI can parse results more reliably. Use `game.table_to_json()` or manual JSON construction. **(CPX 2)**
+*No medium priority items*
 
 ### Low Priority
 
@@ -186,7 +186,6 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-- [ ] **FactorioService Lua Command Tests** — Verify that service methods produce the correct Lua command strings. Mock the RCON client to capture the Lua sent for each operation. **(CPX 2)**
 - [ ] **MCP Tool Integration Tests** — Verify tools resolve from DI, accept correct parameters, and call the expected service methods. **(CPX 3)**
 
 ### Low Priority

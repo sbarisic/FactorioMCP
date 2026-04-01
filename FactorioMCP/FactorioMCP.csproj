@@ -16,4 +16,8 @@
     <InternalsVisibleTo Include="FactorioMCP.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="LuaAPI\" />
+  </ItemGroup>
+
 </Project>

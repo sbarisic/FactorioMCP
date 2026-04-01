@@ -17,7 +17,10 @@ Walk in a direction for a specified duration, then stop automatically.
 | `direction` | `string` | Direction to walk: `north`, `south`, `east`, `west`, `northeast`, `northwest`, `southeast`, `southwest` |
 | `seconds` | `double` | Duration to walk in seconds (e.g. `2.5`) |
 
-**Returns**: Player position after walking (serialized Lua table, e.g. `{x = 12.5, y = -3.75}`).
+**Returns**: JSON with player position after walking, e.g.:
+```json
+{"status":"walking","direction":"north","x":12.5,"y":-3.75}
+```
 
 **Example prompt usage**:
 > "Walk north for 3 seconds to get closer to the iron ore patch."
@@ -34,6 +37,8 @@ Stop the player from walking immediately.
 
 **Returns**: `"Stopped walking."`
 
+Note: The underlying walk/stop commands also return JSON position data, but the tool returns a fixed string.
+
 ---
 
 ### `GetPlayerPosition`
@@ -44,7 +49,10 @@ Get the player's current map position.
 |-----------|------|-------------|
 | *(none)* | | |
 
-**Returns**: Serialized position (e.g. `{x = 12.5, y = -3.75}`).
+**Returns**: JSON position, e.g.:
+```json
+{"x":12.5,"y":-3.75}
+```
 
 **Example prompt usage**:
 > "Check my current position before deciding which direction to walk."
@@ -61,11 +69,9 @@ List all items and their counts in the player's main inventory.
 |-----------|------|-------------|
 | *(none)* | | |
 
-**Returns**: One line per item type in the format `item-name: count`, e.g.:
-```
-iron-plate: 50
-copper-plate: 30
-iron-gear-wheel: 10
+**Returns**: JSON object with items array, e.g.:
+```json
+{"items":[{"name":"iron-plate","count":50},{"name":"copper-plate","count":30},{"name":"iron-gear-wheel","count":10}]}
 ```
 
 **Example prompt usage**:
@@ -82,7 +88,11 @@ Begin crafting items using a recipe. The items are queued in the real crafting q
 | `recipe` | `string` | Recipe name (e.g. `iron-gear-wheel`, `electronic-circuit`, `transport-belt`) |
 | `count` | `int` | Number of items to craft |
 
-**Returns**: Confirmation message (e.g. `"Queued 5 iron-gear-wheel"`). The count returned is the number actually queued, which may be less than requested if ingredients are insufficient.
+**Returns**: JSON with crafting result, e.g.:
+```json
+{"status":"crafting","recipe":"iron-gear-wheel","requested":5,"queued":5}
+```
+The `queued` count may be less than `requested` if ingredients are insufficient.
 
 **Example prompt usage**:
 > "Craft 10 iron gear wheels so I can build an assembling machine."
@@ -97,12 +107,11 @@ Get the player's current crafting queue showing what is being crafted and how ma
 |-----------|------|-------------|
 | *(none)* | | |
 
-**Returns**: One line per queued recipe in the format `recipe-name xcount`, e.g.:
+**Returns**: JSON object with queue array, e.g.:
+```json
+{"queue":[{"recipe":"iron-gear-wheel","count":5},{"recipe":"electronic-circuit","count":3}]}
 ```
-iron-gear-wheel x5
-electronic-circuit x3
-```
-Returns `"No items in crafting queue"` when the queue is empty.
+Returns `{"queue":[]}` when the queue is empty.
 
 **Example prompt usage**:
 > "Check if crafting is done before trying to place the assembling machine."
@@ -122,11 +131,16 @@ Place an entity from the player's inventory at the specified map coordinates. Va
 | `y` | `double` | *(required)* | Y coordinate on the map |
 | `direction` | `string` | `"north"` | Direction the entity faces: `north`, `south`, `east`, `west`, `northeast`, `northwest`, `southeast`, `southwest` |
 
-**Returns**: Confirmation or error message:
-- `"Placed stone-furnace at {x = 5, y = -2}"` — success
-- `"Out of range: 12.3 tiles away (build distance: 6)"` — too far away
-- `"Cannot place stone-furnace at {x = 5, y = -2}"` — position blocked
-- `"No stone-furnace in inventory"` — item not available
+**Returns**: JSON with success status:
+```json
+{"success":true,"entity":"stone-furnace","x":5,"y":-2}
+```
+Error responses:
+```json
+{"success":false,"error":"out_of_range","distance":12.3,"limit":6}
+{"success":false,"error":"invalid_position","entity":"stone-furnace","x":5,"y":-2}
+{"success":false,"error":"missing_item","entity":"stone-furnace"}
+```
 
 **Example prompt usage**:
 > "Place a stone furnace at coordinates 5, -2 facing north."
@@ -142,10 +156,15 @@ Mine/remove an entity at the specified map coordinates. Validates proximity (mus
 | `x` | `double` | X coordinate of the entity to mine |
 | `y` | `double` | Y coordinate of the entity to mine |
 
-**Returns**: Confirmation or error message:
-- `"Mined stone-furnace"` — success
-- `"Out of range: 8.5 tiles away (reach distance: 6)"` — too far away
-- `"No entity found at position"` — nothing to mine
+**Returns**: JSON with success status:
+```json
+{"success":true,"entity":"stone-furnace"}
+```
+Error responses:
+```json
+{"success":false,"error":"out_of_range","distance":8.5,"limit":6}
+{"success":false,"error":"no_entity","x":5,"y":-2}
+```
 
 **Example prompt usage**:
 > "Mine the entity at coordinates 5, -2 to pick it up."
@@ -162,11 +181,9 @@ Get a list of all entities near the player within a given radius.
 |-----------|------|---------|-------------|
 | `radius` | `double` | `10` | Search radius around the player in tiles |
 
-**Returns**: One line per entity in the format `entity-name at {x = ..., y = ...}`, e.g.:
-```
-iron-ore at {x = 3.5, y = -1.5}
-stone-furnace at {x = 5, y = -2}
-transport-belt at {x = 6, y = -2}
+**Returns**: JSON object with entities array, e.g.:
+```json
+{"entities":[{"name":"iron-ore","x":3.5,"y":-1.5},{"name":"stone-furnace","x":5,"y":-2},{"name":"transport-belt","x":6,"y":-2}]}
 ```
 
 **Example prompt usage**:
@@ -183,9 +200,14 @@ Check the distance from the player to target map coordinates and whether the tar
 | `x` | `double` | X coordinate of the target position |
 | `y` | `double` | Y coordinate of the target position |
 
-**Returns**: Distance report with range status, e.g.:
-- `"Distance: 4.2 tiles | Build: in range (6) | Reach: in range (6)"` — close enough
-- `"Distance: 9.1 tiles | Build: OUT OF RANGE (6) | Reach: OUT OF RANGE (6)"` — too far
+**Returns**: JSON distance report, e.g.:
+```json
+{"distance":4.2,"build_in_range":true,"build_limit":6,"reach_in_range":true,"reach_limit":6}
+```
+When out of range:
+```json
+{"distance":9.1,"build_in_range":false,"build_limit":6,"reach_in_range":false,"reach_limit":6}
+```
 
 **Example prompt usage**:
 > "Check if I'm close enough to coordinates 5, -2 before placing a furnace."
@@ -200,9 +222,14 @@ Get the current research status and progress for the player's force.
 |-----------|------|-------------|
 | *(none)* | | |
 
-**Returns**: Research status message:
-- `"Researching: automation (45.2%)"` — research in progress
-- `"No active research"` — nothing queued
+**Returns**: JSON research status:
+```json
+{"researching":true,"technology":"automation","progress":0.452}
+```
+When no research is active:
+```json
+{"researching":false}
+```
 
 **Example prompt usage**:
 > "Check research progress before deciding what to do next."

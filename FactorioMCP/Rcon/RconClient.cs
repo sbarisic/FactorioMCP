@@ -8,7 +8,7 @@ namespace FactorioMCP.Rcon;
 /// Supports authentication, command execution with Lua via /c prefix,
 /// and automatic reconnection with exponential backoff on connection loss.
 /// </summary>
-internal sealed class RconClient : IAsyncDisposable, IDisposable
+internal class RconClient : IAsyncDisposable, IDisposable
 {
     private TcpClient? _tcp;
     private NetworkStream? _stream;
@@ -55,7 +55,7 @@ internal sealed class RconClient : IAsyncDisposable, IDisposable
     /// Execute a raw command string on the server and return the response body.
     /// Automatically attempts reconnection on connection failure.
     /// </summary>
-    public async Task<string> ExecuteAsync(string command, CancellationToken cancellationToken = default)
+    public virtual async Task<string> ExecuteAsync(string command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
 

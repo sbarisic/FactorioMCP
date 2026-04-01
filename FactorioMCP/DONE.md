@@ -20,6 +20,7 @@ Items completed from the [TODO list](TODO.md).
 ## Improvements
 
 - [x] **RCON Reconnection & Resilience (CPX 2)** — `RconClient` now stores connection parameters, recreates `TcpClient` on connection loss, and retries with exponential backoff (up to 3 attempts). `ExecuteAsync` catches `IOException`/`SocketException`/`ObjectDisposedException` and auto-reconnects before retrying the command. `RconConnectionService` retries startup connection up to 5 times with backoff and logs warnings via `ILogger`. Thread-safe via `SemaphoreSlim`.
+- [x] **Structured Lua Responses (CPX 2)** — All `FactorioService` methods now return JSON via `rcon.print()` instead of ad-hoc text. Responses use flat keys (e.g. `{"success":true,"entity":"stone-furnace","x":5,"y":-2}`) for reliable AI parsing. Error responses include structured `error` codes (`out_of_range`, `invalid_position`, `missing_item`, `no_entity`). TOOLS.md updated with all JSON response examples.
 
 ---
 
@@ -34,3 +35,4 @@ Items completed from the [TODO list](TODO.md).
 
 - [x] **Test Project Setup (CPX 1)** — `FactorioMCP.Tests` project with xUnit, project reference to `FactorioMCP`, `InternalsVisibleTo` for test access.
 - [x] **RCON Packet Serialization Tests (CPX 2)** — Extracted `ToBytes()` and `FromPayload()` serialization methods onto `RconPacket`, refactored `RconClient` to use them. 20 unit tests covering wire format (byte order, sizes, null terminators), all three packet types (Auth/ExecCommand/ResponseValue), round-trip serialization, UTF-8 bodies, edge cases (empty body, negative id, large body, too-small payload).
+- [x] **FactorioService Lua Command Tests (CPX 2)** — 58 unit tests in `FactorioServiceTests.cs` verifying all service methods produce correct Lua commands. Uses `CapturingRconClient` test double (overrides virtual `ExecuteAsync`) to capture commands without TCP. Tests cover: correct Lua API calls, JSON output structure, parameter interpolation with InvariantCulture, direction/recipe handling, proximity/inventory validation inclusion, argument validation (null, whitespace, zero, negative), and `/c` prefix on all commands. Made `RconClient.ExecuteAsync` virtual and unsealed the class for testability.
