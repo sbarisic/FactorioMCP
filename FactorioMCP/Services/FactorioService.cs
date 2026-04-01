@@ -98,7 +98,7 @@ internal sealed class FactorioService(RconClient rcon)
 
     /// <summary>
     /// Place an entity from the player's inventory at the specified position.
-    /// Validates that the item exists in inventory and the position is valid before placing.
+    /// Validates proximity, inventory contents, and position validity before placing.
     /// </summary>
     public Task<string> PlaceEntityAsync(
         string entityName,
@@ -115,6 +115,14 @@ internal sealed class FactorioService(RconClient rcon)
             local pos = {{{x}}, {{y}}}
             local name = "{{entityName}}"
             local dir = defines.direction.{{direction}}
+            local player_pos = game.player.position
+            local dx = pos[1] - player_pos.x
+            local dy = pos[2] - player_pos.y
+            local distance = math.sqrt(dx*dx + dy*dy)
+            if distance > game.player.build_distance then
+                rcon.print("Out of range: " .. string.format("%.1f", distance) .. " tiles away (build distance: " .. game.player.build_distance .. ")")
+                return
+            end
             if not surface.can_place_entity{name=name, position=pos, force=game.player.force, direction=dir} then
                 rcon.print("Cannot place " .. name .. " at " .. serpent.line(pos))
                 return
@@ -133,10 +141,19 @@ internal sealed class FactorioService(RconClient rcon)
 
     /// <summary>
     /// Mine/remove an entity at the specified position. Mined items go to the player's inventory.
+    /// Validates proximity before mining.
     /// </summary>
     public Task<string> MineEntityAtAsync(double x, double y, CancellationToken cancellationToken = default)
     {
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player_pos = game.player.position
+            local dx = {{x}} - player_pos.x
+            local dy = {{y}} - player_pos.y
+            local distance = math.sqrt(dx*dx + dy*dy)
+            if distance > game.player.reach_distance then
+                rcon.print("Out of range: " .. string.format("%.1f", distance) .. " tiles away (reach distance: " .. game.player.reach_distance .. ")")
+                return
+            end
             local entities = game.player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
             if #entities > 0 then
                 local e = entities[1]
@@ -167,6 +184,27 @@ internal sealed class FactorioService(RconClient rcon)
                 result = result .. e.name .. " at " .. serpent.line(e.position) .. "\n"
             end
             rcon.print(result)
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Check the distance from the player to a target position and report whether
+    /// it is within build and reach range.
+    /// </summary>
+    public Task<string> CheckDistanceAsync(double x, double y, CancellationToken cancellationToken = default)
+    {
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player_pos = game.player.position
+            local dx = {{x}} - player_pos.x
+            local dy = {{y}} - player_pos.y
+            local distance = math.sqrt(dx*dx + dy*dy)
+            local build_ok = distance <= game.player.build_distance
+            local reach_ok = distance <= game.player.reach_distance
+            rcon.print("Distance: " .. string.format("%.1f", distance) .. " tiles"
+                .. " | Build: " .. (build_ok and "in range" or "OUT OF RANGE") .. " (" .. game.player.build_distance .. ")"
+                .. " | Reach: " .. (reach_ok and "in range" or "OUT OF RANGE") .. " (" .. game.player.reach_distance .. ")")
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);

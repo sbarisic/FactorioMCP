@@ -48,11 +48,11 @@ FactorioMCP.Tests → FactorioMCP
 
 | System | Status | Description |
 |--------|--------|-------------|
-| RCON Client | ✅ Functional | Low-level Source RCON protocol implementation over TCP |
+| RCON Client | ✅ Functional | Low-level Source RCON protocol over TCP with auto-reconnection and exponential backoff |
 | Factorio Service | ✅ Functional | High-level game operations (movement, crafting, building, world queries) |
-| MCP Tools | 🔶 Partial/WIP | Movement and inventory/crafting tools exposed via MCP SDK |
+| MCP Tools | 🔶 Partial/WIP | Movement, inventory/crafting, entity placement/mining, world scanning, and proximity checking tools exposed via MCP SDK |
 | MCP Hosting | ✅ Functional | Program.cs wiring with DI, configuration, stdio transport |
-| Realistic Behaviors | 🔶 Partial/WIP | Walking with real physics, crafting with real queue — no cheating |
+| Realistic Behaviors | 🔶 Partial/WIP | Walking with real physics, crafting with real queue, proximity validation on place/mine — no cheating |
 
 Legend: ✅ Functional | 🔶 Partial/WIP | ⬜ Planned
 
@@ -88,10 +88,7 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-- [ ] **Entity Placement & Mining Tools** — Place entities from inventory at coordinates (with direction), mine entities at coordinates into inventory. Validate item is in inventory before placement, validate entity exists before mining. **(CPX 2)**
-- [ ] **World Scanning Tools** — Get nearby entities within radius, get player position, get current research status/progress. All use `rcon.print()` to return structured text. **(CPX 2)**
 - [ ] **Wait / Polling Mechanisms** — Wait for crafting queue to empty, wait until player reaches a target position (within tolerance), wait for a specified game tick count. These enable realistic pacing without the AI spamming commands. **(CPX 3)**
-- [ ] **Proximity Checks** — Before placing, mining, or interacting, verify the player is within interaction range of the target. Return clear error messages when out of range instead of silently failing. **(CPX 2)**
 
 ### Low Priority
 
@@ -116,7 +113,6 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-- [ ] **RCON Reconnection & Resilience** — Auto-reconnect on connection loss, retry with backoff, connection health checks. The game server may restart during long sessions. **(CPX 2)**
 - [ ] **Structured Lua Responses** — Return JSON from Lua scripts instead of plain text so the AI can parse results more reliably. Use `game.table_to_json()` or manual JSON construction. **(CPX 2)**
 
 ### Low Priority
@@ -135,14 +131,15 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **README.md** — Project overview, prerequisites (Factorio with RCON), setup instructions, configuration (env vars), how to run, how to connect an MCP client (Claude Desktop, VS Code Copilot). **(CPX 1)**
+*No high priority items*
 
 ### Medium Priority
 
-- [ ] **Available Tools Reference** — Document all MCP tools with descriptions, parameters, expected return values, and usage examples for AI agent prompt engineering. **(CPX 1)**
+*No medium priority items*
 
 ### Low Priority
 
+- [ ] **LM Studio Setup Guide** — Add LM Studio connection instructions to the README as a recommended local-model setup. Include default model suggestion (`qwen/qwen3-vl-4b`), MCP client configuration, and any LM Studio-specific notes for connecting to the stdio MCP server. **(CPX 1)**
 - [ ] **Architecture Decision Records** — Document key decisions: why RCON over mod API, why realistic AI constraints, why stdio transport. **(CPX 1)**
 
 ### On Hold
@@ -185,7 +182,7 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **RCON Packet Serialization Tests** — Unit test packet construction and parsing (correct byte order, sizes, null terminators, auth vs exec packet types) without a live connection. **(CPX 2)**
+*No high priority items*
 
 ### Medium Priority
 
@@ -207,6 +204,7 @@ RCON connection settings are read from environment variables:
 - **Realistic AI constraint**: The AI player must not teleport, spawn items, or skip crafting time. It should walk to locations, wait for crafting to finish, and only interact with entities within range. This is a core design principle.
 - **RCON is the bridge**: All game control goes through RCON → Lua. The [Factorio Lua API](https://lua-api.factorio.com/latest/) is the authoritative reference for available operations.
 - **Singleplayer RCON caveat**: In singleplayer, `game.player` refers to the local player. In multiplayer/dedicated server, use `game.players[index]` or `game.connected_players`.
+- Factorio installation folder is located in `E:\Games\Factorio2`
 
 ---
 

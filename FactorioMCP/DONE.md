@@ -11,9 +11,26 @@ Items completed from the [TODO list](TODO.md).
 - [x] **MCP Server Hosting & Wiring (CPX 2)** — Program.cs rewritten with Generic Host, DI registration of RconClient/FactorioService, `RconConnectionService` hosted service for RCON connection on startup from environment variables, MCP server with stdio transport and assembly-scanned tool discovery. Added `ModelContextProtocol` and `Microsoft.Extensions.Hosting` packages.
 - [x] **Movement Tools (CPX 2)** — `Tools/MovementTools.cs` with MCP tools: `WalkForDuration` (walk direction + seconds then stop, returns position), `StopWalking`, `GetPlayerPosition`. Uses real physics-based walking via `player.walking_state`.
 - [x] **Inventory & Crafting Tools (CPX 2)** — `Tools/InventoryTools.cs` with MCP tools: `GetInventory`, `Craft` (real crafting queue via `player.begin_crafting`), `GetCraftingQueue`.
+- [x] **Entity Placement & Mining Tools (CPX 2)** — `Tools/EntityTools.cs` with MCP tools: `PlaceEntity` (place from inventory at coordinates with direction, validates inventory and position), `MineEntity` (mine entity at coordinates into inventory).
+- [x] **World Scanning Tools (CPX 2)** — `Tools/WorldTools.cs` with MCP tools: `GetNearbyEntities` (entities within radius), `GetResearchStatus` (current research and progress). `GetPlayerPosition` already available in MovementTools.
+- [x] **Proximity Checks (CPX 2)** — `PlaceEntityAsync` validates `build_distance`, `MineEntityAtAsync` validates `reach_distance` before executing. Added `CheckDistanceAsync` service method and `CheckDistance` MCP tool in WorldTools for pre-flight range checks. Returns clear "Out of range" errors with distances when player is too far.
+
+---
+
+## Improvements
+
+- [x] **RCON Reconnection & Resilience (CPX 2)** — `RconClient` now stores connection parameters, recreates `TcpClient` on connection loss, and retries with exponential backoff (up to 3 attempts). `ExecuteAsync` catches `IOException`/`SocketException`/`ObjectDisposedException` and auto-reconnects before retrying the command. `RconConnectionService` retries startup connection up to 5 times with backoff and logs warnings via `ILogger`. Thread-safe via `SemaphoreSlim`.
+
+---
+
+## Documentation
+
+- [x] **README.md (CPX 1)** — Project overview, prerequisites, setup instructions, env var configuration, how to run, MCP client connection examples (Claude Desktop, VS Code Copilot), available tools reference, project structure.
+- [x] **Available Tools Reference (CPX 1)** — `TOOLS.md` with detailed documentation for all 11 MCP tools: parameters, types, return values, example outputs, and AI prompt engineering tips. Linked from README.
 
 ---
 
 ## Testing
 
 - [x] **Test Project Setup (CPX 1)** — `FactorioMCP.Tests` project with xUnit, project reference to `FactorioMCP`, `InternalsVisibleTo` for test access.
+- [x] **RCON Packet Serialization Tests (CPX 2)** — Extracted `ToBytes()` and `FromPayload()` serialization methods onto `RconPacket`, refactored `RconClient` to use them. 20 unit tests covering wire format (byte order, sizes, null terminators), all three packet types (Auth/ExecCommand/ResponseValue), round-trip serialization, UTF-8 bodies, edge cases (empty body, negative id, large body, too-small payload).

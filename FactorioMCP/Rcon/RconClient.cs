@@ -1,26 +1,36 @@
 using System.Buffers.Binary;
 using System.Net.Sockets;
-using System.Text;
 
 namespace FactorioMCP.Rcon;
 
 /// <summary>
 /// Source RCON protocol client for communicating with a Factorio server over TCP.
-/// Supports authentication and command execution with Lua via /c prefix.
+/// Supports authentication, command execution with Lua via /c prefix,
+/// and automatic reconnection with exponential backoff on connection loss.
 /// </summary>
 internal sealed class RconClient : IAsyncDisposable, IDisposable
 {
-    private readonly TcpClient _tcp = new();
+    private TcpClient? _tcp;
     private NetworkStream? _stream;
     private int _nextRequestId;
+    private readonly SemaphoreSlim _lock = new(1, 1);
+
+    // Stored connection parameters for reconnection
+    private string? _host;
+    private int _port;
+    private string? _password;
+
+    private const int MaxReconnectAttempts = 3;
+    private static readonly TimeSpan InitialBackoff = TimeSpan.FromSeconds(1);
 
     /// <summary>
     /// Whether the client is currently connected to the RCON server.
     /// </summary>
-    public bool IsConnected => _tcp.Connected && _stream is not null;
+    public bool IsConnected => _tcp is { Connected: true } && _stream is not null;
 
     /// <summary>
     /// Connect to the RCON server and authenticate with the given password.
+    /// Stores connection parameters for automatic reconnection on failure.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown when authentication fails.</exception>
     public async Task ConnectAndAuthenticateAsync(
@@ -34,36 +44,44 @@ internal sealed class RconClient : IAsyncDisposable, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(port);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(port, 65535);
 
-        await _tcp.ConnectAsync(host, port, cancellationToken).ConfigureAwait(false);
-        _stream = _tcp.GetStream();
+        _host = host;
+        _port = port;
+        _password = password;
 
-        var authId = Interlocked.Increment(ref _nextRequestId);
-        await SendPacketAsync(authId, RconPacketType.Auth, password, cancellationToken).ConfigureAwait(false);
-        var response = await ReadPacketAsync(cancellationToken).ConfigureAwait(false);
-
-        if (response.Id == -1)
-        {
-            throw new InvalidOperationException("RCON authentication failed. Check the password.");
-        }
+        await ConnectCoreAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Execute a raw command string on the server and return the response body.
+    /// Automatically attempts reconnection on connection failure.
     /// </summary>
     public async Task<string> ExecuteAsync(string command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        if (_stream is null)
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            throw new InvalidOperationException("Not connected. Call ConnectAndAuthenticateAsync first.");
+            if (_stream is null || _host is null)
+            {
+                throw new InvalidOperationException("Not connected. Call ConnectAndAuthenticateAsync first.");
+            }
+
+            try
+            {
+                return await ExecuteCoreAsync(command, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (IsConnectionException(ex))
+            {
+                // Connection lost — attempt reconnection then retry the command
+                await ReconnectWithBackoffAsync(cancellationToken).ConfigureAwait(false);
+                return await ExecuteCoreAsync(command, cancellationToken).ConfigureAwait(false);
+            }
         }
-
-        var id = Interlocked.Increment(ref _nextRequestId);
-        await SendPacketAsync(id, RconPacketType.ExecCommand, command, cancellationToken).ConfigureAwait(false);
-        var response = await ReadPacketAsync(cancellationToken).ConfigureAwait(false);
-
-        return response.Body;
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     /// <summary>
@@ -76,10 +94,83 @@ internal sealed class RconClient : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
+    /// Create a fresh TCP connection and authenticate with stored credentials.
+    /// </summary>
+    private async Task ConnectCoreAsync(CancellationToken cancellationToken)
+    {
+        CloseConnection();
+
+        _tcp = new TcpClient();
+        await _tcp.ConnectAsync(_host!, _port, cancellationToken).ConfigureAwait(false);
+        _stream = _tcp.GetStream();
+
+        var authId = Interlocked.Increment(ref _nextRequestId);
+        await SendPacketAsync(authId, RconPacketType.Auth, _password!, cancellationToken).ConfigureAwait(false);
+        var response = await ReadPacketAsync(cancellationToken).ConfigureAwait(false);
+
+        if (response.Id == -1)
+        {
+            throw new InvalidOperationException("RCON authentication failed. Check the password.");
+        }
+    }
+
+    /// <summary>
+    /// Send a command and read the response on an already-established connection.
+    /// </summary>
+    private async Task<string> ExecuteCoreAsync(string command, CancellationToken cancellationToken)
+    {
+        var id = Interlocked.Increment(ref _nextRequestId);
+        await SendPacketAsync(id, RconPacketType.ExecCommand, command, cancellationToken).ConfigureAwait(false);
+        var response = await ReadPacketAsync(cancellationToken).ConfigureAwait(false);
+        return response.Body;
+    }
+
+    /// <summary>
+    /// Attempt to reconnect with exponential backoff, up to <see cref="MaxReconnectAttempts"/> times.
+    /// </summary>
+    /// <exception cref="IOException">Thrown when all reconnection attempts fail.</exception>
+    private async Task ReconnectWithBackoffAsync(CancellationToken cancellationToken)
+    {
+        var delay = InitialBackoff;
+
+        for (var attempt = 1; attempt <= MaxReconnectAttempts; attempt++)
+        {
+            try
+            {
+                await ConnectCoreAsync(cancellationToken).ConfigureAwait(false);
+                return; // Reconnection succeeded
+            }
+            catch (Exception ex) when (attempt < MaxReconnectAttempts && IsConnectionException(ex))
+            {
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                delay *= 2; // Exponential backoff
+            }
+        }
+
+        throw new IOException(
+            $"Failed to reconnect to RCON server at {_host}:{_port} after {MaxReconnectAttempts} attempts.");
+    }
+
+    /// <summary>
+    /// Determines whether the exception indicates a connection-level failure
+    /// that can potentially be recovered by reconnecting.
+    /// </summary>
+    private static bool IsConnectionException(Exception ex) =>
+        ex is IOException or SocketException or ObjectDisposedException;
+
+    /// <summary>
+    /// Close and dispose the current TCP connection if one exists.
+    /// </summary>
+    private void CloseConnection()
+    {
+        _stream?.Dispose();
+        _stream = null;
+        _tcp?.Dispose();
+        _tcp = null;
+    }
+
+    /// <summary>
     /// Build and send a single RCON packet over the wire.
-    /// Packet format (little-endian):
-    ///   [4 bytes size][4 bytes id][4 bytes type][body bytes][0x00][0x00]
-    /// where size = 4 (id) + 4 (type) + body.Length + 2 (null terminators).
     /// </summary>
     private async Task SendPacketAsync(
         int id,
@@ -87,17 +178,7 @@ internal sealed class RconClient : IAsyncDisposable, IDisposable
         string body,
         CancellationToken cancellationToken)
     {
-        var bodyBytes = Encoding.UTF8.GetBytes(body);
-        var packetSize = 4 + 4 + bodyBytes.Length + 2; // id + type + body + 2 null terminators
-        var totalLength = 4 + packetSize; // 4 bytes for the size field itself
-
-        var buffer = new byte[totalLength];
-        BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(0, 4), packetSize);
-        BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(4, 4), id);
-        BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(8, 4), (int)type);
-        bodyBytes.CopyTo(buffer, 12);
-        buffer[totalLength - 2] = 0;
-        buffer[totalLength - 1] = 0;
+        var buffer = new RconPacket(id, type, body).ToBytes();
 
         await _stream!.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
         await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
@@ -112,22 +193,10 @@ internal sealed class RconClient : IAsyncDisposable, IDisposable
         await ReadExactAsync(sizeBuffer, 4, cancellationToken).ConfigureAwait(false);
         var size = BinaryPrimitives.ReadInt32LittleEndian(sizeBuffer);
 
-        if (size < 10)
-        {
-            throw new InvalidOperationException($"RCON packet too small: {size} bytes (minimum 10).");
-        }
-
         var payload = new byte[size];
         await ReadExactAsync(payload, size, cancellationToken).ConfigureAwait(false);
 
-        var id = BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(0, 4));
-        var type = (RconPacketType)BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(4, 4));
-        var bodyLength = size - 10; // subtract id(4) + type(4) + 2 null terminators
-        var body = bodyLength > 0
-            ? Encoding.UTF8.GetString(payload, 8, bodyLength)
-            : string.Empty;
-
-        return new RconPacket(id, type, body);
+        return RconPacket.FromPayload(payload);
     }
 
     /// <summary>
@@ -159,12 +228,14 @@ internal sealed class RconClient : IAsyncDisposable, IDisposable
             await _stream.DisposeAsync().ConfigureAwait(false);
         }
 
-        _tcp.Dispose();
+        _tcp?.Dispose();
+        _lock.Dispose();
     }
 
     public void Dispose()
     {
         _stream?.Dispose();
-        _tcp.Dispose();
+        _tcp?.Dispose();
+        _lock.Dispose();
     }
 }
