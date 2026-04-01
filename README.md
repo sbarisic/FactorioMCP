@@ -35,7 +35,7 @@ factorio --start-server save.zip --rcon-port 27015 --rcon-password mypassword
 |----------|---------|-------------|
 | `FACTORIO_RCON_HOST` | `127.0.0.1` | RCON server host |
 | `FACTORIO_RCON_PORT` | `27015` | RCON server port |
-| `FACTORIO_RCON_PASSWORD` | *(required)* | RCON password |
+| `FACTORIO_RCON_PASSWORD` | `mypassword` | RCON password |
 
 ### 3. Build
 
@@ -65,6 +65,11 @@ Add to your `claude_desktop_config.json`:
 
 ### VS Code (GitHub Copilot)
 
+A pre-configured [`.vscode/mcp.json`](.vscode/mcp.json) is included in the repository. Open the workspace in VS Code and it will be detected automatically. Adjust the environment variables if needed.
+
+<details>
+<summary>Manual setup</summary>
+
 Add to your `.vscode/mcp.json`:
 
 ```json
@@ -73,14 +78,18 @@ Add to your `.vscode/mcp.json`:
     "factorio": {
       "type": "stdio",
       "command": "dotnet",
-      "args": ["run", "--project", "path/to/FactorioMCP"],
+      "args": ["run", "--project", "${workspaceFolder}/FactorioMCP"],
       "env": {
+        "FACTORIO_RCON_HOST": "127.0.0.1",
+        "FACTORIO_RCON_PORT": "27015",
         "FACTORIO_RCON_PASSWORD": "mypassword"
       }
     }
   }
 }
 ```
+
+</details>
 
 ## Available Tools
 

@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "factorio": {
+      "type": "stdio",
+      "command": "dotnet",
+      "args": ["run", "--project", "${workspaceFolder}/FactorioMCP"],
+      "env": {
+        "FACTORIO_RCON_HOST": "127.0.0.1",
+        "FACTORIO_RCON_PORT": "27015",
+        "FACTORIO_RCON_PASSWORD": "mypassword"
+      }
+    }
+  }
+}

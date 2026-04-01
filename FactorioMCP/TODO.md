@@ -52,7 +52,7 @@ FactorioMCP.Tests → FactorioMCP
 | Factorio Service | ✅ Functional | High-level game operations (movement, crafting, building, world queries) |
 | MCP Tools | 🔶 Partial/WIP | Movement, inventory/crafting, entity placement/mining, world scanning, and proximity checking tools exposed via MCP SDK |
 | MCP Hosting | ✅ Functional | Program.cs wiring with DI, configuration, stdio transport |
-| Realistic Behaviors | 🔶 Partial/WIP | Walking with real physics, crafting with real queue, proximity validation on place/mine — no cheating |
+| Realistic Behaviors | ✅ Functional | Walking with real physics, crafting with real queue, proximity validation on place/mine, wait/polling for crafting completion, position arrival, and game tick timing — no cheating |
 
 Legend: ✅ Functional | 🔶 Partial/WIP | ⬜ Planned
 
@@ -76,7 +76,7 @@ RCON connection settings are read from environment variables:
 |----------|---------|-------------|
 | `FACTORIO_RCON_HOST` | `127.0.0.1` | RCON server host |
 | `FACTORIO_RCON_PORT` | `27015` | RCON server port |
-| `FACTORIO_RCON_PASSWORD` | *(required)* | RCON password |
+| `FACTORIO_RCON_PASSWORD` | `mypassword` | RCON password |
 
 ---
 
@@ -88,13 +88,14 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-- [ ] **Wait / Polling Mechanisms** — Wait for crafting queue to empty, wait until player reaches a target position (within tolerance), wait for a specified game tick count. These enable realistic pacing without the AI spamming commands. **(CPX 3)**
+*No medium priority items*
 
 ### Low Priority
 
 - [ ] **Research Tools** — Start research, get available technologies, get research progress. **(CPX 2)**
 - [ ] **Raw Lua Execution Tool** — Execute arbitrary Lua code for advanced operations not covered by specific tools. Include safety warning in tool description. **(CPX 1)**
 - [ ] **Recipe & Technology Query Tools** — Query available recipes, recipe ingredients/products, technology prerequisites. Helps the AI plan crafting chains. **(CPX 2)**
+- [ ] **Chat Message Reaction** — Read and respond to in-game chat messages. Would enable AI to respond to player messages in multiplayer or see its own messages for confirmation. ⚠️ Note: `game.get_message_log()` does not exist in the Factorio Lua API. The `on_console_chat` event requires a mod handler (not available via RCON). May require the **Helper Factorio Mod** (ON HOLD) or a creative RCON-only workaround. **(CPX 3)**
 - [ ] **Map / Terrain Scanning** — Scan tiles around the player for resource patches (iron, copper, stone, coal, oil), water, terrain type. Helps the AI decide where to build. **(CPX 3)**
 - [ ] **Blueprint & Ghost Support** — Place blueprints or ghost entities for planned construction. **(CPX 4)**
 
@@ -113,11 +114,11 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-*No medium priority items*
+- [ ] **RCON Client Connection Logging** — Add `ILogger` to `RconClient` to log connection status changes (connected, disconnected, reconnecting), reconnection attempts with backoff timing, and communication errors. `RconConnectionService` already logs startup retries but `RconClient` internal reconnection is silent. **(CPX 2)**
 
 ### Low Priority
 
-- [ ] **RCON Multi-Packet Response Handling** — Handle responses that span multiple RCON packets (responses > 4096 bytes). Send an empty follow-up packet to detect end of multi-packet response. **(CPX 2)**
+- [ ] **RCON Multi-Packet Response Handling**
 - [ ] **Multiplayer Player Targeting** — Support specifying which player to control in multiplayer games instead of always using `game.player` (which is only valid in singleplayer RCON context). Use `game.players[name]` or `game.connected_players`. **(CPX 3)**
 - [ ] **Command Queuing & Sequencing** — Queue commands to avoid race conditions when the AI sends multiple commands rapidly. Ensure one Lua command completes before the next is sent. **(CPX 3)**
 
@@ -141,6 +142,7 @@ RCON connection settings are read from environment variables:
 
 - [ ] **LM Studio Setup Guide** — Add LM Studio connection instructions to the README as a recommended local-model setup. Include default model suggestion (`qwen/qwen3-vl-4b`), MCP client configuration, and any LM Studio-specific notes for connecting to the stdio MCP server. **(CPX 1)**
 - [ ] **Architecture Decision Records** — Document key decisions: why RCON over mod API, why realistic AI constraints, why stdio transport. **(CPX 1)**
+- [ ] **LuaAPI Reference in README** — Add a section to the README documenting the bundled `LuaAPI/` folder containing the full Factorio Lua API reference (HTML). Link to key class docs (LuaPlayer, LuaSurface, LuaEntity, LuaForce, LuaRCON, defines). **(CPX 1)**
 
 ### On Hold
 
@@ -198,6 +200,7 @@ RCON connection settings are read from environment variables:
 
 - Try to edit files and use tools WITHOUT POWERSHELL where possible, shell scripts get stuck and then manually terminate. Do not use powershell commands unless absolutely necessary
 - Do not be afraid to break backwards compatibility if new changes will simplify or improve the project
+- When implementing or modifying Lua scripts, reference the bundled `LuaAPI/` HTML docs to verify correct API calls, parameter names, and return types. All current Lua snippets have been audited and confirmed correct against the Factorio API docs.
 - Problem solutions need to be optimized, performant and well thought out before implementation, avoid quick fixes
 - Keep files below 1000 lines, split when they get too large. Either partial classes or split into multiple smaller classes that handle a single functionality.
 - **Realistic AI constraint**: The AI player must not teleport, spawn items, or skip crafting time. It should walk to locations, wait for crafting to finish, and only interact with entities within range. This is a core design principle.

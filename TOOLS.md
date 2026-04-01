@@ -236,12 +236,107 @@ When no research is active:
 
 ---
 
+## Wait & Polling Tools
+
+### `WaitForCrafting`
+
+Wait for the crafting queue to empty. Polls the queue periodically until all items are crafted or the timeout is reached.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `pollIntervalSeconds` | `double` | `1.0` | How often to check the queue in seconds |
+| `timeoutSeconds` | `double` | `60` | Maximum time to wait in seconds before giving up |
+
+**Returns**: JSON with completion status:
+```json
+{"status":"complete","queue":[]}
+```
+On timeout:
+```json
+{"status":"timeout","remaining":{"queue":[{"recipe":"iron-gear-wheel","count":3}]}}
+```
+
+**Example prompt usage**:
+> "Craft 20 iron gear wheels and wait for them to finish."
+
+---
+
+### `WaitForPosition`
+
+Wait until the player reaches a target position within a given tolerance. Polls the player's position periodically. The player must already be walking.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `targetX` | `double` | *(required)* | Target X coordinate to reach |
+| `targetY` | `double` | *(required)* | Target Y coordinate to reach |
+| `tolerance` | `double` | `2.0` | Arrived when within this many tiles of the target |
+| `pollIntervalSeconds` | `double` | `0.5` | How often to check position in seconds |
+| `timeoutSeconds` | `double` | `30` | Maximum time to wait in seconds before giving up |
+
+**Returns**: JSON with arrival status:
+```json
+{"status":"arrived","tolerance":2,"position":{"x":9.8,"y":-1.2,"distance":0.28}}
+```
+On timeout:
+```json
+{"status":"timeout","target_x":10,"target_y":-1,"position":{"x":5.2,"y":3.1}}
+```
+
+**Example prompt usage**:
+> "Walk north and wait until I reach coordinates 10, -1."
+
+---
+
+### `WaitForTicks`
+
+Wait for a specified number of game ticks to elapse. Factorio runs at 60 ticks per second at normal speed.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `ticks` | `int` | *(required)* | Number of game ticks to wait (60 = 1 second at 1x speed) |
+| `pollIntervalSeconds` | `double` | `0.5` | How often to check the tick count in seconds |
+| `timeoutSeconds` | `double` | `30` | Maximum real-time seconds to wait before giving up |
+
+**Returns**: JSON with completion status:
+```json
+{"status":"complete","start_tick":1000,"end_tick":1060,"elapsed":60}
+```
+On timeout:
+```json
+{"status":"timeout","start_tick":1000,"current_tick":1020,"target_tick":1060}
+```
+
+**Example prompt usage**:
+> "Wait 300 ticks (5 seconds) for the furnace to smelt some iron."
+
+---
+
+### `GetGameTick`
+
+Get the current game tick. Useful for measuring elapsed time between operations.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| *(none)* | | |
+
+**Returns**: JSON with current tick:
+```json
+{"tick":12345}
+```
+
+**Example prompt usage**:
+> "Check the current game tick to measure how long smelting takes."
+
+---
+
 ## Tips for AI Agent Prompt Engineering
 
 - **Always check position** before walking. Use `GetPlayerPosition` to know where the player is, then calculate which direction and how long to walk.
 - **Check distance before interacting**. Use `CheckDistance` to verify you're within build/reach range before calling `PlaceEntity` or `MineEntity`. Walk closer if out of range.
 - **Check inventory before crafting**. Use `GetInventory` to verify the player has the required ingredients before calling `Craft`.
-- **Poll the crafting queue**. After calling `Craft`, use `GetCraftingQueue` to check when items are finished before attempting to use them.
+- **Wait for crafting to finish**. After calling `Craft`, use `WaitForCrafting` to block until the queue empties before attempting to use the crafted items.
+- **Wait for arrival**. After starting to walk with `WalkForDuration`, use `WaitForPosition` to confirm the player reached the destination, especially for precise placement tasks.
+- **Use tick-based waits for game mechanics**. Use `WaitForTicks` when waiting for furnace smelting, inserter cycles, or other game-tick-dependent operations (60 ticks = 1 second at normal speed).
 - **Scan before placing**. Use `GetNearbyEntities` to see what's around the player, and `GetPlayerPosition` to plan placement coordinates.
 - **Check inventory before placing**. Use `GetInventory` to confirm you have the entity item before calling `PlaceEntity`.
 - **Walking is physics-based**. The player accelerates and decelerates realistically. Short durations (0.5–1s) give fine-grained movement; longer durations (3–5s) cover more ground.

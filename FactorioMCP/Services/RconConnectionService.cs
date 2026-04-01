@@ -22,8 +22,7 @@ internal sealed class RconConnectionService(
     {
         var host = configuration["FACTORIO_RCON_HOST"] ?? "127.0.0.1";
         var port = int.Parse(configuration["FACTORIO_RCON_PORT"] ?? "27015");
-        var password = configuration["FACTORIO_RCON_PASSWORD"]
-            ?? throw new InvalidOperationException("FACTORIO_RCON_PASSWORD environment variable is required.");
+        var password = configuration["FACTORIO_RCON_PASSWORD"] ?? "mypassword";
 
         var delay = InitialBackoff;
         for (var attempt = 1; attempt <= MaxStartupAttempts; attempt++)
