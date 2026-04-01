@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="FactorioMCP.Tests/FactorioMCP.Tests.csproj" />
   <Project Path="FactorioMCP/FactorioMCP.csproj" />
 </Solution>

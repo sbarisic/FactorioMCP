@@ -50,9 +50,9 @@ FactorioMCP.Tests → FactorioMCP
 |--------|--------|-------------|
 | RCON Client | ✅ Functional | Low-level Source RCON protocol implementation over TCP |
 | Factorio Service | ✅ Functional | High-level game operations (movement, crafting, building, world queries) |
-| MCP Tools | ⬜ Planned | Tool definitions exposed to AI agents via MCP SDK |
-| MCP Hosting | ⬜ Planned | Program.cs wiring with DI, configuration, stdio transport |
-| Realistic Behaviors | ⬜ Planned | Walking, crafting wait, proximity checks — no cheating |
+| MCP Tools | 🔶 Partial/WIP | Movement and inventory/crafting tools exposed via MCP SDK |
+| MCP Hosting | ✅ Functional | Program.cs wiring with DI, configuration, stdio transport |
+| Realistic Behaviors | 🔶 Partial/WIP | Walking with real physics, crafting with real queue — no cheating |
 
 Legend: ✅ Functional | 🔶 Partial/WIP | ⬜ Planned
 
@@ -84,9 +84,7 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **MCP Server Hosting & Wiring**
-- [ ] **Movement Tools (Realistic)** — Walk in a direction for a duration then stop (`WalkForDuration`), stop walking, get player position. No teleportation. Walking uses `player.walking_state` for real physics-based movement. **(CPX 2)**
-- [ ] **Inventory & Crafting Tools** — Get inventory contents, begin crafting with recipe name and count. Crafting uses `player.begin_crafting` which respects real crafting time. **(CPX 2)**
+*No high priority items*
 
 ### Medium Priority
 
@@ -187,7 +185,6 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **Test Project Setup** — Create `FactorioMCP.Tests` project with xUnit. Add project reference to `FactorioMCP`. **(CPX 1)**
 - [ ] **RCON Packet Serialization Tests** — Unit test packet construction and parsing (correct byte order, sizes, null terminators, auth vs exec packet types) without a live connection. **(CPX 2)**
 
 ### Medium Priority
