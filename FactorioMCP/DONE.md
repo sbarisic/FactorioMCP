@@ -15,7 +15,8 @@ Items completed from the [TODO list](TODO.md).
 - [x] **World Scanning Tools (CPX 2)** — `Tools/WorldTools.cs` with MCP tools: `GetNearbyEntities` (entities within radius), `GetResearchStatus` (current research and progress). `GetPlayerPosition` already available in MovementTools.
 - [x] **Proximity Checks (CPX 2)** — `PlaceEntityAsync` validates `build_distance`, `MineEntityAtAsync` validates `reach_distance` before executing. Added `CheckDistanceAsync` service method and `CheckDistance` MCP tool in WorldTools for pre-flight range checks. Returns clear "Out of range" errors with distances when player is too far.
 - [x] **Wait / Polling Mechanisms (CPX 3)** — `Tools/WaitTools.cs` with MCP tools: `WaitForCrafting` (poll until queue empties), `WaitForPosition` (poll until player reaches target within tolerance), `WaitForTicks` (poll until game ticks elapse), `GetGameTick` (current tick). All use configurable poll interval and timeout with JSON status responses (`complete`/`arrived`/`timeout`). Added `ScriptedRconClient` test double for polling tests. 20 new tests (98 total). TOOLS.md updated with new Wait & Polling section.
-- [x] **Movement Pathfinding & Obstacle Avoidance (CPX 4)** — Player gets stuck when walking into entities. Implemented stuck detection + automatic detour in the Lua `on_tick` walking handler. Tracks player position each tick; after 10 ticks with no movement, switches to a perpendicular direction for 15 ticks to navigate around the obstacle, then resumes the original direction. Alternates detour sides (left/right) on repeated stuck events. Uses `global.walk_state` for state persistence. `WalkForDuration` MCP tool now also reports a `"stuck"` status with a warning when the player fails to move at all. Updated `WalkAndStop_MovesPlayer` integration test to try multiple directions. Added 2 new unit tests (`WalkAsync_IncludesStuckDetectionLogic`, `StopWalkingAsync_ClearsWalkState`).
+- [x] **Movement Pathfinding & Obstacle Avoidance (CPX 4)** — Player gets stuck when walking into entities. Implemented stuck detection + automatic detour in the Lua `on_tick` walking handler. Tracks player position each tick; after 10 ticks with no movement, switches to a perpendicular direction for 15 ticks to navigate around the obstacle, then resumes the original direction. Alternates detour sides (left/right) on repeated stuck events. Uses `storage.walk_state` for state persistence. `WalkForDuration` MCP tool now also reports a `"stuck"` status with a warning when the player fails to move at all.
+- [x] **Map / Terrain Scanning (CPX 3)** — Two new service methods and MCP tools: `ScanResources` scans for resource patches (ores, oil) within a radius, returning a summary per resource type (name, patch count, total amount, center coordinates). `ScanTiles` scans terrain tiles in an area, returning tile type counts (grass, sand, water, etc.). Both use `find_entities_filtered{type="resource"}` and `find_tiles_filtered` respectively. Added 13 unit tests.
 
 ---
 
@@ -35,6 +36,8 @@ Items completed from the [TODO list](TODO.md).
 - [x] **Lua API Audit** — Verified all Lua snippets in `FactorioService.cs` against bundled Factorio API HTML docs. Confirmed correct: LuaPlayer (walking_state, build_distance, reach_distance, begin_crafting, crafting_queue, get_main_inventory, get_item_count, remove_item), LuaSurface (find_entities_filtered, can_place_entity, create_entity), LuaForce (current_research, research_progress), LuaEntity (mine), LuaRCON (print), defines (direction). All calls match the API reference.
 - [x] **Example mcp.json (CPX 1)** — Added `.vscode/mcp.json` pre-configured with `dotnet run --project` command and all default environment variables (`FACTORIO_RCON_HOST`, `FACTORIO_RCON_PORT`, `FACTORIO_RCON_PASSWORD`). Uses `${workspaceFolder}` for portable project path. Updated README VS Code section to reference the bundled file with manual setup in collapsible details.
 
+- [x] **Use `/silent-command` Instead of `/c` (CPX 1)** — Switched `RconClient.ExecuteLuaAsync` from `/c` to `/silent-command` so Lua commands don't appear in the game chat log. Updated all unit test assertions from `/c` prefix to `/silent-command` prefix.
+
 ---
 
 ## Bug Fixes
@@ -44,9 +47,10 @@ Items completed from the [TODO list](TODO.md).
 - [x] **`MineEntityAtAsync` Factorio 2 API fix** — `entity.mine{inventory=player.get_main_inventory()}` fails in Factorio 2 (`"inventory" must be a script inventory or entity inventory`). Switched to `player.mine_entity(e, true)` which correctly mines as-if-player, handles inventory transfer automatically, and raises proper game events (`on_player_mined_entity`, etc.).
 - [x] **`WalkAndStop_MovesPlayer` Flaky Test Fix** — Integration test failed when the player was blocked by nearby entities. Updated to try multiple directions (south, east, north, west) and succeed if the player moves in any of them. Proper diagnostic output shows how far the player moved in each attempt.
 
----
+- [x] **Factorio 2 `global` → `storage` Migration** — Factorio 2 removed the `global` table and replaced it with `storage`. Fixed all Lua scripts using `global.walk_state` (in `WalkAsync` and `StopWalkingAsync`) to use `storage.walk_state` instead. This was causing `attempt to index global 'global' (a nil value)` errors during walking.
+- [x] **Factorio 2 `game.active_mods` API Fix** — `game.active_mods` was removed in Factorio 2. Fixed `RawDiagnostics_CheckGameState` integration test to use `script.active_mods['base']` instead.
 
-## Testing
+---
 
 - [x] **Test Project Setup (CPX 1)** — `FactorioMCP.Tests` project with xUnit, project reference to `FactorioMCP`, `InternalsVisibleTo` for test access.
 - [x] **RCON Packet Serialization Tests (CPX 2)** — Extracted `ToBytes()` and `FromPayload()` serialization methods onto `RconPacket`, refactored `RconClient` to use them. 20 unit tests covering wire format (byte order, sizes, null terminators), all three packet types (Auth/ExecCommand/ResponseValue), round-trip serialization, UTF-8 bodies, edge cases (empty body, negative id, large body, too-small payload).

@@ -96,12 +96,12 @@ internal class RconClient : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// Execute a Lua command via Factorio's /c console command.
+    /// Execute a Lua command via Factorio's /silent-command (suppresses chat output).
     /// </summary>
     public Task<string> ExecuteLuaAsync(string luaCode, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(luaCode);
-        return ExecuteAsync($"/c {luaCode}", cancellationToken);
+        return ExecuteAsync($"/silent-command {luaCode}", cancellationToken);
     }
 
     /// <summary>

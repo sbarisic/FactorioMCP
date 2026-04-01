@@ -84,10 +84,12 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-*No high priority items*
+- [ ] **Chat Message Reaction** — Read and respond to in-game chat messages. Would enable AI to respond to player messages in multiplayer or see its own messages for confirmation. ⚠️ Note: `game.get_message_log()` does not exist in the Factorio Lua API. The `on_console_chat` event requires a mod handler (not available via RCON). May require the **Helper Factorio Mod** (ON HOLD) or a creative RCON-only workaround. **(CPX 3)**
+- [ ] **Goal Planner & State Machine** — Set goals, track progress, persist current objective so the AI can resume tasks after interruptions. **(CPX 5)**
 
 ### Medium Priority
 
+- [ ] **Energy Management Tools** — Get power production/consumption, manage accumulators, inspect electric networks. **(CPX 3)**
 - [ ] **Blueprint & Ghost Support** — Place blueprints or ghost entities for planned construction. Manage blueprint books. **(CPX 4)**
 
 ### Low Priority
@@ -96,15 +98,11 @@ RCON connection settings are read from environment variables:
 - [ ] **Raw Lua Execution Tool** — Execute arbitrary Lua code for advanced operations not covered by specific tools. Include safety warning in tool description. **(CPX 1)**
 - [ ] **Recipe & Technology Query Tools** — Query available recipes, recipe ingredients/products, technology prerequisites. Helps the AI plan crafting chains. **(CPX 2)**
 - [ ] **Inventory Management Tools** — Drop items, swap items, transfer between inventories, and other inventory operations beyond crafting. **(CPX 2)**
-- [ ] **Energy Management Tools** — Get power production/consumption, manage accumulators, inspect electric networks. **(CPX 3)**
 - [ ] **Logistics Tools** — Manage logistic robots, request items from logistic network, inspect logistic zones. **(CPX 3)**
 - [ ] **Combat Tools** — Attack entities, manage turrets, check enemy positions, defensive operations. **(CPX 3)**
 - [ ] **Train Management Tools** — Control trains, manage stations, set schedules, inspect train networks. **(CPX 3)**
-- [ ] **Chat Message Reaction** — Read and respond to in-game chat messages. Would enable AI to respond to player messages in multiplayer or see its own messages for confirmation. ⚠️ Note: `game.get_message_log()` does not exist in the Factorio Lua API. The `on_console_chat` event requires a mod handler (not available via RCON). May require the **Helper Factorio Mod** (ON HOLD) or a creative RCON-only workaround. **(CPX 3)**
 - [ ] **Player Interaction Tools** — Interact with entities (open GUIs, insert/remove items from machines, read machine status). **(CPX 3)**
-- [ ] **Map / Terrain Scanning** — Scan tiles around the player for resource patches (iron, copper, stone, coal, oil), water, terrain type. Helps the AI decide where to build. **(CPX 3)**
 - [ ] **Building Memory & State Tracking** — Remember placed building locations, track building upgrades, maintain a spatial index of the player's factory. **(CPX 4)**
-- [ ] **Goal Planner & State Machine** — Set goals, track progress, persist current objective so the AI can resume tasks after interruptions. **(CPX 5)**
 
 ### ON HOLD
 
@@ -121,7 +119,7 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-- [ ] **Use `/silent-command` Instead of `/c`** — Switch RCON Lua execution from `/c` to `/silent-command` so commands don't appear in the game chat log, keeping the console clean. **(CPX 1)**
+*No medium priority items*
 
 ### Low Priority
 
@@ -205,6 +203,7 @@ RCON connection settings are read from environment variables:
 
 ## Notes
 
+- This is for Factorio 2, not Factorio 1. Some API calls and behaviors may differ from Factorio 1. Keep the Factorio 2 Lua API docs handy for reference.
 - Try to edit files and use tools WITHOUT POWERSHELL where possible, shell scripts get stuck and then manually terminate. Do not use powershell commands unless absolutely necessary
 - Do not be afraid to break backwards compatibility if new changes will simplify or improve the project
 - When implementing or modifying Lua scripts, reference the bundled `LuaAPI/` HTML docs to verify correct API calls, parameter names, and return types. All current Lua snippets have been audited and confirmed correct against the Factorio API docs.

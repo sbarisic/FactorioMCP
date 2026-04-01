@@ -39,7 +39,7 @@ public class FactorioServiceTests
         await _service.WalkAsync("north");
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/c", _rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
         Assert.Contains("defines.direction.north", _rcon.LastCommand);
         Assert.Contains("walking = true", _rcon.LastCommand);
     }
@@ -90,7 +90,7 @@ public class FactorioServiceTests
         Assert.NotNull(_rcon.LastCommand);
         Assert.Contains("stuck_ticks", _rcon.LastCommand);
         Assert.Contains("detour_dir", _rcon.LastCommand);
-        Assert.Contains("global.walk_state", _rcon.LastCommand);
+        Assert.Contains("storage.walk_state", _rcon.LastCommand);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class FactorioServiceTests
         await _service.StopWalkingAsync();
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.Contains("global.walk_state = nil", _rcon.LastCommand);
+        Assert.Contains("storage.walk_state = nil", _rcon.LastCommand);
     }
 
     // ── StopWalking ──────────────────────────────────────────────────
@@ -110,7 +110,7 @@ public class FactorioServiceTests
         await _service.StopWalkingAsync();
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/c", _rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
         Assert.Contains("walking = false", _rcon.LastCommand);
     }
 
@@ -132,7 +132,7 @@ public class FactorioServiceTests
         await _service.GetPlayerPositionAsync();
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/c", _rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
         Assert.Contains("game.connected_players[1].position", _rcon.LastCommand);
     }
 
@@ -153,7 +153,7 @@ public class FactorioServiceTests
         await _service.GetInventoryAsync();
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/c", _rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
         Assert.Contains("get_main_inventory", _rcon.LastCommand);
     }
 
@@ -175,7 +175,7 @@ public class FactorioServiceTests
         await _service.CraftAsync("iron-gear-wheel", 5);
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/c", _rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
         Assert.Contains("begin_crafting", _rcon.LastCommand);
         Assert.Contains("count=5", _rcon.LastCommand);
         Assert.Contains("recipe=\"iron-gear-wheel\"", _rcon.LastCommand);
@@ -218,7 +218,7 @@ public class FactorioServiceTests
         await _service.GetCraftingQueueAsync();
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/c", _rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
         Assert.Contains("crafting_queue", _rcon.LastCommand);
     }
 
@@ -247,7 +247,7 @@ public class FactorioServiceTests
         await _service.PlaceEntityAsync("stone-furnace", 5.0, -2.0);
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/c", _rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
         Assert.Contains("\"stone-furnace\"", _rcon.LastCommand);
         Assert.Contains("5", _rcon.LastCommand);
         Assert.Contains("-2", _rcon.LastCommand);
@@ -357,7 +357,7 @@ public class FactorioServiceTests
         await _service.MineEntityAtAsync(5.0, -2.0);
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/c", _rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
         Assert.Contains("5", _rcon.LastCommand);
         Assert.Contains("-2", _rcon.LastCommand);
     }
@@ -423,7 +423,7 @@ public class FactorioServiceTests
         await _service.GetNearbyEntitiesAsync();
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/c", _rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
         Assert.Contains("find_entities_filtered", _rcon.LastCommand);
         Assert.Contains("radius=10", _rcon.LastCommand);
     }
@@ -469,7 +469,7 @@ public class FactorioServiceTests
         await _service.CheckDistanceAsync(10.0, -5.0);
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/c", _rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
         Assert.Contains("10", _rcon.LastCommand);
         Assert.Contains("-5", _rcon.LastCommand);
     }
@@ -511,7 +511,7 @@ public class FactorioServiceTests
         await _service.GetResearchStatusAsync();
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/c", _rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
         Assert.Contains("current_research", _rcon.LastCommand);
     }
 
@@ -541,13 +541,13 @@ public class FactorioServiceTests
         await _service.ExecuteRawLuaAsync("rcon.print('hello')");
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.Equal("/c rcon.print('hello')", _rcon.LastCommand);
+        Assert.Equal("/silent-command rcon.print('hello')", _rcon.LastCommand);
     }
 
-    // ── Cross-cutting: all commands use /c prefix ────────────────────
+    // ── Cross-cutting: all commands use /silent-command prefix ────────────────────
 
     [Fact]
-    public async Task AllCommands_UseSlashCPrefix()
+    public async Task AllCommands_UseSilentCommandPrefix()
     {
         await _service.WalkAsync("north");
         await _service.StopWalkingAsync();
@@ -562,9 +562,11 @@ public class FactorioServiceTests
         await _service.GetResearchStatusAsync();
         await _service.ExecuteRawLuaAsync("rcon.print('test')");
         await _service.GetGameTickAsync();
+        await _service.ScanResourcesAsync();
+        await _service.ScanTilesAsync();
 
-        Assert.Equal(13, _rcon.AllCommands.Count);
-        Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/c ", cmd));
+        Assert.Equal(15, _rcon.AllCommands.Count);
+        Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command ", cmd));
     }
 
     // ── GetGameTick ──────────────────────────────────────────────────
@@ -575,7 +577,7 @@ public class FactorioServiceTests
         await _service.GetGameTickAsync();
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/c", _rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
         Assert.Contains("game.tick", _rcon.LastCommand);
     }
 
@@ -790,6 +792,121 @@ public class FactorioServiceTests
             TimeSpan.FromMilliseconds(10), TimeSpan.FromSeconds(5));
 
         Assert.All(scripted.AllCommands, cmd => Assert.Contains("game.tick", cmd));
+    }
+
+    // ── ScanResources ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ScanResourcesAsync_SendsCorrectLuaCommand()
+    {
+        await _service.ScanResourcesAsync();
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+        Assert.Contains("find_entities_filtered", _rcon.LastCommand);
+        Assert.Contains("type=\"resource\"", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task ScanResourcesAsync_UsesDefaultRadius()
+    {
+        await _service.ScanResourcesAsync();
+
+        Assert.Contains("radius=50", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ScanResourcesAsync_UsesCustomRadius()
+    {
+        await _service.ScanResourcesAsync(100);
+
+        Assert.Contains("radius=100", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ScanResourcesAsync_OutputsJsonResourcesSummary()
+    {
+        await _service.ScanResourcesAsync();
+
+        Assert.Contains("\"scan_radius\":", _rcon.LastCommand!);
+        Assert.Contains("\"resources\":[", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ScanResourcesAsync_IncludesResourceDetails()
+    {
+        await _service.ScanResourcesAsync();
+
+        Assert.Contains("\"name\":\"", _rcon.LastCommand!);
+        Assert.Contains("\"patches\":", _rcon.LastCommand!);
+        Assert.Contains("\"total_amount\":", _rcon.LastCommand!);
+        Assert.Contains("\"center_x\":", _rcon.LastCommand!);
+        Assert.Contains("\"center_y\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ScanResourcesAsync_ThrowsOnZeroRadius()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.ScanResourcesAsync(0));
+    }
+
+    [Fact]
+    public async Task ScanResourcesAsync_ThrowsOnNegativeRadius()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.ScanResourcesAsync(-5));
+    }
+
+    // ── ScanTiles ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ScanTilesAsync_SendsCorrectLuaCommand()
+    {
+        await _service.ScanTilesAsync();
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+        Assert.Contains("find_tiles_filtered", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task ScanTilesAsync_UsesDefaultRadius()
+    {
+        await _service.ScanTilesAsync();
+
+        // The radius appears in the scan_radius output field
+        Assert.Contains("\"scan_radius\":16", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ScanTilesAsync_UsesCustomRadius()
+    {
+        await _service.ScanTilesAsync(32);
+
+        Assert.Contains("\"scan_radius\":32", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ScanTilesAsync_OutputsJsonTilesSummary()
+    {
+        await _service.ScanTilesAsync();
+
+        Assert.Contains("\"tiles\":[", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ScanTilesAsync_ThrowsOnZeroRadius()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.ScanTilesAsync(0));
+    }
+
+    [Fact]
+    public async Task ScanTilesAsync_ThrowsOnNegativeRadius()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.ScanTilesAsync(-5));
     }
 }
 

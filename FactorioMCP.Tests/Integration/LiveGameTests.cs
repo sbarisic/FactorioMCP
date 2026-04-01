@@ -73,7 +73,7 @@ public sealed class LiveGameTests : IAsyncLifetime
         lines.Add($"game.players[1]: [{result5}]");
 
         // Check game version
-        var result6 = await _rcon.ExecuteAsync("/c rcon.print('version: '..game.active_mods['base'])");
+        var result6 = await _rcon.ExecuteAsync("/c rcon.print('version: '..script.active_mods['base'])");
         lines.Add($"game version: [{result6}]");
 
         // Test the actual service methods

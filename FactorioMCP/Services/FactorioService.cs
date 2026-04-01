@@ -38,7 +38,7 @@ internal sealed class FactorioService(RconClient rcon)
             }
 
             -- State for stuck detection
-            global.walk_state = {
+            storage.walk_state = {
                 target_dir = target_dir,
                 prev_x = player.position.x,
                 prev_y = player.position.y,
@@ -51,7 +51,7 @@ internal sealed class FactorioService(RconClient rcon)
             script.on_event(defines.events.on_tick, function()
                 local p = game.connected_players[1]
                 if not (p and p.valid) then return end
-                local ws = global.walk_state
+                local ws = storage.walk_state
                 if not ws then return end
 
                 local pos = p.position
@@ -112,7 +112,7 @@ internal sealed class FactorioService(RconClient rcon)
         return rcon.ExecuteLuaAsync("""
             local player = game.connected_players[1]
             script.on_event(defines.events.on_tick, nil)
-            global.walk_state = nil
+            storage.walk_state = nil
             player.walking_state = {walking = false, direction = defines.direction.north}
             local p = player.position
             rcon.print('{"status":"stopped","x":'..p.x..',"y":'..p.y..'}')
@@ -448,5 +448,75 @@ internal sealed class FactorioService(RconClient rcon)
     public Task<string> ExecuteRawLuaAsync(string luaCode, CancellationToken cancellationToken = default)
     {
         return rcon.ExecuteLuaAsync(luaCode, cancellationToken);
+    }
+
+    /// <summary>
+    /// Scan for resource patches (ores, oil, etc.) within a radius of the player.
+    /// Returns each resource entity's name, position, and remaining amount.
+    /// </summary>
+    public Task<string> ScanResourcesAsync(double radius = 50, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local resources = player.surface.find_entities_filtered{
+                position=player.position, radius={{radius}}, type="resource"
+            }
+            local summary = {}
+            for _, r in pairs(resources) do
+                local key = r.name
+                if not summary[key] then
+                    summary[key] = {name=r.name, count=0, total_amount=0, min_x=r.position.x, min_y=r.position.y, max_x=r.position.x, max_y=r.position.y}
+                end
+                local s = summary[key]
+                s.count = s.count + 1
+                s.total_amount = s.total_amount + r.amount
+                if r.position.x < s.min_x then s.min_x = r.position.x end
+                if r.position.y < s.min_y then s.min_y = r.position.y end
+                if r.position.x > s.max_x then s.max_x = r.position.x end
+                if r.position.y > s.max_y then s.max_y = r.position.y end
+            end
+            local parts = {}
+            for _, s in pairs(summary) do
+                parts[#parts+1] = '{"name":"'..s.name..'","patches":'..s.count..',"total_amount":'..s.total_amount..',"center_x":'..string.format("%.1f",(s.min_x+s.max_x)/2)..',"center_y":'..string.format("%.1f",(s.min_y+s.max_y)/2)..'}'
+            end
+            rcon.print('{"scan_radius":{{radius}},"resources":['..table.concat(parts, ",")..']}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Scan tiles around the player to get terrain type information.
+    /// Returns a summary of tile types found within the specified radius.
+    /// </summary>
+    public Task<string> ScanTilesAsync(double radius = 16, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local pos = player.position
+            local r = {{radius}}
+            local tiles = player.surface.find_tiles_filtered{
+                area={{"{"}}{pos.x-r, pos.y-r}, {pos.x+r, pos.y+r}{{"}"}}
+            }
+            local summary = {}
+            for _, t in pairs(tiles) do
+                local name = t.name
+                if not summary[name] then
+                    summary[name] = 0
+                end
+                summary[name] = summary[name] + 1
+            end
+            local parts = {}
+            for name, count in pairs(summary) do
+                parts[#parts+1] = '{"name":"'..name..'","count":'..count..'}'
+            end
+            rcon.print('{"scan_radius":{{radius}},"tiles":['..table.concat(parts, ",")..']}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
 }

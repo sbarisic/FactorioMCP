@@ -43,4 +43,28 @@ internal sealed class WorldTools(FactorioService factorio)
     {
         return factorio.GetResearchStatusAsync(cancellationToken);
     }
+
+    [McpServerTool, Description(
+        "Scan for resource patches (ores, oil, etc.) within a radius of the player. " +
+        "Returns a summary of each resource type found: name, number of patches, total amount, " +
+        "and approximate center coordinates. Useful for finding where to mine.")]
+    public Task<string> ScanResources(
+        [Description("Search radius around the player in tiles (default 50)")]
+        double radius = 50,
+        CancellationToken cancellationToken = default)
+    {
+        return factorio.ScanResourcesAsync(radius, cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Scan tiles around the player to get terrain information. " +
+        "Returns a summary of tile types (grass, sand, water, dirt, etc.) and their counts " +
+        "within the area. Useful for understanding the landscape before building.")]
+    public Task<string> ScanTiles(
+        [Description("Search radius around the player in tiles (default 16)")]
+        double radius = 16,
+        CancellationToken cancellationToken = default)
+    {
+        return factorio.ScanTilesAsync(radius, cancellationToken);
+    }
 }
