@@ -94,6 +94,8 @@ Add to your `.vscode/mcp.json`:
 ## Available Tools
 
 > **Full reference**: See [TOOLS.md](TOOLS.md) for detailed parameters, return values, and AI prompt engineering tips.
+>
+> **LLM system prompt**: See [PROMPT.md](PROMPT.md) for a ready-to-use prompt that teaches the AI how to play Factorio through this MCP server.
 
 ### Movement
 

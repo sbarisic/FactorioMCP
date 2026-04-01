@@ -88,16 +88,23 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-*No medium priority items*
+- [ ] **Blueprint & Ghost Support** — Place blueprints or ghost entities for planned construction. Manage blueprint books. **(CPX 4)**
 
 ### Low Priority
 
 - [ ] **Research Tools** — Start research, get available technologies, get research progress. **(CPX 2)**
 - [ ] **Raw Lua Execution Tool** — Execute arbitrary Lua code for advanced operations not covered by specific tools. Include safety warning in tool description. **(CPX 1)**
 - [ ] **Recipe & Technology Query Tools** — Query available recipes, recipe ingredients/products, technology prerequisites. Helps the AI plan crafting chains. **(CPX 2)**
+- [ ] **Inventory Management Tools** — Drop items, swap items, transfer between inventories, and other inventory operations beyond crafting. **(CPX 2)**
+- [ ] **Energy Management Tools** — Get power production/consumption, manage accumulators, inspect electric networks. **(CPX 3)**
+- [ ] **Logistics Tools** — Manage logistic robots, request items from logistic network, inspect logistic zones. **(CPX 3)**
+- [ ] **Combat Tools** — Attack entities, manage turrets, check enemy positions, defensive operations. **(CPX 3)**
+- [ ] **Train Management Tools** — Control trains, manage stations, set schedules, inspect train networks. **(CPX 3)**
 - [ ] **Chat Message Reaction** — Read and respond to in-game chat messages. Would enable AI to respond to player messages in multiplayer or see its own messages for confirmation. ⚠️ Note: `game.get_message_log()` does not exist in the Factorio Lua API. The `on_console_chat` event requires a mod handler (not available via RCON). May require the **Helper Factorio Mod** (ON HOLD) or a creative RCON-only workaround. **(CPX 3)**
+- [ ] **Player Interaction Tools** — Interact with entities (open GUIs, insert/remove items from machines, read machine status). **(CPX 3)**
 - [ ] **Map / Terrain Scanning** — Scan tiles around the player for resource patches (iron, copper, stone, coal, oil), water, terrain type. Helps the AI decide where to build. **(CPX 3)**
-- [ ] **Blueprint & Ghost Support** — Place blueprints or ghost entities for planned construction. **(CPX 4)**
+- [ ] **Building Memory & State Tracking** — Remember placed building locations, track building upgrades, maintain a spatial index of the player's factory. **(CPX 4)**
+- [ ] **Goal Planner & State Machine** — Set goals, track progress, persist current objective so the AI can resume tasks after interruptions. **(CPX 5)**
 
 ### ON HOLD
 
@@ -114,7 +121,7 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-- [ ] **RCON Client Connection Logging** — Add `ILogger` to `RconClient` to log connection status changes (connected, disconnected, reconnecting), reconnection attempts with backoff timing, and communication errors. `RconConnectionService` already logs startup retries but `RconClient` internal reconnection is silent. **(CPX 2)**
+- [ ] **Use `/silent-command` Instead of `/c`** — Switch RCON Lua execution from `/c` to `/silent-command` so commands don't appear in the game chat log, keeping the console clean. **(CPX 1)**
 
 ### Low Priority
 
@@ -205,7 +212,7 @@ RCON connection settings are read from environment variables:
 - Keep files below 1000 lines, split when they get too large. Either partial classes or split into multiple smaller classes that handle a single functionality.
 - **Realistic AI constraint**: The AI player must not teleport, spawn items, or skip crafting time. It should walk to locations, wait for crafting to finish, and only interact with entities within range. This is a core design principle.
 - **RCON is the bridge**: All game control goes through RCON → Lua. The [Factorio Lua API](https://lua-api.factorio.com/latest/) is the authoritative reference for available operations.
-- **Singleplayer RCON caveat**: In singleplayer, `game.player` refers to the local player. In multiplayer/dedicated server, use `game.players[index]` or `game.connected_players`.
+- **RCON player resolution**: `game.player` is `nil` in RCON context. All Lua scripts use `game.connected_players[1]` which works for both singleplayer and dedicated server RCON. For future multiplayer support, a player index/name parameter would be needed.
 - Factorio installation folder is located in `E:\Games\Factorio2`
 
 ---

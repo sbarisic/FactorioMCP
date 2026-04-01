@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
 using System.Net.Sockets;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FactorioMCP.Rcon;
 
@@ -10,6 +12,7 @@ namespace FactorioMCP.Rcon;
 /// </summary>
 internal class RconClient : IAsyncDisposable, IDisposable
 {
+    private readonly ILogger<RconClient> _logger;
     private TcpClient? _tcp;
     private NetworkStream? _stream;
     private int _nextRequestId;
@@ -22,6 +25,11 @@ internal class RconClient : IAsyncDisposable, IDisposable
 
     private const int MaxReconnectAttempts = 3;
     private static readonly TimeSpan InitialBackoff = TimeSpan.FromSeconds(1);
+
+    public RconClient(ILogger<RconClient>? logger = null)
+    {
+        _logger = logger ?? NullLogger<RconClient>.Instance;
+    }
 
     /// <summary>
     /// Whether the client is currently connected to the RCON server.
@@ -48,7 +56,9 @@ internal class RconClient : IAsyncDisposable, IDisposable
         _port = port;
         _password = password;
 
+        _logger.LogDebug("Connecting to RCON server at {Host}:{Port}", host, port);
         await ConnectCoreAsync(cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("RCON connected and authenticated at {Host}:{Port}", host, port);
     }
 
     /// <summary>
@@ -74,6 +84,7 @@ internal class RconClient : IAsyncDisposable, IDisposable
             catch (Exception ex) when (IsConnectionException(ex))
             {
                 // Connection lost — attempt reconnection then retry the command
+                _logger.LogWarning(ex, "RCON connection lost during command execution. Attempting reconnection");
                 await ReconnectWithBackoffAsync(cancellationToken).ConfigureAwait(false);
                 return await ExecuteCoreAsync(command, cancellationToken).ConfigureAwait(false);
             }
@@ -135,17 +146,30 @@ internal class RconClient : IAsyncDisposable, IDisposable
 
         for (var attempt = 1; attempt <= MaxReconnectAttempts; attempt++)
         {
+            _logger.LogInformation(
+                "RCON reconnection attempt {Attempt}/{Max} to {Host}:{Port}",
+                attempt, MaxReconnectAttempts, _host, _port);
+
             try
             {
                 await ConnectCoreAsync(cancellationToken).ConfigureAwait(false);
-                return; // Reconnection succeeded
+                _logger.LogInformation("RCON reconnected successfully on attempt {Attempt}", attempt);
+                return;
             }
             catch (Exception ex) when (attempt < MaxReconnectAttempts && IsConnectionException(ex))
             {
+                _logger.LogWarning(
+                    ex,
+                    "RCON reconnection attempt {Attempt}/{Max} failed. Retrying in {Delay}s",
+                    attempt, MaxReconnectAttempts, delay.TotalSeconds);
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                 delay *= 2; // Exponential backoff
             }
         }
+
+        _logger.LogError(
+            "RCON reconnection failed after {Max} attempts to {Host}:{Port}",
+            MaxReconnectAttempts, _host, _port);
 
         throw new IOException(
             $"Failed to reconnect to RCON server at {_host}:{_port} after {MaxReconnectAttempts} attempts.");
@@ -163,6 +187,11 @@ internal class RconClient : IAsyncDisposable, IDisposable
     /// </summary>
     private void CloseConnection()
     {
+        if (_stream is not null || _tcp is not null)
+        {
+            _logger.LogDebug("Closing RCON connection");
+        }
+
         _stream?.Dispose();
         _stream = null;
         _tcp?.Dispose();

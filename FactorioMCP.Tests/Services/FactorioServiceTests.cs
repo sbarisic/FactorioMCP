@@ -82,6 +82,26 @@ public class FactorioServiceTests
         await Assert.ThrowsAsync<ArgumentException>(() => _service.WalkAsync("  "));
     }
 
+    [Fact]
+    public async Task WalkAsync_IncludesStuckDetectionLogic()
+    {
+        await _service.WalkAsync("south");
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.Contains("stuck_ticks", _rcon.LastCommand);
+        Assert.Contains("detour_dir", _rcon.LastCommand);
+        Assert.Contains("global.walk_state", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task StopWalkingAsync_ClearsWalkState()
+    {
+        await _service.StopWalkingAsync();
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.Contains("global.walk_state = nil", _rcon.LastCommand);
+    }
+
     // ── StopWalking ──────────────────────────────────────────────────
 
     [Fact]
@@ -113,7 +133,7 @@ public class FactorioServiceTests
 
         Assert.NotNull(_rcon.LastCommand);
         Assert.StartsWith("/c", _rcon.LastCommand);
-        Assert.Contains("game.player.position", _rcon.LastCommand);
+        Assert.Contains("game.connected_players[1].position", _rcon.LastCommand);
     }
 
     [Fact]
@@ -293,8 +313,8 @@ public class FactorioServiceTests
         await _service.PlaceEntityAsync("assembling-machine-1", 3.0, 4.0);
 
         Assert.Contains("create_entity", _rcon.LastCommand!);
-        Assert.Contains("force=game.player.force", _rcon.LastCommand!);
-        Assert.Contains("player=game.player", _rcon.LastCommand!);
+        Assert.Contains("force=player.force", _rcon.LastCommand!);
+        Assert.Contains("player=player", _rcon.LastCommand!);
     }
 
     [Fact]
@@ -361,12 +381,11 @@ public class FactorioServiceTests
     }
 
     [Fact]
-    public async Task MineEntityAtAsync_MinesIntoMainInventory()
+    public async Task MineEntityAtAsync_UsesPlayerMineEntity()
     {
         await _service.MineEntityAtAsync(0, 0);
 
-        Assert.Contains(".mine{", _rcon.LastCommand!);
-        Assert.Contains("get_main_inventory", _rcon.LastCommand!);
+        Assert.Contains("mine_entity", _rcon.LastCommand!);
     }
 
     [Fact]

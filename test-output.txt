@@ -1,0 +1,30 @@
+═══ RAW RCON DIAGNOSTICS ═══
+Basic rcon.print: [hello from rcon
+]
+game.player: [nil
+]
+game.players: [player count: 1
+]
+connected_players: [connected: Cartman300
+]
+game.players[1]: [player[1]: Cartman300 at -5,-0.90234375
+]
+game version: []
+
+═══ SERVICE METHOD RESULTS ═══
+GetPlayerPosition: [{"x":-5,"y":-0.90234375}
+]
+GetInventory: [{"items":[{"name":"burner-mining-drill","count":1},{"name":"wood","count":9}]}
+]
+GetNearbyEntities: [{"entities":[{"name":"tree-snow-a","x":-3.125,"y":-10.4375},{"name":"tree-snow-a","x":-9.125,"y":-8.375},{"name":"tree-snow-a","x":-5.1875,"y":-9.5625},{"name":"tree-snow-a","x":-5.625,"y":-8.625},{"name":"tree-snow-a","x":-4.5625,"y":-8.25},{"name":"tree-snow-a","x":-2.75,"y":-8.75},{"name":"tree-snow-a","x":-1.625,"y":-8.9375},{"name":"tree-snow-a","x":-12,"y":-6.1875},{"name":"tree-snow-a","x":-8.8125,"y":-6.0625},{"name":"tree-snow-a","x":-5.3125,"y":-7},{"name":"tree-snow-a","x":-4.625,"y":-6.125},{"name":"tree-snow-a","x":-1.1875,"y":-7.5},{"name":"tree-snow-a","x":-1.375,"y":-6.6875},{"name":"tree-snow-a","x":1.875,"y":-7.5},{"name":"tree-snow-a","x":2.5625,"y":-6.4375},{"name":"tree-snow-a","x":-13.625,"y":-4.875},{"name":"tree-snow-a","x":-12.25,"y":-4.875},{"name":"tree-snow-a","x":-10.9375,"y":-5.5},{"name":"tree-snow-a","x":-7.9375,"y":-4.5625},{"name":"crash-site-spaceship","x":-5,"y":-6},{"name":"tree-snow-a","x":-0.0625,"y":-5.8125},{"name":"tree-snow-a","x":1.3125,"y":-5.875},{"name":"tree-snow-a","x":2.1875,"y":-5.625},{"name":"tree-snow-a","x":-12.4375,"y":-2.75},{"name":"tree-snow-a","x":-10.25,"y":-3.625},{"name":"tree-snow-a","x":-11.5,"y":-2.4375},{"name":"tree-snow-a","x":-6.5,"y":-3.375},{"name":"tree-snow-a","x":-2.25,"y":-3.75},{"name":"tree-snow-a","x":-3.3125,"y":-2.5},{"name":"tree-02-stump","x":-1.125,"y":-3.4375},{"name":"crash-site-electric-pole","x":-12.5,"y":-0.5},{"name":"tree-snow-a","x":-10.375,"y":-0.8125},{"name":"tree-snow-a","x":-7.375,"y":-1.0625},{"name":"character","x":-5,"y":-0.90234375},{"name":"tree-snow-a","x":-5.6875,"y":-1.5625},{"name":"tree-snow-a","x":-4.375,"y":-1.375},{"name":"crash-site-lab-repaired","x":-3.5,"y":0.5},{"name":"crash-site-electric-pole","x":-13.5,"y":2.5},{"name":"crash-site-assembling-machine-1-repaired","x":-10.5,"y":2},{"name":"crash-site-electric-pole","x":-7.5,"y":4.5},{"name":"stone-furnace","x":1,"y":7}]}
+]
+GetResearchStatus: [{"researching":false}
+]
+GetGameTick: [{"tick":152999}
+]
+GetCraftingQueue: [{"queue":[]}
+]
+CheckDistance(0,0): [{"distance":5.1,"build_in_range":true,"build_limit":10,"reach_in_range":true,"reach_limit":10}
+]
+
+═══ DIAGNOSTICS COMPLETE ═══
