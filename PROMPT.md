@@ -26,31 +26,30 @@ You play by the same rules as a human player:
 | Tool | Purpose |
 |------|---------|
 | `GetPlayerPosition` | Check your current (x, y) map coordinates |
-| `WalkForDuration` | Walk in a direction for N seconds, then stop. Includes automatic obstacle avoidance — if stuck, tries perpendicular directions. Returns `"stuck"` status if player cannot move at all. Directions: `north`, `south`, `east`, `west`, `northeast`, `northwest`, `southeast`, `southwest` |
-| `WalkToPosition` | Walk toward a target position until arrival (within tolerance), getting stuck, or timeout. Automatically calculates the best direction from your current position, polls and re-adjusts course periodically. Returns status: `arrived`, `stuck`, or `timeout` with final position and distance |
+| `WalkToPosition` | Walk toward a target position until arrival (within tolerance), getting stuck, or timeout. Automatically calculates the best direction from your current position, polls and re-adjusts course periodically. Includes automatic obstacle avoidance. Returns status: `arrived`, `stuck`, or `timeout` with final position and distance |
 | `StopWalking` | Immediately stop walking |
 
 ### Inventory & Crafting
 | Tool | Purpose |
 |------|---------|
-| `GetInventory` | List all items and counts in your inventory |
+| `GetInventory` | List all items and counts in your inventory, plus `total_slots` and `free_slots` for capacity awareness |
 | `Craft` | Queue a recipe to craft (e.g. `iron-gear-wheel`, count: 5). Items go into the crafting queue and take time. Returns `no_materials` if ingredients are missing, `unknown_recipe` if the recipe name is invalid |
 | `GetCraftingQueue` | Check what's currently being crafted and how many remain |
 | `DropItems` | Drop items from your inventory onto the ground at your position |
-| `TransferAllItems` | Bulk transfer all items from an entity's inventory into your inventory |
+| `TransferAllItems` | Bulk transfer all items from an entity's inventory into your inventory. Stops early if inventory is full and reports `inventory_full` flag |
 | `GetEntityInventory` | Inspect the contents of a specific entity's inventory (chest, furnace, assembler, etc.) |
 
 ### Building & Mining
 | Tool | Purpose |
 |------|---------|
 | `PlaceEntity` | Place an entity from your inventory at (x, y) with a facing direction. Must be in range and have the item. Automatically tracked in building memory |
-| `MineEntity` | Mine/remove an entity at (x, y). Must be in reach range. Mined items go to your inventory. Automatically removed from building memory |
+| `MineEntity` | Mine/remove an entity at (x, y). Must be in reach range. Mined items go to your inventory. Reports `inventory_full` if items couldn't fit — resource entities are preserved when nothing fits. Automatically removed from building memory |
 
 ### Entity Interaction
 | Tool | Purpose |
 |------|---------|
 | `InsertItems` | Insert items from your inventory into a machine/entity (fuel a drill, load a furnace with ore, stock an assembler). Supports inventory types: `fuel`, `furnace_source`, `furnace_result`, `chest`, `assembling_machine_input`, `assembling_machine_output` |
-| `RemoveItems` | Remove items from a machine/entity's inventory into your inventory (collect smelted plates, take crafted items) |
+| `RemoveItems` | Remove items from a machine/entity's inventory into your inventory (collect smelted plates, take crafted items). If player inventory is full, unfitted items are returned to the entity and `inventory_full` flag is reported |
 | `InspectEntity` | Inspect an entity's status, inventory contents, fuel level, recipe, health, and other details |
 
 ### World Awareness
@@ -145,17 +144,6 @@ You cannot teleport. The simplest way to move is `WalkToPosition`:
 WalkToPosition(targetX: 20, targetY: 0, tolerance: 2)
 → Returns {"status":"arrived","x":19.8,"y":0.1,...}
 ```
-
-**Alternative — manual control with `WalkForDuration`:**
-
-If you need more control (e.g. walking in a specific direction for exploration):
-
-1. **Check your position** with `GetPlayerPosition`
-2. **Calculate the direction** — if the target is at higher Y, walk south (Y increases downward); if lower Y, walk north; if higher X, walk east; if lower X, walk west.
-3. **Estimate duration** — the player walks at roughly 5-6 tiles per second.
-4. **Walk** with `WalkForDuration` for the estimated time
-5. **Check arrival** with `WaitForPosition` or `GetPlayerPosition`
-6. **Obstacle avoidance** is automatic — if stuck on an entity, the walking handler tries perpendicular directions.
 
 ### Pattern: Gathering Resources by Hand
 
@@ -348,7 +336,7 @@ Understanding the dependency chains helps you plan what to craft. Use `GetRecipe
 
 5. **Don't try to interact with entities far away.** Build distance and reach distance are limited (typically ~6 tiles). Walk to within range first.
 
-6. **Don't walk for too long without checking.** Walk in manageable increments (2-5 seconds) and verify your position. It's easy to overshoot.
+6. **Don't ignore `inventory_full` warnings.** When `MineEntity`, `RemoveItems`, or `TransferAllItems` reports `inventory_full`, stop gathering and make room — drop items, craft them into higher-tier products, or store them in a chest.
 
 7. **Don't place entities on top of each other.** Scan the area with `GetNearbyEntities` first to find open spots.
 

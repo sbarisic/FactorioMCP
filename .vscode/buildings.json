@@ -1,0 +1,18 @@
+[
+  {
+    "entity_name": "stone-furnace",
+    "x": 85,
+    "y": -25,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-02T16:32:37.9647993Z"
+  },
+  {
+    "entity_name": "burner-mining-drill",
+    "x": 82,
+    "y": -25,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-02T16:36:10.8154696Z"
+  }
+]

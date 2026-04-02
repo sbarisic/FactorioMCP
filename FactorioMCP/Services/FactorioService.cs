@@ -135,6 +135,7 @@ internal sealed class FactorioService(RconClient rcon)
 
     /// <summary>
     /// Get the contents of the player's main inventory as a JSON array of items.
+    /// Includes total slot count and free slot count for capacity awareness.
     /// </summary>
     public Task<string> GetInventoryAsync(CancellationToken cancellationToken = default)
     {
@@ -152,7 +153,7 @@ internal sealed class FactorioService(RconClient rcon)
             for name, count in pairs(items) do
                 parts[#parts+1] = '{"name":"'..name..'","count":'..count..'}'
             end
-            rcon.print('{"items":['..table.concat(parts, ",")..']}')
+            rcon.print('{"items":['..table.concat(parts, ",")..'],"total_slots":'..#inv..',"free_slots":'..inv.count_empty_stacks()..'}')  
             """, cancellationToken);
     }
 
@@ -280,17 +281,26 @@ internal sealed class FactorioService(RconClient rcon)
                 -- Manually harvest: get resource amount, insert products, then destroy.
                 local amount = e.amount or 1
                 local products = e.prototype.mineable_properties.products
+                local total_expected = 0
+                local total_inserted = 0
                 if products then
                     for _, prod in pairs(products) do
                         local qty = prod.amount or math.floor((prod.amount_min + prod.amount_max) / 2)
                         qty = math.ceil(qty * amount)
                         if qty > 0 then
-                            player.insert{name=prod.name, count=qty}
+                            total_expected = total_expected + qty
+                            local inserted = player.insert{name=prod.name, count=qty}
+                            total_inserted = total_inserted + inserted
                         end
                     end
                 end
+                if total_inserted == 0 and total_expected > 0 then
+                    rcon.print('{"success":false,"error":"inventory_full","entity":"'..name..'"}')
+                    return
+                end
                 e.destroy()
-                rcon.print('{"success":true,"entity":"'..name..'","amount":'..amount..'}')
+                local inv_full = total_inserted < total_expected
+                rcon.print('{"success":true,"entity":"'..name..'","amount":'..amount..',"inventory_full":'..tostring(inv_full)..'}')  
             else
                 local mined = player.mine_entity(e, true)
                 if mined then
@@ -789,7 +799,7 @@ internal sealed class FactorioService(RconClient rcon)
             if inserted > 0 then
                 player.remove_item{name="{{itemName}}", count=inserted}
             end
-            rcon.print('{"success":true,"entity":"'..e.name..'","item":"{{itemName}}","inserted":'..inserted..',"requested":{{count}}..'}')
+            rcon.print('{"success":true,"entity":"'..e.name..'","item":"{{itemName}}","inserted":'..inserted..',"requested":'..{{count}}..'}')  
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -855,10 +865,15 @@ internal sealed class FactorioService(RconClient rcon)
             end
             local to_remove = math.min({{count}}, item_count)
             local removed = inv.remove{name="{{itemName}}", count=to_remove}
+            local inserted = 0
             if removed > 0 then
-                player.insert{name="{{itemName}}", count=removed}
+                inserted = player.insert{name="{{itemName}}", count=removed}
+                if inserted < removed then
+                    inv.insert{name="{{itemName}}", count=removed - inserted}
+                end
             end
-            rcon.print('{"success":true,"entity":"'..e.name..'","item":"{{itemName}}","removed":'..removed..',"requested":{{count}}..'}')
+            local inv_full = inserted < removed
+            rcon.print('{"success":true,"entity":"'..e.name..'","item":"{{itemName}}","removed":'..inserted..',"requested":'..{{count}}..',"inventory_full":'..tostring(inv_full)..'}')  
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -1101,6 +1116,7 @@ internal sealed class FactorioService(RconClient rcon)
             end
             local transferred = {}
             local total = 0
+            local inv_full = false
             for i = 1, #inv do
                 local stack = inv[i]
                 if stack.valid_for_read then
@@ -1112,9 +1128,13 @@ internal sealed class FactorioService(RconClient rcon)
                         transferred[#transferred+1] = '{"item":"'..name..'","count":'..inserted..'}'
                         total = total + inserted
                     end
+                    if inserted < cnt then
+                        inv_full = true
+                        break
+                    end
                 end
             end
-            rcon.print('{"success":true,"entity":"'..e.name..'","transferred":['..table.concat(transferred, ",")..'],"total_items":'..total..'}')
+            rcon.print('{"success":true,"entity":"'..e.name..'","transferred":['..table.concat(transferred, ",")..'],"total_items":'..total..',"inventory_full":'..tostring(inv_full)..'}')  
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
