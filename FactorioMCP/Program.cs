@@ -15,6 +15,7 @@ builder.Services
     .AddSingleton<EnergyService>()
     .AddSingleton<GoalPlannerService>()
     .AddSingleton<BuildingMemoryService>()
+    .AddSingleton<GameCommandQueue>()
     .AddHostedService<RconConnectionService>()
     .AddMcpServer(options =>
     {

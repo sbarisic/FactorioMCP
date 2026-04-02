@@ -9,12 +9,12 @@ namespace FactorioMCP.Tools;
 /// so the player must wait for items to finish.
 /// </summary>
 [McpServerToolType]
-internal sealed class InventoryTools(FactorioService factorio)
+internal sealed class InventoryTools(FactorioService factorio, GameCommandQueue queue)
 {
     [McpServerTool, Description("Get the contents of the player's main inventory, listing all items and their counts.")]
     public Task<string> GetInventory(CancellationToken cancellationToken = default)
     {
-        return factorio.GetInventoryAsync(cancellationToken);
+        return queue.ExecuteAsync(nameof(GetInventory), factorio.GetInventoryAsync, cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -27,12 +27,12 @@ internal sealed class InventoryTools(FactorioService factorio)
         int count,
         CancellationToken cancellationToken = default)
     {
-        return factorio.CraftAsync(recipe, count, cancellationToken);
+        return queue.ExecuteAsync(nameof(Craft), ct => factorio.CraftAsync(recipe, count, ct), cancellationToken);
     }
 
     [McpServerTool, Description("Get the player's current crafting queue showing what is being crafted and how many.")]
     public Task<string> GetCraftingQueue(CancellationToken cancellationToken = default)
     {
-        return factorio.GetCraftingQueueAsync(cancellationToken);
+        return queue.ExecuteAsync(nameof(GetCraftingQueue), factorio.GetCraftingQueueAsync, cancellationToken);
     }
 }

@@ -10,7 +10,7 @@ namespace FactorioMCP.Tools;
 /// properties for per-entity power diagnostics.
 /// </summary>
 [McpServerToolType]
-internal sealed class EnergyTools(EnergyService energy)
+internal sealed class EnergyTools(EnergyService energy, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Get electric network statistics from the nearest electric pole within a radius. " +
@@ -22,7 +22,7 @@ internal sealed class EnergyTools(EnergyService energy)
         double radius = 50,
         CancellationToken cancellationToken = default)
     {
-        return energy.GetElectricNetworkAsync(radius, cancellationToken);
+        return queue.ExecuteAsync(nameof(GetElectricNetwork), ct => energy.GetElectricNetworkAsync(radius, ct), cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -37,6 +37,6 @@ internal sealed class EnergyTools(EnergyService energy)
         double y,
         CancellationToken cancellationToken = default)
     {
-        return energy.InspectEntityPowerAsync(x, y, cancellationToken);
+        return queue.ExecuteAsync(nameof(InspectEntityPower), ct => energy.InspectEntityPowerAsync(x, y, ct), cancellationToken);
     }
 }

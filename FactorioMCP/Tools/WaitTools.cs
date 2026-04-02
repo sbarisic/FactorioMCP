@@ -9,7 +9,7 @@ namespace FactorioMCP.Tools;
 /// so the AI waits for operations to complete instead of spamming commands.
 /// </summary>
 [McpServerToolType]
-internal sealed class WaitTools(FactorioService factorio)
+internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Wait for the crafting queue to empty. Polls the queue periodically until all items " +
@@ -22,10 +22,10 @@ internal sealed class WaitTools(FactorioService factorio)
         double timeoutSeconds = 60,
         CancellationToken cancellationToken = default)
     {
-        return factorio.WaitForCraftingAsync(
+        return queue.ExecuteAsync(nameof(WaitForCrafting), ct => factorio.WaitForCraftingAsync(
             TimeSpan.FromSeconds(pollIntervalSeconds),
             TimeSpan.FromSeconds(timeoutSeconds),
-            cancellationToken);
+            ct), cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -46,11 +46,11 @@ internal sealed class WaitTools(FactorioService factorio)
         double timeoutSeconds = 30,
         CancellationToken cancellationToken = default)
     {
-        return factorio.WaitForPositionAsync(
+        return queue.ExecuteAsync(nameof(WaitForPosition), ct => factorio.WaitForPositionAsync(
             targetX, targetY, tolerance,
             TimeSpan.FromSeconds(pollIntervalSeconds),
             TimeSpan.FromSeconds(timeoutSeconds),
-            cancellationToken);
+            ct), cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -66,11 +66,11 @@ internal sealed class WaitTools(FactorioService factorio)
         double timeoutSeconds = 30,
         CancellationToken cancellationToken = default)
     {
-        return factorio.WaitForTicksAsync(
+        return queue.ExecuteAsync(nameof(WaitForTicks), ct => factorio.WaitForTicksAsync(
             ticks,
             TimeSpan.FromSeconds(pollIntervalSeconds),
             TimeSpan.FromSeconds(timeoutSeconds),
-            cancellationToken);
+            ct), cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -78,6 +78,6 @@ internal sealed class WaitTools(FactorioService factorio)
         "Useful for measuring elapsed time between operations.")]
     public Task<string> GetGameTick(CancellationToken cancellationToken = default)
     {
-        return factorio.GetGameTickAsync(cancellationToken);
+        return queue.ExecuteAsync(nameof(GetGameTick), factorio.GetGameTickAsync, cancellationToken);
     }
 }

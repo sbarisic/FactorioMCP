@@ -10,7 +10,7 @@ namespace FactorioMCP.Tools;
 /// in storage.chat_log, and game.print() to send messages to all players.
 /// </summary>
 [McpServerToolType]
-internal sealed class ChatTools(FactorioService factorio)
+internal sealed class ChatTools(FactorioService factorio, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Initialize the chat message listener. Registers an event handler that captures " +
@@ -19,7 +19,7 @@ internal sealed class ChatTools(FactorioService factorio)
         "Safe to call multiple times.")]
     public Task<string> InitializeChatListener(CancellationToken cancellationToken = default)
     {
-        return factorio.InitializeChatListenerAsync(cancellationToken);
+        return queue.ExecuteAsync(nameof(InitializeChatListener), factorio.InitializeChatListenerAsync, cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -33,7 +33,7 @@ internal sealed class ChatTools(FactorioService factorio)
         long sinceTick = 0,
         CancellationToken cancellationToken = default)
     {
-        return factorio.GetChatMessagesAsync(sinceTick, cancellationToken);
+        return queue.ExecuteAsync(nameof(GetChatMessages), ct => factorio.GetChatMessagesAsync(sinceTick, ct), cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -44,6 +44,6 @@ internal sealed class ChatTools(FactorioService factorio)
         string message,
         CancellationToken cancellationToken = default)
     {
-        return factorio.SendChatMessageAsync(message, cancellationToken);
+        return queue.ExecuteAsync(nameof(SendChatMessage), ct => factorio.SendChatMessageAsync(message, ct), cancellationToken);
     }
 }

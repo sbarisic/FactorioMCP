@@ -9,7 +9,7 @@ namespace FactorioMCP.Tools;
 /// All results come from rcon.print() as structured text.
 /// </summary>
 [McpServerToolType]
-internal sealed class WorldTools(FactorioService factorio)
+internal sealed class WorldTools(FactorioService factorio, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Get a list of all entities near the player within a given radius. " +
@@ -19,7 +19,7 @@ internal sealed class WorldTools(FactorioService factorio)
         double radius = 10,
         CancellationToken cancellationToken = default)
     {
-        return factorio.GetNearbyEntitiesAsync(radius, cancellationToken);
+        return queue.ExecuteAsync(nameof(GetNearbyEntities), ct => factorio.GetNearbyEntitiesAsync(radius, ct), cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -33,7 +33,7 @@ internal sealed class WorldTools(FactorioService factorio)
         double y,
         CancellationToken cancellationToken = default)
     {
-        return factorio.CheckDistanceAsync(x, y, cancellationToken);
+        return queue.ExecuteAsync(nameof(CheckDistance), ct => factorio.CheckDistanceAsync(x, y, ct), cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -45,7 +45,7 @@ internal sealed class WorldTools(FactorioService factorio)
         double radius = 50,
         CancellationToken cancellationToken = default)
     {
-        return factorio.ScanResourcesAsync(radius, cancellationToken);
+        return queue.ExecuteAsync(nameof(ScanResources), ct => factorio.ScanResourcesAsync(radius, ct), cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -57,6 +57,6 @@ internal sealed class WorldTools(FactorioService factorio)
         double radius = 16,
         CancellationToken cancellationToken = default)
     {
-        return factorio.ScanTilesAsync(radius, cancellationToken);
+        return queue.ExecuteAsync(nameof(ScanTiles), ct => factorio.ScanTilesAsync(radius, ct), cancellationToken);
     }
 }

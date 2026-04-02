@@ -14,6 +14,7 @@ public class McpToolIntegrationTests
     private readonly EnergyService _energy;
     private readonly GoalPlannerService _goals;
     private readonly BuildingMemoryService _buildingMemory;
+    private readonly GameCommandQueue _queue = new();
 
     public McpToolIntegrationTests()
     {
@@ -35,6 +36,7 @@ public class McpToolIntegrationTests
         services.AddSingleton<RconClient, CapturingRconClient>();
         services.AddSingleton<FactorioService>();
         services.AddSingleton<EnergyService>();
+        services.AddSingleton<GameCommandQueue>();
 
         var tempPath = Path.Combine(Path.GetTempPath(), $"goals-di-{Guid.NewGuid():N}.json");
         services.AddSingleton(new GoalPlannerService(tempPath));
@@ -134,7 +136,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task MovementTools_GetPlayerPosition_DelegatesToFactorioService()
     {
-        var tools = new MovementTools(_factorio);
+        var tools = new MovementTools(_factorio, _queue);
 
         await tools.GetPlayerPosition();
 
@@ -145,7 +147,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task MovementTools_StopWalking_DelegatesToFactorioService()
     {
-        var tools = new MovementTools(_factorio);
+        var tools = new MovementTools(_factorio, _queue);
 
         var result = await tools.StopWalking();
 
@@ -158,7 +160,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task InventoryTools_GetInventory_DelegatesToFactorioService()
     {
-        var tools = new InventoryTools(_factorio);
+        var tools = new InventoryTools(_factorio, _queue);
 
         await tools.GetInventory();
 
@@ -168,7 +170,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task InventoryTools_Craft_PassesRecipeAndCount()
     {
-        var tools = new InventoryTools(_factorio);
+        var tools = new InventoryTools(_factorio, _queue);
 
         await tools.Craft("iron-gear-wheel", 5);
 
@@ -179,7 +181,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task InventoryTools_GetCraftingQueue_DelegatesToFactorioService()
     {
-        var tools = new InventoryTools(_factorio);
+        var tools = new InventoryTools(_factorio, _queue);
 
         await tools.GetCraftingQueue();
 
@@ -191,7 +193,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task EntityTools_PlaceEntity_PassesAllParameters()
     {
-        var tools = new EntityTools(_factorio, _buildingMemory);
+        var tools = new EntityTools(_factorio, _buildingMemory, _queue);
 
         await tools.PlaceEntity("stone-furnace", 10.5, -3.2, "south");
 
@@ -204,7 +206,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task EntityTools_MineEntity_PassesCoordinates()
     {
-        var tools = new EntityTools(_factorio, _buildingMemory);
+        var tools = new EntityTools(_factorio, _buildingMemory, _queue);
 
         await tools.MineEntity(5, -2);
 
@@ -216,7 +218,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task WorldTools_GetNearbyEntities_PassesRadius()
     {
-        var tools = new WorldTools(_factorio);
+        var tools = new WorldTools(_factorio, _queue);
 
         await tools.GetNearbyEntities(25);
 
@@ -227,7 +229,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task WorldTools_CheckDistance_PassesCoordinates()
     {
-        var tools = new WorldTools(_factorio);
+        var tools = new WorldTools(_factorio, _queue);
 
         await tools.CheckDistance(100, -50);
 
@@ -238,7 +240,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task WorldTools_ScanResources_PassesRadius()
     {
-        var tools = new WorldTools(_factorio);
+        var tools = new WorldTools(_factorio, _queue);
 
         await tools.ScanResources(100);
 
@@ -249,7 +251,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task WorldTools_ScanTiles_PassesRadius()
     {
-        var tools = new WorldTools(_factorio);
+        var tools = new WorldTools(_factorio, _queue);
 
         await tools.ScanTiles(32);
 
@@ -262,7 +264,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task InteractionTools_InsertItems_PassesAllParameters()
     {
-        var tools = new InteractionTools(_factorio);
+        var tools = new InteractionTools(_factorio, _queue);
 
         await tools.InsertItems(5, -2, "coal", 10, "fuel");
 
@@ -273,7 +275,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task InteractionTools_RemoveItems_PassesAllParameters()
     {
-        var tools = new InteractionTools(_factorio);
+        var tools = new InteractionTools(_factorio, _queue);
 
         await tools.RemoveItems(5, -2, "iron-plate", 20, "furnace_result");
 
@@ -284,7 +286,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task InteractionTools_InspectEntity_PassesCoordinates()
     {
-        var tools = new InteractionTools(_factorio);
+        var tools = new InteractionTools(_factorio, _queue);
 
         await tools.InspectEntity(10, 20);
 
@@ -297,7 +299,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task ChatTools_InitializeChatListener_DelegatesToFactorioService()
     {
-        var tools = new ChatTools(_factorio);
+        var tools = new ChatTools(_factorio, _queue);
 
         await tools.InitializeChatListener();
 
@@ -307,7 +309,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task ChatTools_GetChatMessages_PassesSinceTick()
     {
-        var tools = new ChatTools(_factorio);
+        var tools = new ChatTools(_factorio, _queue);
 
         await tools.GetChatMessages(sinceTick: 500);
 
@@ -318,7 +320,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task ChatTools_SendChatMessage_PassesMessage()
     {
-        var tools = new ChatTools(_factorio);
+        var tools = new ChatTools(_factorio, _queue);
 
         await tools.SendChatMessage("Hello from AI");
 
@@ -376,7 +378,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task EnergyTools_GetElectricNetwork_PassesRadius()
     {
-        var tools = new EnergyTools(_energy);
+        var tools = new EnergyTools(_energy, _queue);
 
         await tools.GetElectricNetwork(radius: 75);
 
@@ -387,7 +389,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task EnergyTools_GetElectricNetwork_UsesDefaultRadius()
     {
-        var tools = new EnergyTools(_energy);
+        var tools = new EnergyTools(_energy, _queue);
 
         await tools.GetElectricNetwork();
 
@@ -397,7 +399,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task EnergyTools_InspectEntityPower_PassesCoordinates()
     {
-        var tools = new EnergyTools(_energy);
+        var tools = new EnergyTools(_energy, _queue);
 
         await tools.InspectEntityPower(12.5, -7.3);
 
@@ -411,7 +413,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task ResearchTools_GetResearchStatus_DelegatesToFactorioService()
     {
-        var tools = new ResearchTools(_factorio);
+        var tools = new ResearchTools(_factorio, _queue);
 
         await tools.GetResearchStatus();
 
@@ -421,7 +423,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task ResearchTools_GetAvailableTechnologies_DelegatesToFactorioService()
     {
-        var tools = new ResearchTools(_factorio);
+        var tools = new ResearchTools(_factorio, _queue);
 
         await tools.GetAvailableTechnologies();
 
@@ -432,7 +434,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task ResearchTools_StartResearch_PassesTechnology()
     {
-        var tools = new ResearchTools(_factorio);
+        var tools = new ResearchTools(_factorio, _queue);
 
         await tools.StartResearch("automation");
 
@@ -445,7 +447,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task LuaTools_ExecuteLua_DelegatesToFactorioService()
     {
-        var tools = new LuaTools(_factorio);
+        var tools = new LuaTools(_factorio, _queue);
 
         await tools.ExecuteLua("rcon.print('hello')");
 
@@ -457,7 +459,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task RecipeTools_GetRecipeDetails_PassesRecipeName()
     {
-        var tools = new RecipeTools(_factorio);
+        var tools = new RecipeTools(_factorio, _queue);
 
         await tools.GetRecipeDetails("iron-gear-wheel");
 
@@ -468,7 +470,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task RecipeTools_GetAvailableRecipes_DelegatesToFactorioService()
     {
-        var tools = new RecipeTools(_factorio);
+        var tools = new RecipeTools(_factorio, _queue);
 
         await tools.GetAvailableRecipes();
 
@@ -479,7 +481,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task RecipeTools_GetTechnologyDetails_PassesTechnologyName()
     {
-        var tools = new RecipeTools(_factorio);
+        var tools = new RecipeTools(_factorio, _queue);
 
         await tools.GetTechnologyDetails("automation");
 
@@ -551,7 +553,7 @@ public class McpToolIntegrationTests
     {
         // CapturingRconClient returns empty string (not a success JSON),
         // so building should not be tracked
-        var tools = new EntityTools(_factorio, _buildingMemory);
+        var tools = new EntityTools(_factorio, _buildingMemory, _queue);
 
         await tools.PlaceEntity("stone-furnace", 5, 5);
 

@@ -9,7 +9,7 @@ namespace FactorioMCP.Tools;
 /// Helps the AI plan crafting chains and research priorities.
 /// </summary>
 [McpServerToolType]
-internal sealed class RecipeTools(FactorioService factorio)
+internal sealed class RecipeTools(FactorioService factorio, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Get details about a specific recipe — ingredients, products, crafting time, and category. " +
@@ -19,7 +19,7 @@ internal sealed class RecipeTools(FactorioService factorio)
         string recipe,
         CancellationToken cancellationToken = default)
     {
-        return factorio.GetRecipeDetailsAsync(recipe, cancellationToken);
+        return queue.ExecuteAsync(nameof(GetRecipeDetails), ct => factorio.GetRecipeDetailsAsync(recipe, ct), cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -28,7 +28,7 @@ internal sealed class RecipeTools(FactorioService factorio)
         "Use this to see what the player can currently craft.")]
     public Task<string> GetAvailableRecipes(CancellationToken cancellationToken = default)
     {
-        return factorio.GetAvailableRecipesAsync(cancellationToken);
+        return queue.ExecuteAsync(nameof(GetAvailableRecipes), factorio.GetAvailableRecipesAsync, cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -40,6 +40,6 @@ internal sealed class RecipeTools(FactorioService factorio)
         string technology,
         CancellationToken cancellationToken = default)
     {
-        return factorio.GetTechnologyDetailsAsync(technology, cancellationToken);
+        return queue.ExecuteAsync(nameof(GetTechnologyDetails), ct => factorio.GetTechnologyDetailsAsync(technology, ct), cancellationToken);
     }
 }

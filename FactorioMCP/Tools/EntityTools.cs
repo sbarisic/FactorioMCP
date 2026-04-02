@@ -11,13 +11,13 @@ namespace FactorioMCP.Tools;
 /// Automatically tracks/untracks buildings in <see cref="BuildingMemoryService"/>.
 /// </summary>
 [McpServerToolType]
-internal sealed class EntityTools(FactorioService factorio, BuildingMemoryService buildingMemory)
+internal sealed class EntityTools(FactorioService factorio, BuildingMemoryService buildingMemory, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Place an entity from the player's inventory at the specified map coordinates. " +
         "Validates proximity (must be within build distance), inventory contents, and position validity before placing. " +
         "Automatically tracks the placed building in memory for future queries.")]
-    public async Task<string> PlaceEntity(
+    public Task<string> PlaceEntity(
         [Description("Entity/item name to place (e.g. 'stone-furnace', 'transport-belt', 'assembling-machine-1')")]
         string entityName,
         [Description("X coordinate on the map")]
@@ -28,14 +28,17 @@ internal sealed class EntityTools(FactorioService factorio, BuildingMemoryServic
         string direction = "north",
         CancellationToken cancellationToken = default)
     {
-        var result = await factorio.PlaceEntityAsync(entityName, x, y, direction, cancellationToken);
-
-        if (IsSuccessResponse(result))
+        return queue.ExecuteAsync(nameof(PlaceEntity), async ct =>
         {
-            await buildingMemory.TrackBuildingAsync(entityName, x, y, direction, cancellationToken);
-        }
+            var result = await factorio.PlaceEntityAsync(entityName, x, y, direction, ct);
 
-        return result;
+            if (IsSuccessResponse(result))
+            {
+                await buildingMemory.TrackBuildingAsync(entityName, x, y, direction, ct);
+            }
+
+            return result;
+        }, cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -43,21 +46,24 @@ internal sealed class EntityTools(FactorioService factorio, BuildingMemoryServic
         "Validates proximity (must be within reach distance) before mining. " +
         "Mined items are added to the player's inventory. " +
         "Automatically removes the building from memory tracking.")]
-    public async Task<string> MineEntity(
+    public Task<string> MineEntity(
         [Description("X coordinate of the entity to mine")]
         double x,
         [Description("Y coordinate of the entity to mine")]
         double y,
         CancellationToken cancellationToken = default)
     {
-        var result = await factorio.MineEntityAtAsync(x, y, cancellationToken);
-
-        if (IsSuccessResponse(result))
+        return queue.ExecuteAsync(nameof(MineEntity), async ct =>
         {
-            await buildingMemory.UntrackBuildingAtAsync(x, y, cancellationToken);
-        }
+            var result = await factorio.MineEntityAtAsync(x, y, ct);
 
-        return result;
+            if (IsSuccessResponse(result))
+            {
+                await buildingMemory.UntrackBuildingAtAsync(x, y, ct);
+            }
+
+            return result;
+        }, cancellationToken);
     }
 
     private static bool IsSuccessResponse(string json)

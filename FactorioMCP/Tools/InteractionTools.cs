@@ -9,7 +9,7 @@ namespace FactorioMCP.Tools;
 /// reading machine status, and inspecting entity inventories.
 /// </summary>
 [McpServerToolType]
-internal sealed class InteractionTools(FactorioService factorio)
+internal sealed class InteractionTools(FactorioService factorio, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Insert items from the player's inventory into a machine/entity at the specified position. " +
@@ -27,7 +27,7 @@ internal sealed class InteractionTools(FactorioService factorio)
         string inventoryType = "fuel",
         CancellationToken cancellationToken = default)
     {
-        return factorio.InsertItemsAsync(x, y, itemName, count, inventoryType, cancellationToken);
+        return queue.ExecuteAsync(nameof(InsertItems), ct => factorio.InsertItemsAsync(x, y, itemName, count, inventoryType, ct), cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -46,7 +46,7 @@ internal sealed class InteractionTools(FactorioService factorio)
         string inventoryType = "furnace_result",
         CancellationToken cancellationToken = default)
     {
-        return factorio.RemoveItemsAsync(x, y, itemName, count, inventoryType, cancellationToken);
+        return queue.ExecuteAsync(nameof(RemoveItems), ct => factorio.RemoveItemsAsync(x, y, itemName, count, inventoryType, ct), cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -60,6 +60,6 @@ internal sealed class InteractionTools(FactorioService factorio)
         double y,
         CancellationToken cancellationToken = default)
     {
-        return factorio.InspectEntityAsync(x, y, cancellationToken);
+        return queue.ExecuteAsync(nameof(InspectEntity), ct => factorio.InspectEntityAsync(x, y, ct), cancellationToken);
     }
 }

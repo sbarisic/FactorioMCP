@@ -9,14 +9,14 @@ namespace FactorioMCP.Tools;
 /// starting research, and checking progress.
 /// </summary>
 [McpServerToolType]
-internal sealed class ResearchTools(FactorioService factorio)
+internal sealed class ResearchTools(FactorioService factorio, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Get the current research status and progress for the player's force. " +
         "Shows the technology being researched and its completion percentage.")]
     public Task<string> GetResearchStatus(CancellationToken cancellationToken = default)
     {
-        return factorio.GetResearchStatusAsync(cancellationToken);
+        return queue.ExecuteAsync(nameof(GetResearchStatus), factorio.GetResearchStatusAsync, cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -25,7 +25,7 @@ internal sealed class ResearchTools(FactorioService factorio)
         "Each entry includes the technology name, research unit cost, and required science pack ingredients.")]
     public Task<string> GetAvailableTechnologies(CancellationToken cancellationToken = default)
     {
-        return factorio.GetAvailableTechnologiesAsync(cancellationToken);
+        return queue.ExecuteAsync(nameof(GetAvailableTechnologies), factorio.GetAvailableTechnologiesAsync, cancellationToken);
     }
 
     [McpServerTool, Description(
@@ -37,6 +37,6 @@ internal sealed class ResearchTools(FactorioService factorio)
         string technology,
         CancellationToken cancellationToken = default)
     {
-        return factorio.StartResearchAsync(technology, cancellationToken);
+        return queue.ExecuteAsync(nameof(StartResearch), ct => factorio.StartResearchAsync(technology, ct), cancellationToken);
     }
 }

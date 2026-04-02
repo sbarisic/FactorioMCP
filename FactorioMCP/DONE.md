@@ -45,6 +45,7 @@ Items completed from the [TODO list](TODO.md).
 - [x] **Example mcp.json (CPX 1)** — Added `.vscode/mcp.json` pre-configured with `dotnet run --project` command and all default environment variables (`FACTORIO_RCON_HOST`, `FACTORIO_RCON_PORT`, `FACTORIO_RCON_PASSWORD`). Uses `${workspaceFolder}` for portable project path. Updated README VS Code section to reference the bundled file with manual setup in collapsible details.
 
 - [x] **Use `/silent-command` Instead of `/c` (CPX 1)** — Switched `RconClient.ExecuteLuaAsync` from `/c` to `/silent-command` so Lua commands don't appear in the game chat log. Updated all unit test assertions from `/c` prefix to `/silent-command` prefix.
+- [x] **LuaAPI Reference (CPX 1)** — Added `LUA_API.md` documenting the bundled `LuaAPI/` folder (Factorio 2.0.76, API v6). Covers folder structure, key runtime classes (LuaPlayer, LuaSurface, LuaEntity, LuaForce, LuaRCON, LuaGameScript, LuaRecord, LuaFlowStatistics), key defines, events, RCON-specific notes, and machine-readable JSON API references.
 
 ---
 

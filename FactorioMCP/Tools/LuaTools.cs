@@ -9,7 +9,7 @@ namespace FactorioMCP.Tools;
 /// Intended for advanced operations not covered by specific tools.
 /// </summary>
 [McpServerToolType]
-internal sealed class LuaTools(FactorioService factorio)
+internal sealed class LuaTools(FactorioService factorio, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Execute arbitrary Lua code on the Factorio game instance via RCON. " +
@@ -25,6 +25,6 @@ internal sealed class LuaTools(FactorioService factorio)
         string luaCode,
         CancellationToken cancellationToken = default)
     {
-        return factorio.ExecuteRawLuaAsync(luaCode, cancellationToken);
+        return queue.ExecuteAsync(nameof(ExecuteLua), ct => factorio.ExecuteRawLuaAsync(luaCode, ct), cancellationToken);
     }
 }

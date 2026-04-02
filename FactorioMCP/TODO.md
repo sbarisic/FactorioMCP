@@ -30,7 +30,7 @@ LLM (Claude/GPT/etc) ←→ [MCP Server (C#, stdio)] ←→ [RCON TCP] ←→ Fa
 ```
 
 - **MCP side**: Uses the [modelcontextprotocol/csharp-sdk](https://github.com/modelcontextprotocol/csharp-sdk) (`ModelContextProtocol` NuGet) to expose tools via stdio transport.
-- **Factorio side**: Connects via Source RCON protocol over TCP to send Lua commands (`/c ...`) using the [Factorio Lua API](https://lua-api.factorio.com/latest/).
+- **Factorio side**: Connects via Source RCON protocol over TCP to send Lua commands (`/c ...`) using the [Factorio Lua API](https://lua-api.factorio.com/latest/). See [`LUA_API.md`](LUA_API.md) for the bundled local API reference.
 - **Realistic AI constraint**: No teleportation, no instant crafting, no spawning items — the AI must play within normal game mechanics.
 
 ### Solution Structure
@@ -89,23 +89,23 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **Blueprint & Ghost Support** — Place blueprints or ghost entities for planned construction. Manage blueprint books. **(CPX 4)**
+- [ ] **Blueprint & Ghost Support** — Place blueprints or ghost entities for planned construction. Manage blueprint books. See [`LuaRecord`](LUA_API.md#rcon--game) for blueprint string operations. **(CPX 4)**
 
 ### Medium Priority
 
-- [ ] **Inventory Management Tools** — Drop items, swap items, transfer between inventories, and other inventory operations beyond crafting. **(CPX 2)**
-- [ ] **Remote Area Scanning Tools** — Query entities, resources, and terrain at arbitrary map coordinates instead of only near the player. Extends existing scan tools (`GetNearbyEntities`, `ScanResources`, `ScanTiles`) with x/y center parameters for long-range planning without walking. **(CPX 2)**
+- [ ] **Inventory Management Tools** — Drop items, swap items, transfer between inventories, and other inventory operations beyond crafting. See [`LuaInventory`/`LuaControl`](LUA_API.md#player--control) and [`defines.inventory`](LUA_API.md#key-defines). **(CPX 2)**
+- [ ] **Remote Area Scanning Tools** — Query entities, resources, and terrain at arbitrary map coordinates instead of only near the player. Extends existing scan tools (`GetNearbyEntities`, `ScanResources`, `ScanTiles`) with x/y center parameters for long-range planning without walking. See [`LuaSurface`](LUA_API.md#world--entities) for `find_entities_filtered()`/`find_tiles_filtered()`. **(CPX 2)**
 
 ### Low Priority
 
-- [ ] **Logistics Tools** — Manage logistic robots, request items from logistic network, inspect logistic zones. **(CPX 3)**
-- [ ] **Combat Tools** — Attack entities, manage turrets, check enemy positions, defensive operations. **(CPX 3)**
-- [ ] **Train Management Tools** — Control trains, manage stations, set schedules, inspect train networks. **(CPX 3)**
+- [ ] **Logistics Tools** — Manage logistic robots, request items from logistic network, inspect logistic zones. See [`LuaEntity`](LUA_API.md#world--entities) and [`LuaForce`](LUA_API.md#research--recipes). **(CPX 3)**
+- [ ] **Combat Tools** — Attack entities, manage turrets, check enemy positions, defensive operations. See [`LuaEntity`](LUA_API.md#world--entities) and [`LuaSurface`](LUA_API.md#world--entities). **(CPX 3)**
+- [ ] **Train Management Tools** — Control trains, manage stations, set schedules, inspect train networks. See [`LuaEntity`](LUA_API.md#world--entities) for train/station entities. **(CPX 3)**
 
 ### ON HOLD
 
-- [ ] **Helper Factorio Mod** — Optional Lua mod installed in Factorio that exposes `remote.call()` interfaces for advanced async state tracking (crafting completion events, walking arrival detection, pathfinding). Only needed if RCON polling proves too limited. **(CPX 5)**
-- [ ] **MCP Resources (Read-Only State)** — Expose game state as MCP Resources (production stats, map info, recipe database) using `[McpServerResource]` for passive context without tool calls. **(CPX 3)**
+- [ ] **Helper Factorio Mod** — Optional Lua mod installed in Factorio that exposes `remote.call()` interfaces for advanced async state tracking (crafting completion events, walking arrival detection, pathfinding). Only needed if RCON polling proves too limited. See [`LUA_API.md` events](LUA_API.md#key-events) and [RCON notes](LUA_API.md#rcon-specific-notes). **(CPX 5)**
+- [ ] **MCP Resources (Read-Only State)** — Expose game state as MCP Resources (production stats, map info, recipe database) using `[McpServerResource]` for passive context without tool calls. See [`LuaFlowStatistics`](LUA_API.md#energy), [`LuaForce`](LUA_API.md#research--recipes), and [`LuaGameScript`](LUA_API.md#rcon--game). **(CPX 3)**
 
 ---
 
@@ -113,7 +113,7 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-*No high priority items*
+- [ ] **Command Queuing & Sequencing** — Queue commands to avoid race conditions when the AI sends multiple commands rapidly. Ensure one Lua command completes before the next is sent. **(CPX 3)**
 
 ### Medium Priority
 
@@ -122,8 +122,7 @@ RCON connection settings are read from environment variables:
 ### Low Priority
 
 - [ ] **RCON Multi-Packet Response Handling**
-- [ ] **Multiplayer Player Targeting** — Support specifying which player to control in multiplayer games instead of always using `game.player` (which is only valid in singleplayer RCON context). Use `game.players[name]` or `game.connected_players`. **(CPX 3)**
-- [ ] **Command Queuing & Sequencing** — Queue commands to avoid race conditions when the AI sends multiple commands rapidly. Ensure one Lua command completes before the next is sent. **(CPX 3)**
+- [ ] **Multiplayer Player Targeting** — Support specifying which player to control in multiplayer games instead of always using `game.player` (which is only valid in singleplayer RCON context). Use `game.players[name]` or `game.connected_players`. See [`LuaGameScript`](LUA_API.md#rcon--game) and [RCON notes](LUA_API.md#rcon-specific-notes). **(CPX 3)**
 
 ### ON HOLD
 
@@ -145,7 +144,6 @@ RCON connection settings are read from environment variables:
 
 - [ ] **LM Studio Setup Guide** — Add LM Studio connection instructions to the README as a recommended local-model setup. Include default model suggestion (`qwen/qwen3-vl-4b`), MCP client configuration, and any LM Studio-specific notes for connecting to the stdio MCP server. **(CPX 1)**
 - [ ] **Architecture Decision Records** — Document key decisions: why RCON over mod API, why realistic AI constraints, why stdio transport. **(CPX 1)**
-- [ ] **LuaAPI Reference in README** — Add a section to the README documenting the bundled `LuaAPI/` folder containing the full Factorio Lua API reference (HTML). Link to key class docs (LuaPlayer, LuaSurface, LuaEntity, LuaForce, LuaRCON, defines). **(CPX 1)**
 
 ### On Hold
 
@@ -201,15 +199,15 @@ RCON connection settings are read from environment variables:
 
 ## Notes
 
-- This is for Factorio 2, not Factorio 1. Some API calls and behaviors may differ from Factorio 1. Keep the Factorio 2 Lua API docs handy for reference.
+- This is for Factorio 2, not Factorio 1. Some API calls and behaviors may differ from Factorio 1. Keep the Factorio 2 Lua API docs handy — see [`LUA_API.md`](LUA_API.md) for the bundled local reference.
 - Try to edit files and use tools WITHOUT POWERSHELL where possible, shell scripts get stuck and then manually terminate. Do not use powershell commands unless absolutely necessary
 - Do not be afraid to break backwards compatibility if new changes will simplify or improve the project
-- When implementing or modifying Lua scripts, reference the bundled `LuaAPI/` HTML docs to verify correct API calls, parameter names, and return types. All current Lua snippets have been audited and confirmed correct against the Factorio API docs.
+- When implementing or modifying Lua scripts, reference [`LUA_API.md`](LUA_API.md) and the bundled `LuaAPI/` HTML docs to verify correct API calls, parameter names, and return types. All current Lua snippets have been audited and confirmed correct against the Factorio API docs.
 - Problem solutions need to be optimized, performant and well thought out before implementation, avoid quick fixes
 - Keep files below 1000 lines, split when they get too large. Either partial classes or split into multiple smaller classes that handle a single functionality.
 - **Realistic AI constraint**: The AI player must not teleport, spawn items, or skip crafting time. It should walk to locations, wait for crafting to finish, and only interact with entities within range. This is a core design principle.
-- **RCON is the bridge**: All game control goes through RCON → Lua. The [Factorio Lua API](https://lua-api.factorio.com/latest/) is the authoritative reference for available operations.
-- **RCON player resolution**: `game.player` is `nil` in RCON context. All Lua scripts use `game.connected_players[1]` which works for both singleplayer and dedicated server RCON. For future multiplayer support, a player index/name parameter would be needed.
+- **RCON is the bridge**: All game control goes through RCON → Lua. The [Factorio Lua API](https://lua-api.factorio.com/latest/) is the authoritative reference; see [`LUA_API.md`](LUA_API.md) for the local copy and [RCON-specific notes](LUA_API.md#rcon-specific-notes).
+- **RCON player resolution**: `game.player` is `nil` in RCON context. All Lua scripts use `game.connected_players[1]` which works for both singleplayer and dedicated server RCON. For future multiplayer support, a player index/name parameter would be needed. See [`LUA_API.md` RCON notes](LUA_API.md#rcon-specific-notes).
 - Factorio installation folder is located in `E:\Games\Factorio2`
 
 ---
