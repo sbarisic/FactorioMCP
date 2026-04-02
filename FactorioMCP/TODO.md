@@ -50,7 +50,7 @@ FactorioMCP.Tests → FactorioMCP
 |--------|--------|-------------|
 | RCON Client | ✅ Functional | Low-level Source RCON protocol over TCP with auto-reconnection and exponential backoff |
 | Factorio Service | ✅ Functional | High-level game operations (movement, crafting, building, world queries) |
-| MCP Tools | 🔶 Partial/WIP | Movement, inventory/crafting, entity placement/mining, world scanning, and proximity checking tools exposed via MCP SDK |
+| MCP Tools | ✅ Functional | Movement, inventory/crafting, entity placement/mining, entity interaction (insert/remove items, inspect), world scanning, and proximity checking tools exposed via MCP SDK |
 | MCP Hosting | ✅ Functional | Program.cs wiring with DI, configuration, stdio transport |
 | Realistic Behaviors | ✅ Functional | Walking with real physics, crafting with real queue, proximity validation on place/mine, wait/polling for crafting completion, position arrival, and game tick timing — no cheating |
 
@@ -101,7 +101,6 @@ RCON connection settings are read from environment variables:
 - [ ] **Logistics Tools** — Manage logistic robots, request items from logistic network, inspect logistic zones. **(CPX 3)**
 - [ ] **Combat Tools** — Attack entities, manage turrets, check enemy positions, defensive operations. **(CPX 3)**
 - [ ] **Train Management Tools** — Control trains, manage stations, set schedules, inspect train networks. **(CPX 3)**
-- [ ] **Player Interaction Tools** — Interact with entities (open GUIs, insert/remove items from machines, read machine status). **(CPX 3)**
 - [ ] **Building Memory & State Tracking** — Remember placed building locations, track building upgrades, maintain a spatial index of the player's factory. **(CPX 4)**
 
 ### ON HOLD

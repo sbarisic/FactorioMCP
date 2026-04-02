@@ -165,8 +165,14 @@ internal sealed class FactorioService(RconClient rcon)
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(count);
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
             local player = game.connected_players[1]
-            local crafted = player.begin_crafting{count={{count}}, recipe="{{recipe}}"}
-            rcon.print('{"status":"crafting","recipe":"{{recipe}}","requested":{{count}},"queued":'..crafted..'}')
+            local ok, result = pcall(function() return player.begin_crafting{count={{count}}, recipe="{{recipe}}"} end)
+            if not ok then
+                rcon.print('{"status":"error","error":"unknown_recipe","recipe":"{{recipe}}"}')
+            elseif result == 0 then
+                rcon.print('{"status":"no_materials","recipe":"{{recipe}}","requested":{{count}},"queued":0}')
+            else
+                rcon.print('{"status":"crafting","recipe":"{{recipe}}","requested":{{count}},"queued":'..result..'}')
+            end
             """);
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
@@ -236,7 +242,11 @@ internal sealed class FactorioService(RconClient rcon)
 
     /// <summary>
     /// Mine/remove an entity at the specified position. Mined items go to the player's inventory.
-    /// Uses player.mine_entity() which handles inventory transfer and raises proper game events.
+    /// Uses player.mine_entity() for non-resource entities which handles inventory transfer
+    /// and raises proper game events. For resource entities (ores), manually harvests the
+    /// resource amount and inserts products into inventory since player.mine_entity() fails
+    /// on resources in Factorio 2.
+    /// Prioritizes non-resource entities when multiple entities overlap at the same position.
     /// Validates proximity before mining.
     /// </summary>
     public Task<string> MineEntityAtAsync(double x, double y, CancellationToken cancellationToken = default)
@@ -252,17 +262,41 @@ internal sealed class FactorioService(RconClient rcon)
                 return
             end
             local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
-            if #entities > 0 then
-                local e = entities[1]
-                local name = e.name
+            if #entities == 0 then
+                rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
+                return
+            end
+            -- Sort: non-resource entities first so we don't accidentally mine ore under a drill
+            table.sort(entities, function(a, b)
+                local a_res = a.type == "resource" and 1 or 0
+                local b_res = b.type == "resource" and 1 or 0
+                return a_res < b_res
+            end)
+            local e = entities[1]
+            local name = e.name
+            if e.type == "resource" then
+                -- Resource entities cannot be mined with player.mine_entity() in Factorio 2.
+                -- Manually harvest: get resource amount, insert products, then destroy.
+                local amount = e.amount or 1
+                local products = e.prototype.mineable_properties.products
+                if products then
+                    for _, prod in pairs(products) do
+                        local qty = prod.amount or math.floor((prod.amount_min + prod.amount_max) / 2)
+                        qty = math.ceil(qty * amount)
+                        if qty > 0 then
+                            player.insert{name=prod.name, count=qty}
+                        end
+                    end
+                end
+                e.destroy()
+                rcon.print('{"success":true,"entity":"'..name..'","amount":'..amount..'}')
+            else
                 local mined = player.mine_entity(e, true)
                 if mined then
                     rcon.print('{"success":true,"entity":"'..name..'"}')
                 else
                     rcon.print('{"success":false,"error":"mine_failed","entity":"'..name..'"}')
                 end
-            else
-                rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
             end
             """);
 
@@ -515,6 +549,230 @@ internal sealed class FactorioService(RconClient rcon)
                 parts[#parts+1] = '{"name":"'..name..'","count":'..count..'}'
             end
             rcon.print('{"scan_radius":{{radius}},"tiles":['..table.concat(parts, ",")..']}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Insert items from the player's inventory into an entity's inventory at the specified position.
+    /// Supports specifying the target inventory slot (fuel, input, output, etc.).
+    /// Validates proximity before interacting.
+    /// </summary>
+    public Task<string> InsertItemsAsync(double x, double y, string itemName, int count, string inventoryType = "fuel", CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemName);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(count);
+        ArgumentException.ThrowIfNullOrWhiteSpace(inventoryType);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local player_pos = player.position
+            local dx = {{x}} - player_pos.x
+            local dy = {{y}} - player_pos.y
+            local distance = math.sqrt(dx*dx + dy*dy)
+            if distance > player.reach_distance then
+                rcon.print('{"success":false,"error":"out_of_range","distance":'..string.format("%.1f", distance)..',"limit":'..player.reach_distance..'}')
+                return
+            end
+            local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
+            -- Prioritize non-resource entities
+            table.sort(entities, function(a, b)
+                local a_res = a.type == "resource" and 1 or 0
+                local b_res = b.type == "resource" and 1 or 0
+                return a_res < b_res
+            end)
+            local e = nil
+            for _, ent in pairs(entities) do
+                if ent.type ~= "resource" then e = ent break end
+            end
+            if not e then
+                rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
+                return
+            end
+            -- Map inventory type string to defines
+            local inv_map = {
+                fuel = defines.inventory.fuel,
+                furnace_source = defines.inventory.furnace_source,
+                furnace_result = defines.inventory.furnace_result,
+                chest = defines.inventory.chest,
+                assembling_machine_input = defines.inventory.assembling_machine_input,
+                assembling_machine_output = defines.inventory.assembling_machine_output
+            }
+            local inv_type = inv_map["{{inventoryType}}"]
+            if not inv_type then
+                rcon.print('{"success":false,"error":"invalid_inventory_type","inventory_type":"{{inventoryType}}"}')
+                return
+            end
+            local inv = e.get_inventory(inv_type)
+            if not inv then
+                rcon.print('{"success":false,"error":"no_inventory","entity":"'..e.name..'","inventory_type":"{{inventoryType}}"}')
+                return
+            end
+            local available = player.get_item_count("{{itemName}}")
+            if available == 0 then
+                rcon.print('{"success":false,"error":"no_items","item":"{{itemName}}","available":0}')
+                return
+            end
+            local to_insert = math.min({{count}}, available)
+            local inserted = inv.insert{name="{{itemName}}", count=to_insert}
+            if inserted > 0 then
+                player.remove_item{name="{{itemName}}", count=inserted}
+            end
+            rcon.print('{"success":true,"entity":"'..e.name..'","item":"{{itemName}}","inserted":'..inserted..',"requested":{{count}}..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Remove items from an entity's inventory at the specified position into the player's inventory.
+    /// Supports specifying the source inventory slot (fuel, input, output, etc.).
+    /// Validates proximity before interacting.
+    /// </summary>
+    public Task<string> RemoveItemsAsync(double x, double y, string itemName, int count, string inventoryType = "furnace_result", CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemName);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(count);
+        ArgumentException.ThrowIfNullOrWhiteSpace(inventoryType);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local player_pos = player.position
+            local dx = {{x}} - player_pos.x
+            local dy = {{y}} - player_pos.y
+            local distance = math.sqrt(dx*dx + dy*dy)
+            if distance > player.reach_distance then
+                rcon.print('{"success":false,"error":"out_of_range","distance":'..string.format("%.1f", distance)..',"limit":'..player.reach_distance..'}')
+                return
+            end
+            local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
+            table.sort(entities, function(a, b)
+                local a_res = a.type == "resource" and 1 or 0
+                local b_res = b.type == "resource" and 1 or 0
+                return a_res < b_res
+            end)
+            local e = nil
+            for _, ent in pairs(entities) do
+                if ent.type ~= "resource" then e = ent break end
+            end
+            if not e then
+                rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
+                return
+            end
+            local inv_map = {
+                fuel = defines.inventory.fuel,
+                furnace_source = defines.inventory.furnace_source,
+                furnace_result = defines.inventory.furnace_result,
+                chest = defines.inventory.chest,
+                assembling_machine_input = defines.inventory.assembling_machine_input,
+                assembling_machine_output = defines.inventory.assembling_machine_output
+            }
+            local inv_type = inv_map["{{inventoryType}}"]
+            if not inv_type then
+                rcon.print('{"success":false,"error":"invalid_inventory_type","inventory_type":"{{inventoryType}}"}')
+                return
+            end
+            local inv = e.get_inventory(inv_type)
+            if not inv then
+                rcon.print('{"success":false,"error":"no_inventory","entity":"'..e.name..'","inventory_type":"{{inventoryType}}"}')
+                return
+            end
+            local item_count = inv.get_item_count("{{itemName}}")
+            if item_count == 0 then
+                rcon.print('{"success":false,"error":"no_items","entity":"'..e.name..'","item":"{{itemName}}","available":0}')
+                return
+            end
+            local to_remove = math.min({{count}}, item_count)
+            local removed = inv.remove{name="{{itemName}}", count=to_remove}
+            if removed > 0 then
+                player.insert{name="{{itemName}}", count=removed}
+            end
+            rcon.print('{"success":true,"entity":"'..e.name..'","item":"{{itemName}}","removed":'..removed..',"requested":{{count}}..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Inspect an entity at the specified position, returning its status, inventory contents,
+    /// fuel level, recipe, and other relevant information.
+    /// Validates proximity before interacting.
+    /// </summary>
+    public Task<string> InspectEntityAsync(double x, double y, CancellationToken cancellationToken = default)
+    {
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local player_pos = player.position
+            local dx = {{x}} - player_pos.x
+            local dy = {{y}} - player_pos.y
+            local distance = math.sqrt(dx*dx + dy*dy)
+            if distance > player.reach_distance then
+                rcon.print('{"success":false,"error":"out_of_range","distance":'..string.format("%.1f", distance)..',"limit":'..player.reach_distance..'}')
+                return
+            end
+            local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
+            table.sort(entities, function(a, b)
+                local a_res = a.type == "resource" and 1 or 0
+                local b_res = b.type == "resource" and 1 or 0
+                return a_res < b_res
+            end)
+            local e = nil
+            for _, ent in pairs(entities) do
+                if ent.type ~= "resource" then e = ent break end
+            end
+            if not e then
+                rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
+                return
+            end
+            local result = '{"success":true,"entity":"'..e.name..'","type":"'..e.type..'","position":{"x":'..e.position.x..',"y":'..e.position.y..'}'
+            -- Status
+            if e.status then
+                local status_names = {}
+                for k, v in pairs(defines.entity_status) do status_names[v] = k end
+                local status_name = status_names[e.status] or tostring(e.status)
+                result = result..',"status":"'..status_name..'"'
+            end
+            -- Health
+            if e.health then
+                result = result..',"health":'..e.health
+                if e.prototype and e.prototype.max_health then
+                    result = result..',"max_health":'..e.prototype.max_health
+                end
+            end
+            -- Recipe (assembling machines)
+            local ok_recipe, recipe = pcall(function() return e.get_recipe() end)
+            if ok_recipe and recipe then
+                result = result..',"recipe":"'..recipe.name..'"'
+            end
+            -- Inventories
+            local inv_names = {"fuel", "furnace_source", "furnace_result", "chest", "assembling_machine_input", "assembling_machine_output"}
+            local inv_defines = {defines.inventory.fuel, defines.inventory.furnace_source, defines.inventory.furnace_result, defines.inventory.chest, defines.inventory.assembling_machine_input, defines.inventory.assembling_machine_output}
+            local inv_parts = {}
+            for i, inv_name in pairs(inv_names) do
+                local inv = e.get_inventory(inv_defines[i])
+                if inv then
+                    local contents = inv.get_contents()
+                    local items = {}
+                    for _, item_stack in pairs(contents) do
+                        items[#items+1] = '{"name":"'..item_stack.name..'","count":'..item_stack.count..'}'
+                    end
+                    inv_parts[#inv_parts+1] = '"'..inv_name..'":[' ..table.concat(items, ",")..']'
+                end
+            end
+            if #inv_parts > 0 then
+                result = result..',"inventories":{'..table.concat(inv_parts, ",")..'}'
+            end
+            -- Burner (fuel remaining)
+            if e.burner then
+                result = result..',"burner":{"remaining_burning_fuel":'..string.format("%.1f", e.burner.remaining_burning_fuel)..',"heat":'..string.format("%.1f", e.burner.heat)..',"heat_capacity":'..string.format("%.1f", e.burner.heat_capacity)..'}'
+            end
+            -- Mining target (for mining drills)
+            if e.mining_target then
+                result = result..',"mining_target":"'..e.mining_target.name..'"'
+            end
+            result = result..'}'
+            rcon.print(result)
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);

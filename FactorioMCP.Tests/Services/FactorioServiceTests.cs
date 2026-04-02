@@ -193,6 +193,25 @@ public class FactorioServiceTests
     }
 
     [Fact]
+    public async Task CraftAsync_ReturnsNoMaterialsWhenQueuedIsZero()
+    {
+        await _service.CraftAsync("iron-gear-wheel", 5);
+
+        Assert.Contains("\"status\":\"no_materials\"", _rcon.LastCommand!);
+        Assert.Contains("\"queued\":0", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task CraftAsync_ReturnsErrorOnInvalidRecipe()
+    {
+        await _service.CraftAsync("not-a-real-recipe", 1);
+
+        Assert.Contains("pcall", _rcon.LastCommand!);
+        Assert.Contains("\"status\":\"error\"", _rcon.LastCommand!);
+        Assert.Contains("\"error\":\"unknown_recipe\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
     public async Task CraftAsync_ThrowsOnNullRecipe()
     {
         await Assert.ThrowsAsync<ArgumentNullException>(() => _service.CraftAsync(null!, 1));
@@ -415,6 +434,34 @@ public class FactorioServiceTests
         Assert.Contains("-3.75", _rcon.LastCommand!);
     }
 
+    [Fact]
+    public async Task MineEntityAtAsync_PrioritizesNonResourceEntities()
+    {
+        await _service.MineEntityAtAsync(0, 0);
+
+        Assert.Contains("table.sort", _rcon.LastCommand!);
+        Assert.Contains("\"resource\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task MineEntityAtAsync_HandlesResourceEntitiesWithDestroy()
+    {
+        await _service.MineEntityAtAsync(0, 0);
+
+        Assert.Contains("e.type == \"resource\"", _rcon.LastCommand!);
+        Assert.Contains("e.destroy()", _rcon.LastCommand!);
+        Assert.Contains("player.insert", _rcon.LastCommand!);
+        Assert.Contains("mineable_properties", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task MineEntityAtAsync_ReturnsAmountForResourceEntities()
+    {
+        await _service.MineEntityAtAsync(0, 0);
+
+        Assert.Contains("\"amount\":", _rcon.LastCommand!);
+    }
+
     // ── GetNearbyEntities ────────────────────────────────────────────
 
     [Fact]
@@ -564,8 +611,11 @@ public class FactorioServiceTests
         await _service.GetGameTickAsync();
         await _service.ScanResourcesAsync();
         await _service.ScanTilesAsync();
+        await _service.InsertItemsAsync(0, 0, "coal", 5);
+        await _service.RemoveItemsAsync(0, 0, "iron-plate", 10);
+        await _service.InspectEntityAsync(0, 0);
 
-        Assert.Equal(15, _rcon.AllCommands.Count);
+        Assert.Equal(18, _rcon.AllCommands.Count);
         Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command ", cmd));
     }
 
@@ -907,6 +957,216 @@ public class FactorioServiceTests
     {
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => _service.ScanTilesAsync(-5));
+    }
+
+    // ── InsertItems ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task InsertItemsAsync_SendsCorrectItemAndCount()
+    {
+        await _service.InsertItemsAsync(5.0, 3.0, "coal", 10, "fuel");
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+        Assert.Contains("coal", _rcon.LastCommand);
+        Assert.Contains("10", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task InsertItemsAsync_ChecksProximity()
+    {
+        await _service.InsertItemsAsync(0, 0, "coal", 1);
+
+        Assert.Contains("reach_distance", _rcon.LastCommand!);
+        Assert.Contains("out_of_range", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InsertItemsAsync_PrioritizesNonResourceEntities()
+    {
+        await _service.InsertItemsAsync(0, 0, "coal", 1);
+
+        Assert.Contains("table.sort", _rcon.LastCommand!);
+        Assert.Contains("\"resource\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InsertItemsAsync_MapsInventoryTypes()
+    {
+        await _service.InsertItemsAsync(0, 0, "iron-ore", 5, "furnace_source");
+
+        Assert.Contains("defines.inventory.fuel", _rcon.LastCommand!);
+        Assert.Contains("defines.inventory.furnace_source", _rcon.LastCommand!);
+        Assert.Contains("defines.inventory.furnace_result", _rcon.LastCommand!);
+        Assert.Contains("defines.inventory.chest", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InsertItemsAsync_ChecksPlayerInventory()
+    {
+        await _service.InsertItemsAsync(0, 0, "coal", 1);
+
+        Assert.Contains("get_item_count", _rcon.LastCommand!);
+        Assert.Contains("no_items", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InsertItemsAsync_InsertsIntoEntityInventory()
+    {
+        await _service.InsertItemsAsync(0, 0, "coal", 5);
+
+        Assert.Contains("inv.insert", _rcon.LastCommand!);
+        Assert.Contains("remove_item", _rcon.LastCommand!);
+        Assert.Contains("\"inserted\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InsertItemsAsync_ThrowsOnNullItemName()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _service.InsertItemsAsync(0, 0, null!, 1));
+    }
+
+    [Fact]
+    public async Task InsertItemsAsync_ThrowsOnZeroCount()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => _service.InsertItemsAsync(0, 0, "coal", 0));
+    }
+
+    // ── RemoveItems ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RemoveItemsAsync_SendsCorrectItemAndCount()
+    {
+        await _service.RemoveItemsAsync(5.0, 3.0, "iron-plate", 20, "furnace_result");
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+        Assert.Contains("iron-plate", _rcon.LastCommand);
+        Assert.Contains("20", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task RemoveItemsAsync_ChecksProximity()
+    {
+        await _service.RemoveItemsAsync(0, 0, "iron-plate", 1);
+
+        Assert.Contains("reach_distance", _rcon.LastCommand!);
+        Assert.Contains("out_of_range", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task RemoveItemsAsync_ChecksEntityInventoryContents()
+    {
+        await _service.RemoveItemsAsync(0, 0, "iron-plate", 1);
+
+        Assert.Contains("get_item_count", _rcon.LastCommand!);
+        Assert.Contains("no_items", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task RemoveItemsAsync_RemovesFromEntityAndInsertsToPlayer()
+    {
+        await _service.RemoveItemsAsync(0, 0, "iron-plate", 5);
+
+        Assert.Contains("inv.remove", _rcon.LastCommand!);
+        Assert.Contains("player.insert", _rcon.LastCommand!);
+        Assert.Contains("\"removed\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task RemoveItemsAsync_ThrowsOnNullItemName()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _service.RemoveItemsAsync(0, 0, null!, 1));
+    }
+
+    [Fact]
+    public async Task RemoveItemsAsync_ThrowsOnZeroCount()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => _service.RemoveItemsAsync(0, 0, "iron-plate", 0));
+    }
+
+    // ── InspectEntity ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task InspectEntityAsync_SendsCorrectPosition()
+    {
+        await _service.InspectEntityAsync(7.5, -3.0);
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+        Assert.Contains("7.5", _rcon.LastCommand);
+        Assert.Contains("-3", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task InspectEntityAsync_ChecksProximity()
+    {
+        await _service.InspectEntityAsync(0, 0);
+
+        Assert.Contains("reach_distance", _rcon.LastCommand!);
+        Assert.Contains("out_of_range", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InspectEntityAsync_PrioritizesNonResourceEntities()
+    {
+        await _service.InspectEntityAsync(0, 0);
+
+        Assert.Contains("table.sort", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InspectEntityAsync_ReadsEntityStatus()
+    {
+        await _service.InspectEntityAsync(0, 0);
+
+        Assert.Contains("e.status", _rcon.LastCommand!);
+        Assert.Contains("defines.entity_status", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InspectEntityAsync_ReadsInventoryContents()
+    {
+        await _service.InspectEntityAsync(0, 0);
+
+        Assert.Contains("get_inventory", _rcon.LastCommand!);
+        Assert.Contains("get_contents", _rcon.LastCommand!);
+        Assert.Contains("\"inventories\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InspectEntityAsync_ReadsBurnerInfo()
+    {
+        await _service.InspectEntityAsync(0, 0);
+
+        Assert.Contains("e.burner", _rcon.LastCommand!);
+        Assert.Contains("remaining_burning_fuel", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InspectEntityAsync_ReadsRecipe()
+    {
+        await _service.InspectEntityAsync(0, 0);
+
+        Assert.Contains("get_recipe", _rcon.LastCommand!);
+        Assert.Contains("\"recipe\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InspectEntityAsync_ReadsHealth()
+    {
+        await _service.InspectEntityAsync(0, 0);
+
+        Assert.Contains("e.health", _rcon.LastCommand!);
+        Assert.Contains("\"health\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InspectEntityAsync_ReadsMiningTarget()
+    {
+        await _service.InspectEntityAsync(0, 0);
+
+        Assert.Contains("mining_target", _rcon.LastCommand!);
     }
 }
 
