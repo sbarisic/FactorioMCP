@@ -12,6 +12,7 @@ public class McpToolIntegrationTests
     private readonly CapturingRconClient _rcon = new();
     private readonly FactorioService _factorio;
     private readonly EnergyService _energy;
+    private readonly BlueprintService _blueprints;
     private readonly GoalPlannerService _goals;
     private readonly BuildingMemoryService _buildingMemory;
     private readonly GameCommandQueue _queue = new();
@@ -20,6 +21,7 @@ public class McpToolIntegrationTests
     {
         _factorio = new FactorioService(_rcon);
         _energy = new EnergyService(_rcon);
+        _blueprints = new BlueprintService(_rcon);
         _goals = new GoalPlannerService(
             Path.Combine(Path.GetTempPath(), $"goals-mcp-{Guid.NewGuid():N}.json"));
         _buildingMemory = new BuildingMemoryService(
@@ -36,6 +38,7 @@ public class McpToolIntegrationTests
         services.AddSingleton<RconClient, CapturingRconClient>();
         services.AddSingleton<FactorioService>();
         services.AddSingleton<EnergyService>();
+        services.AddSingleton<BlueprintService>();
         services.AddSingleton<GameCommandQueue>();
 
         var tempPath = Path.Combine(Path.GetTempPath(), $"goals-di-{Guid.NewGuid():N}.json");
@@ -131,6 +134,13 @@ public class McpToolIntegrationTests
         Assert.NotNull(ActivatorUtilities.CreateInstance<EnergyTools>(provider));
     }
 
+    [Fact]
+    public void BlueprintTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<BlueprintTools>(provider));
+    }
+
     // ── MovementTools Delegation ──────────────────────────────────────
 
     [Fact]
@@ -186,6 +196,39 @@ public class McpToolIntegrationTests
         await tools.GetCraftingQueue();
 
         Assert.Contains("crafting_queue", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InventoryTools_DropItems_DelegatesToFactorioService()
+    {
+        var tools = new InventoryTools(_factorio, _queue);
+
+        await tools.DropItems("iron-plate", 10);
+
+        Assert.Contains("spill_item_stack", _rcon.LastCommand!);
+        Assert.Contains("iron-plate", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InventoryTools_TransferAllItems_DelegatesToFactorioService()
+    {
+        var tools = new InventoryTools(_factorio, _queue);
+
+        await tools.TransferAllItems(5, 10, "furnace_result");
+
+        Assert.Contains("get_inventory", _rcon.LastCommand!);
+        Assert.Contains("defines.inventory.furnace_result", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InventoryTools_GetEntityInventory_DelegatesToFactorioService()
+    {
+        var tools = new InventoryTools(_factorio, _queue);
+
+        await tools.GetEntityInventory(5, 10, "fuel");
+
+        Assert.Contains("get_contents", _rcon.LastCommand!);
+        Assert.Contains("defines.inventory.fuel", _rcon.LastCommand!);
     }
 
     // ── EntityTools Delegation ────────────────────────────────────────
@@ -544,6 +587,63 @@ public class McpToolIntegrationTests
 
         Assert.Contains("ok", result);
         Assert.Contains("total_buildings", result);
+    }
+
+    // ── BlueprintTools Delegation ─────────────────────────────────────
+
+    [Fact]
+    public async Task BlueprintTools_PlaceGhostEntity_DelegatesToBlueprintService()
+    {
+        var tools = new BlueprintTools(_blueprints, _queue);
+
+        await tools.PlaceGhostEntity("stone-furnace", 10, 20);
+
+        Assert.Contains("entity-ghost", _rcon.LastCommand!);
+        Assert.Contains("stone-furnace", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task BlueprintTools_PlaceBlueprintString_DelegatesToBlueprintService()
+    {
+        var tools = new BlueprintTools(_blueprints, _queue);
+
+        await tools.PlaceBlueprintString("0eNqFake", 10, 20);
+
+        Assert.Contains("import_stack", _rcon.LastCommand!);
+        Assert.Contains("build_from_cursor", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task BlueprintTools_GetGhostEntities_DelegatesToBlueprintService()
+    {
+        var tools = new BlueprintTools(_blueprints, _queue);
+
+        await tools.GetGhostEntities();
+
+        Assert.Contains("entity-ghost", _rcon.LastCommand!);
+        Assert.Contains("find_entities_filtered", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task BlueprintTools_CreateBlueprintFromArea_DelegatesToBlueprintService()
+    {
+        var tools = new BlueprintTools(_blueprints, _queue);
+
+        await tools.CreateBlueprintFromArea(-10, -10, 10, 10);
+
+        Assert.Contains("create_blueprint", _rcon.LastCommand!);
+        Assert.Contains("export_stack", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task BlueprintTools_RevokeGhostEntity_DelegatesToBlueprintService()
+    {
+        var tools = new BlueprintTools(_blueprints, _queue);
+
+        await tools.RevokeGhostEntity(10, 20);
+
+        Assert.Contains("entity-ghost", _rcon.LastCommand!);
+        Assert.Contains("destroy", _rcon.LastCommand!);
     }
 
     // ── EntityTools Auto-Tracking ─────────────────────────────────────

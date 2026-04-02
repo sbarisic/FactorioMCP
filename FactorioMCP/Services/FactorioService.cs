@@ -305,22 +305,28 @@ internal sealed class FactorioService(RconClient rcon)
     }
 
     /// <summary>
-    /// Get a list of entities near the player within the specified radius.
+    /// Get a list of entities within the specified radius.
+    /// When centerX/centerY are provided, scans around those coordinates instead of the player.
     /// </summary>
-    public Task<string> GetNearbyEntitiesAsync(double radius = 10, CancellationToken cancellationToken = default)
+    public Task<string> GetNearbyEntitiesAsync(double radius = 10, double? centerX = null, double? centerY = null, CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
 
+        var posExpr = centerX.HasValue && centerY.HasValue
+            ? string.Create(CultureInfo.InvariantCulture, $"{{{centerX.Value},{centerY.Value}}}")
+            : "player.position";
+
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
             local player = game.connected_players[1]
+            local center = {{posExpr}}
             local entities = player.surface.find_entities_filtered{
-                position=player.position, radius={{radius}}
+                position=center, radius={{radius}}
             }
             local parts = {}
             for _, e in pairs(entities) do
                 parts[#parts+1] = '{"name":"'..e.name..'","x":'..e.position.x..',"y":'..e.position.y..'}'
             end
-            rcon.print('{"entities":['..table.concat(parts, ",")..']}')
+            rcon.print('{"entities":['..table.concat(parts, ",")..']}') 
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -638,17 +644,23 @@ internal sealed class FactorioService(RconClient rcon)
     }
 
     /// <summary>
-    /// Scan for resource patches (ores, oil, etc.) within a radius of the player.
+    /// Scan for resource patches (ores, oil, etc.) within a radius.
+    /// When centerX/centerY are provided, scans around those coordinates instead of the player.
     /// Returns each resource entity's name, position, and remaining amount.
     /// </summary>
-    public Task<string> ScanResourcesAsync(double radius = 50, CancellationToken cancellationToken = default)
+    public Task<string> ScanResourcesAsync(double radius = 50, double? centerX = null, double? centerY = null, CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
 
+        var posExpr = centerX.HasValue && centerY.HasValue
+            ? string.Create(CultureInfo.InvariantCulture, $"{{{centerX.Value},{centerY.Value}}}")
+            : "player.position";
+
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
             local player = game.connected_players[1]
+            local center = {{posExpr}}
             local resources = player.surface.find_entities_filtered{
-                position=player.position, radius={{radius}}, type="resource"
+                position=center, radius={{radius}}, type="resource"
             }
             local summary = {}
             for _, r in pairs(resources) do
@@ -675,16 +687,21 @@ internal sealed class FactorioService(RconClient rcon)
     }
 
     /// <summary>
-    /// Scan tiles around the player to get terrain type information.
+    /// Scan tiles to get terrain type information.
+    /// When centerX/centerY are provided, scans around those coordinates instead of the player.
     /// Returns a summary of tile types found within the specified radius.
     /// </summary>
-    public Task<string> ScanTilesAsync(double radius = 16, CancellationToken cancellationToken = default)
+    public Task<string> ScanTilesAsync(double radius = 16, double? centerX = null, double? centerY = null, CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
 
+        var posExpr = centerX.HasValue && centerY.HasValue
+            ? string.Create(CultureInfo.InvariantCulture, $"{{x={centerX.Value},y={centerY.Value}}}")
+            : "player.position";
+
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
             local player = game.connected_players[1]
-            local pos = player.position
+            local pos = {{posExpr}}
             local r = {{radius}}
             local tiles = player.surface.find_tiles_filtered{
                 area={{"{"}}{pos.x-r, pos.y-r}, {pos.x+r, pos.y+r}{{"}"}}
@@ -1022,5 +1039,120 @@ internal sealed class FactorioService(RconClient rcon)
             }
         }
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Drop items from the player's inventory onto the ground at the player's position.
+    /// Uses <c>surface.spill_item_stack</c> to scatter items near the player.
+    /// Removes items from inventory first, then spills them.
+    /// </summary>
+    public Task<string> DropItemsAsync(
+        string itemName,
+        int count,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemName);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(count, 0);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local name = "{{itemName}}"
+            local available = player.get_item_count(name)
+            local want = {{count}}
+            if available == 0 then
+                rcon.print('{"success":false,"error":"no_items","item":"'..name..'"}')
+                return
+            end
+            local to_drop = math.min(want, available)
+            player.remove_item{name=name, count=to_drop}
+            local drop_stack = {name=name, count=to_drop}
+            player.surface.spill_item_stack{position=player.position, stack=drop_stack}
+            rcon.print('{"success":true,"item":"'..name..'","dropped":'..to_drop..',"remaining":'..player.get_item_count(name)..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Transfer all items from an entity's inventory to the player's inventory.
+    /// Finds the entity at the given position and moves everything from the
+    /// specified inventory type into the player's main inventory.
+    /// </summary>
+    public Task<string> TransferAllItemsAsync(
+        double x,
+        double y,
+        string inventoryType = "chest",
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(inventoryType);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
+            if #entities == 0 then
+                rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
+                return
+            end
+            local e = entities[1]
+            local inv = e.get_inventory(defines.inventory.{{inventoryType}})
+            if not inv then
+                rcon.print('{"success":false,"error":"no_inventory","entity":"'..e.name..'","inventory_type":"{{inventoryType}}"}')
+                return
+            end
+            local transferred = {}
+            local total = 0
+            for i = 1, #inv do
+                local stack = inv[i]
+                if stack.valid_for_read then
+                    local name = stack.name
+                    local cnt = stack.count
+                    local inserted = player.insert{name=name, count=cnt}
+                    if inserted > 0 then
+                        stack.count = cnt - inserted
+                        transferred[#transferred+1] = '{"item":"'..name..'","count":'..inserted..'}'
+                        total = total + inserted
+                    end
+                end
+            end
+            rcon.print('{"success":true,"entity":"'..e.name..'","transferred":['..table.concat(transferred, ",")..'],"total_items":'..total..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Get the contents of a specific entity's inventory at a position.
+    /// Returns all items and counts in the specified inventory slot.
+    /// </summary>
+    public Task<string> GetEntityInventoryAsync(
+        double x,
+        double y,
+        string inventoryType = "chest",
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(inventoryType);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
+            if #entities == 0 then
+                rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
+                return
+            end
+            local e = entities[1]
+            local inv = e.get_inventory(defines.inventory.{{inventoryType}})
+            if not inv then
+                rcon.print('{"success":false,"error":"no_inventory","entity":"'..e.name..'","inventory_type":"{{inventoryType}}"}')
+                return
+            end
+            local contents = inv.get_contents()
+            local parts = {}
+            for _, item in pairs(contents) do
+                parts[#parts+1] = '{"name":"'..item.name..'","count":'..item.count..'}'
+            end
+            rcon.print('{"success":true,"entity":"'..e.name..'","inventory_type":"{{inventoryType}}","items":['..table.concat(parts, ",")..'],"slots":'..#inv..',"empty_slots":'..inv.count_empty_stacks()..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
 }

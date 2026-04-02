@@ -35,4 +35,50 @@ internal sealed class InventoryTools(FactorioService factorio, GameCommandQueue 
     {
         return queue.ExecuteAsync(nameof(GetCraftingQueue), factorio.GetCraftingQueueAsync, cancellationToken);
     }
+
+    [McpServerTool, Description(
+        "Drop items from the player's inventory onto the ground at the player's position. " +
+        "Items are scattered on the ground and can be picked up by the player or bots. " +
+        "If the player has fewer items than requested, drops as many as available.")]
+    public Task<string> DropItems(
+        [Description("Item name to drop (e.g. 'iron-plate', 'wood', 'coal')")]
+        string itemName,
+        [Description("Number of items to drop")]
+        int count,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(DropItems), ct => factorio.DropItemsAsync(itemName, count, ct), cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Transfer all items from an entity's inventory into the player's inventory. " +
+        "Use this to quickly empty a chest, furnace, or assembler. " +
+        "Only transfers items that fit in the player's inventory.")]
+    public Task<string> TransferAllItems(
+        [Description("X coordinate of the entity")]
+        double x,
+        [Description("Y coordinate of the entity")]
+        double y,
+        [Description("Source inventory: fuel, furnace_source, furnace_result, chest, assembling_machine_input, assembling_machine_output")]
+        string inventoryType = "chest",
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(TransferAllItems), ct => factorio.TransferAllItemsAsync(x, y, inventoryType, ct), cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Get the contents of a specific entity's inventory at a position. " +
+        "Returns all items, counts, total slots, and empty slots. " +
+        "Use this to check what a chest contains or how full a furnace is.")]
+    public Task<string> GetEntityInventory(
+        [Description("X coordinate of the entity")]
+        double x,
+        [Description("Y coordinate of the entity")]
+        double y,
+        [Description("Inventory to inspect: fuel, furnace_source, furnace_result, chest, assembling_machine_input, assembling_machine_output")]
+        string inventoryType = "chest",
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(GetEntityInventory), ct => factorio.GetEntityInventoryAsync(x, y, inventoryType, ct), cancellationToken);
+    }
 }

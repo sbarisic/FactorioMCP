@@ -13,6 +13,7 @@ builder.Services
     .AddSingleton<RconClient>()
     .AddSingleton<FactorioService>()
     .AddSingleton<EnergyService>()
+    .AddSingleton<BlueprintService>()
     .AddSingleton<GoalPlannerService>()
     .AddSingleton<BuildingMemoryService>()
     .AddSingleton<GameCommandQueue>()

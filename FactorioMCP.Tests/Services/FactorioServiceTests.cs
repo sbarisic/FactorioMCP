@@ -963,8 +963,11 @@ public class FactorioServiceTests
         await _service.InitializeChatListenerAsync();
         await _service.GetChatMessagesAsync();
         await _service.SendChatMessageAsync("hello");
+        await _service.DropItemsAsync("iron-plate", 10);
+        await _service.TransferAllItemsAsync(0, 0);
+        await _service.GetEntityInventoryAsync(0, 0);
 
-        Assert.Equal(26, _rcon.AllCommands.Count);
+        Assert.Equal(29, _rcon.AllCommands.Count);
         Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command ", cmd));
     }
 
@@ -1306,6 +1309,71 @@ public class FactorioServiceTests
     {
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => _service.ScanTilesAsync(-5));
+    }
+
+    // ── Remote Area Scanning ─────────────────────────────────────────
+
+    [Fact]
+    public async Task GetNearbyEntitiesAsync_UsesPlayerPositionByDefault()
+    {
+        await _service.GetNearbyEntitiesAsync();
+
+        Assert.Contains("player.position", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetNearbyEntitiesAsync_UsesCustomCenterWhenProvided()
+    {
+        await _service.GetNearbyEntitiesAsync(20, centerX: 100.5, centerY: -50.0);
+
+        Assert.Contains("100.5", _rcon.LastCommand!);
+        Assert.Contains("-50", _rcon.LastCommand!);
+        Assert.DoesNotContain("player.position", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ScanResourcesAsync_UsesPlayerPositionByDefault()
+    {
+        await _service.ScanResourcesAsync();
+
+        Assert.Contains("player.position", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ScanResourcesAsync_UsesCustomCenterWhenProvided()
+    {
+        await _service.ScanResourcesAsync(100, centerX: 200.0, centerY: 300.0);
+
+        Assert.Contains("200", _rcon.LastCommand!);
+        Assert.Contains("300", _rcon.LastCommand!);
+        Assert.DoesNotContain("player.position", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ScanTilesAsync_UsesPlayerPositionByDefault()
+    {
+        await _service.ScanTilesAsync();
+
+        Assert.Contains("player.position", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ScanTilesAsync_UsesCustomCenterWhenProvided()
+    {
+        await _service.ScanTilesAsync(32, centerX: -10.5, centerY: 42.0);
+
+        Assert.Contains("-10.5", _rcon.LastCommand!);
+        Assert.Contains("42", _rcon.LastCommand!);
+        Assert.DoesNotContain("player.position", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetNearbyEntitiesAsync_IgnoresPartialCenter()
+    {
+        // Only centerX provided (no centerY) — should fall back to player position
+        await _service.GetNearbyEntitiesAsync(10, centerX: 50.0);
+
+        Assert.Contains("player.position", _rcon.LastCommand!);
     }
 
     // ── InsertItems ──────────────────────────────────────────────────
@@ -1675,6 +1743,236 @@ public class FactorioServiceTests
     {
         await Assert.ThrowsAsync<ArgumentException>(
             () => _service.SendChatMessageAsync("   "));
+    }
+
+    // ── DropItemsAsync ───────────────────────────────────────────
+
+    [Fact]
+    public async Task DropItemsAsync_SendsSilentCommand()
+    {
+        await _service.DropItemsAsync("iron-plate", 10);
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task DropItemsAsync_ChecksItemCount()
+    {
+        await _service.DropItemsAsync("iron-plate", 10);
+
+        Assert.Contains("get_item_count", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task DropItemsAsync_RemovesItemsBeforeSpilling()
+    {
+        await _service.DropItemsAsync("iron-plate", 10);
+
+        Assert.Contains("remove_item", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task DropItemsAsync_UsesSpillItemStack()
+    {
+        await _service.DropItemsAsync("iron-plate", 10);
+
+        Assert.Contains("spill_item_stack", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task DropItemsAsync_ReportsNoItemsError()
+    {
+        await _service.DropItemsAsync("iron-plate", 10);
+
+        Assert.Contains("no_items", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task DropItemsAsync_ThrowsOnNullItemName()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => _service.DropItemsAsync(null!, 10));
+    }
+
+    [Fact]
+    public async Task DropItemsAsync_ThrowsOnZeroCount()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.DropItemsAsync("iron-plate", 0));
+    }
+
+    [Fact]
+    public async Task DropItemsAsync_ThrowsOnNegativeCount()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.DropItemsAsync("iron-plate", -5));
+    }
+
+    [Fact]
+    public async Task DropItemsAsync_FormatsCountWithInvariantCulture()
+    {
+        await _service.DropItemsAsync("iron-plate", 50);
+
+        Assert.Contains("50", _rcon.LastCommand!);
+    }
+
+    // ── TransferAllItemsAsync ────────────────────────────────────
+
+    [Fact]
+    public async Task TransferAllItemsAsync_SendsSilentCommand()
+    {
+        await _service.TransferAllItemsAsync(10, 20);
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task TransferAllItemsAsync_FindsEntityAtPosition()
+    {
+        await _service.TransferAllItemsAsync(10, 20);
+
+        Assert.Contains("find_entities_filtered", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task TransferAllItemsAsync_GetsInventory()
+    {
+        await _service.TransferAllItemsAsync(10, 20);
+
+        Assert.Contains("get_inventory", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task TransferAllItemsAsync_DefaultsToChest()
+    {
+        await _service.TransferAllItemsAsync(10, 20);
+
+        Assert.Contains("defines.inventory.chest", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task TransferAllItemsAsync_UsesCustomInventoryType()
+    {
+        await _service.TransferAllItemsAsync(10, 20, "furnace_result");
+
+        Assert.Contains("defines.inventory.furnace_result", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task TransferAllItemsAsync_InsertsIntoPlayer()
+    {
+        await _service.TransferAllItemsAsync(10, 20);
+
+        Assert.Contains("player.insert", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task TransferAllItemsAsync_ReportsNoEntityError()
+    {
+        await _service.TransferAllItemsAsync(10, 20);
+
+        Assert.Contains("no_entity", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task TransferAllItemsAsync_ReportsTransferredItems()
+    {
+        await _service.TransferAllItemsAsync(10, 20);
+
+        Assert.Contains("\"transferred\"", _rcon.LastCommand!);
+        Assert.Contains("\"total_items\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task TransferAllItemsAsync_ThrowsOnNullInventoryType()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => _service.TransferAllItemsAsync(10, 20, null!));
+    }
+
+    // ── GetEntityInventoryAsync ──────────────────────────────────
+
+    [Fact]
+    public async Task GetEntityInventoryAsync_SendsSilentCommand()
+    {
+        await _service.GetEntityInventoryAsync(10, 20);
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GetEntityInventoryAsync_FindsEntityAtPosition()
+    {
+        await _service.GetEntityInventoryAsync(10, 20);
+
+        Assert.Contains("find_entities_filtered", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetEntityInventoryAsync_GetsInventory()
+    {
+        await _service.GetEntityInventoryAsync(10, 20);
+
+        Assert.Contains("get_inventory", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetEntityInventoryAsync_DefaultsToChest()
+    {
+        await _service.GetEntityInventoryAsync(10, 20);
+
+        Assert.Contains("defines.inventory.chest", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetEntityInventoryAsync_UsesCustomInventoryType()
+    {
+        await _service.GetEntityInventoryAsync(10, 20, "fuel");
+
+        Assert.Contains("defines.inventory.fuel", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetEntityInventoryAsync_GetsContents()
+    {
+        await _service.GetEntityInventoryAsync(10, 20);
+
+        Assert.Contains("get_contents", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetEntityInventoryAsync_ReportsSlotInfo()
+    {
+        await _service.GetEntityInventoryAsync(10, 20);
+
+        Assert.Contains("\"slots\"", _rcon.LastCommand!);
+        Assert.Contains("\"empty_slots\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetEntityInventoryAsync_ReportsNoEntityError()
+    {
+        await _service.GetEntityInventoryAsync(10, 20);
+
+        Assert.Contains("no_entity", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetEntityInventoryAsync_ReportsNoInventoryError()
+    {
+        await _service.GetEntityInventoryAsync(10, 20);
+
+        Assert.Contains("no_inventory", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetEntityInventoryAsync_ThrowsOnNullInventoryType()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => _service.GetEntityInventoryAsync(10, 20, null!));
     }
 }
 

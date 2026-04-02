@@ -89,12 +89,11 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **Blueprint & Ghost Support** — Place blueprints or ghost entities for planned construction. Manage blueprint books. See [`LuaRecord`](LUA_API.md#rcon--game) for blueprint string operations. **(CPX 4)**
+*(none remaining)*
 
 ### Medium Priority
 
-- [ ] **Inventory Management Tools** — Drop items, swap items, transfer between inventories, and other inventory operations beyond crafting. See [`LuaInventory`/`LuaControl`](LUA_API.md#player--control) and [`defines.inventory`](LUA_API.md#key-defines). **(CPX 2)**
-- [ ] **Remote Area Scanning Tools** — Query entities, resources, and terrain at arbitrary map coordinates instead of only near the player. Extends existing scan tools (`GetNearbyEntities`, `ScanResources`, `ScanTiles`) with x/y center parameters for long-range planning without walking. See [`LuaSurface`](LUA_API.md#world--entities) for `find_entities_filtered()`/`find_tiles_filtered()`. **(CPX 2)**
+*(none remaining)*
 
 ### Low Priority
 
@@ -113,7 +112,7 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **Command Queuing & Sequencing** — Queue commands to avoid race conditions when the AI sends multiple commands rapidly. Ensure one Lua command completes before the next is sent. **(CPX 3)**
+*No high priority items*
 
 ### Medium Priority
 
@@ -177,7 +176,7 @@ RCON connection settings are read from environment variables:
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
-*No uncategorized items*
+- Add to goals and planning the ability to save time when the plan was created or updated, so the AI has some sense of time
 
 ---
 
