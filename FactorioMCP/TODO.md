@@ -174,7 +174,7 @@ RCON connection settings are read from environment variables:
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
-- Add a function similar to WalkForDuration, but instead of walking for a duration, walk in a direction until a certain condition is met (e.g. proximity to target, stuck detection, etc). This would be useful for more dynamic movement behaviors where the AI needs to adjust its path based on the environment.
+*(empty)*
 
 ---
 
