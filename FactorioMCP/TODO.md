@@ -50,8 +50,9 @@ FactorioMCP.Tests → FactorioMCP
 |--------|--------|-------------|
 | RCON Client | ✅ Functional | Low-level Source RCON protocol over TCP with auto-reconnection and exponential backoff |
 | Factorio Service | ✅ Functional | High-level game operations (movement, crafting, building, world queries) |
+| Energy Service | ✅ Functional | Electric network statistics (production/consumption/satisfaction) and per-entity power inspection |
 | Goal Planner | ✅ Functional | AI goal tracking with state machine lifecycle, ordered steps, suspend/resume, and JSON file persistence |
-| MCP Tools | ✅ Functional | Movement, inventory/crafting, entity placement/mining, entity interaction (insert/remove items, inspect), world scanning, proximity checking, chat message, and goal planning tools exposed via MCP SDK |
+| MCP Tools | ✅ Functional | Movement, inventory/crafting, entity placement/mining, entity interaction (insert/remove items, inspect), world scanning, proximity checking, chat message, goal planning, energy management, and research tools exposed via MCP SDK |
 | MCP Hosting | ✅ Functional | Program.cs wiring with DI, configuration, stdio transport |
 | Realistic Behaviors | ✅ Functional | Walking with real physics, crafting with real queue, proximity validation on place/mine, wait/polling for crafting completion, position arrival, and game tick timing — no cheating |
 
@@ -86,23 +87,20 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-*No high priority items*
+- [ ] **Blueprint & Ghost Support** — Place blueprints or ghost entities for planned construction. Manage blueprint books. **(CPX 4)**
+- [ ] **Building Memory & State Tracking** — Remember placed building locations, track building upgrades, maintain a spatial index of the player's factory. **(CPX 4)**
 
 ### Medium Priority
 
-- [ ] **Energy Management Tools** — Get power production/consumption, manage accumulators, inspect electric networks. **(CPX 3)**
-- [ ] **Blueprint & Ghost Support** — Place blueprints or ghost entities for planned construction. Manage blueprint books. **(CPX 4)**
-
-### Low Priority
-
-- [ ] **Research Tools** — Start research, get available technologies, get research progress. **(CPX 2)**
 - [ ] **Raw Lua Execution Tool** — Execute arbitrary Lua code for advanced operations not covered by specific tools. Include safety warning in tool description. **(CPX 1)**
 - [ ] **Recipe & Technology Query Tools** — Query available recipes, recipe ingredients/products, technology prerequisites. Helps the AI plan crafting chains. **(CPX 2)**
 - [ ] **Inventory Management Tools** — Drop items, swap items, transfer between inventories, and other inventory operations beyond crafting. **(CPX 2)**
+
+### Low Priority
+
 - [ ] **Logistics Tools** — Manage logistic robots, request items from logistic network, inspect logistic zones. **(CPX 3)**
 - [ ] **Combat Tools** — Attack entities, manage turrets, check enemy positions, defensive operations. **(CPX 3)**
 - [ ] **Train Management Tools** — Control trains, manage stations, set schedules, inspect train networks. **(CPX 3)**
-- [ ] **Building Memory & State Tracking** — Remember placed building locations, track building upgrades, maintain a spatial index of the player's factory. **(CPX 4)**
 
 ### ON HOLD
 
@@ -181,7 +179,7 @@ RCON connection settings are read from environment variables:
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
-*No uncategorized items*
+- Add ability to "look at" the minimap and query map information (entities, terrain) at a distance instead of just nearby. This would allow the AI to plan more effectively without needing to walk around to scan everything
 
 ---
 
@@ -193,7 +191,7 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-- [ ] **MCP Tool Integration Tests** — Verify tools resolve from DI, accept correct parameters, and call the expected service methods. **(CPX 3)**
+*No medium priority items*
 
 ### Low Priority
 

@@ -580,6 +580,155 @@ public class FactorioServiceTests
         Assert.Contains("\"researching\":false", _rcon.LastCommand!);
     }
 
+    // ── GetAvailableTechnologies ─────────────────────────────────────
+
+    [Fact]
+    public async Task GetAvailableTechnologiesAsync_SendsSilentCommand()
+    {
+        await _service.GetAvailableTechnologiesAsync();
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GetAvailableTechnologiesAsync_UsesForce()
+    {
+        await _service.GetAvailableTechnologiesAsync();
+
+        Assert.Contains("game.connected_players[1].force", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetAvailableTechnologiesAsync_IteratesTechnologies()
+    {
+        await _service.GetAvailableTechnologiesAsync();
+
+        Assert.Contains("force.technologies", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetAvailableTechnologiesAsync_ChecksPrerequisites()
+    {
+        await _service.GetAvailableTechnologiesAsync();
+
+        Assert.Contains("tech.prerequisites", _rcon.LastCommand!);
+        Assert.Contains("prereq.researched", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetAvailableTechnologiesAsync_FiltersResearchedAndDisabled()
+    {
+        await _service.GetAvailableTechnologiesAsync();
+
+        Assert.Contains("not tech.researched", _rcon.LastCommand!);
+        Assert.Contains("tech.enabled", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetAvailableTechnologiesAsync_IncludesCostAndIngredients()
+    {
+        await _service.GetAvailableTechnologiesAsync();
+
+        Assert.Contains("research_unit_count", _rcon.LastCommand!);
+        Assert.Contains("research_unit_ingredients", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetAvailableTechnologiesAsync_OutputsJsonWithTechnologiesArray()
+    {
+        await _service.GetAvailableTechnologiesAsync();
+
+        Assert.Contains("\"technologies\":[", _rcon.LastCommand!);
+        Assert.Contains("\"count\":", _rcon.LastCommand!);
+    }
+
+    // ── StartResearch ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task StartResearchAsync_SendsSilentCommand()
+    {
+        await _service.StartResearchAsync("automation");
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task StartResearchAsync_LookUpTechnologyByName()
+    {
+        await _service.StartResearchAsync("logistics");
+
+        Assert.Contains("force.technologies[\"logistics\"]", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StartResearchAsync_ValidatesTechnologyExists()
+    {
+        await _service.StartResearchAsync("automation");
+
+        Assert.Contains("\"error\":\"unknown_technology\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StartResearchAsync_ChecksAlreadyResearched()
+    {
+        await _service.StartResearchAsync("automation");
+
+        Assert.Contains("tech.researched", _rcon.LastCommand!);
+        Assert.Contains("\"error\":\"already_researched\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StartResearchAsync_UsesAddResearch()
+    {
+        await _service.StartResearchAsync("automation");
+
+        Assert.Contains("force.add_research(tech)", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StartResearchAsync_UsesPcallForSafety()
+    {
+        await _service.StartResearchAsync("automation");
+
+        Assert.Contains("pcall", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StartResearchAsync_OutputsJsonSuccessResponse()
+    {
+        await _service.StartResearchAsync("automation");
+
+        Assert.Contains("\"success\":true", _rcon.LastCommand!);
+        Assert.Contains("\"technology\":\"", _rcon.LastCommand!);
+        Assert.Contains("\"cost\":", _rcon.LastCommand!);
+        Assert.Contains("\"ingredients\":[", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StartResearchAsync_OutputsJsonErrorOnFailure()
+    {
+        await _service.StartResearchAsync("automation");
+
+        Assert.Contains("\"success\":false", _rcon.LastCommand!);
+        Assert.Contains("\"error\":\"research_failed\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StartResearchAsync_ThrowsOnNullTechnology()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => _service.StartResearchAsync(null!));
+    }
+
+    [Fact]
+    public async Task StartResearchAsync_ThrowsOnWhitespaceTechnology()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.StartResearchAsync("   "));
+    }
+
     // ── ExecuteRawLua ────────────────────────────────────────────────
 
     [Fact]
@@ -607,6 +756,8 @@ public class FactorioServiceTests
         await _service.GetNearbyEntitiesAsync();
         await _service.CheckDistanceAsync(0, 0);
         await _service.GetResearchStatusAsync();
+        await _service.GetAvailableTechnologiesAsync();
+        await _service.StartResearchAsync("automation");
         await _service.ExecuteRawLuaAsync("rcon.print('test')");
         await _service.GetGameTickAsync();
         await _service.ScanResourcesAsync();
@@ -618,7 +769,7 @@ public class FactorioServiceTests
         await _service.GetChatMessagesAsync();
         await _service.SendChatMessageAsync("hello");
 
-        Assert.Equal(21, _rcon.AllCommands.Count);
+        Assert.Equal(23, _rcon.AllCommands.Count);
         Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command ", cmd));
     }
 

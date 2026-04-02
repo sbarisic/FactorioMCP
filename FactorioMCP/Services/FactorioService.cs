@@ -362,6 +362,73 @@ internal sealed class FactorioService(RconClient rcon)
     }
 
     /// <summary>
+    /// Get technologies available for research — not yet researched, enabled,
+    /// and with all prerequisites already researched. Returns each technology's
+    /// name, unit cost, and ingredient requirements.
+    /// </summary>
+    public Task<string> GetAvailableTechnologiesAsync(CancellationToken cancellationToken = default)
+    {
+        return rcon.ExecuteLuaAsync("""
+            local force = game.connected_players[1].force
+            local parts = {}
+            for name, tech in pairs(force.technologies) do
+                if not tech.researched and tech.enabled then
+                    local prereqs_met = true
+                    for _, prereq in pairs(tech.prerequisites) do
+                        if not prereq.researched then
+                            prereqs_met = false
+                            break
+                        end
+                    end
+                    if prereqs_met then
+                        local ings = {}
+                        for _, ing in pairs(tech.research_unit_ingredients) do
+                            ings[#ings+1] = '{"name":"'..ing.name..'","count":'..ing.amount..'}'
+                        end
+                        parts[#parts+1] = '{"name":"'..name..'","cost":'..tech.research_unit_count..',"ingredients":['..table.concat(ings, ",")..']}'    
+                    end
+                end
+            end
+            rcon.print('{"technologies":['..table.concat(parts, ",")..'],"count":'..#parts..'}')
+            """, cancellationToken);
+    }
+
+    /// <summary>
+    /// Start researching a technology by adding it to the research queue.
+    /// If no research is in progress, it begins immediately.
+    /// Validates that the technology exists and is not already researched.
+    /// </summary>
+    public Task<string> StartResearchAsync(string technology, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(technology);
+
+        var lua = $$"""
+            local force = game.connected_players[1].force
+            local tech = force.technologies["{{technology}}"]
+            if not tech then
+                rcon.print('{"success":false,"error":"unknown_technology","technology":"{{technology}}"}')
+                return
+            end
+            if tech.researched then
+                rcon.print('{"success":false,"error":"already_researched","technology":"{{technology}}"}')
+                return
+            end
+            local ok, err = pcall(function() force.add_research(tech) end)
+            if ok then
+                local ings = {}
+                for _, ing in pairs(tech.research_unit_ingredients) do
+                    ings[#ings+1] = '{"name":"'..ing.name..'","count":'..ing.amount..'}'
+                end
+                rcon.print('{"success":true,"technology":"'..tech.name..'","cost":'..tech.research_unit_count..',"ingredients":['..table.concat(ings, ",")..']}')
+            else
+                rcon.print('{"success":false,"error":"research_failed","technology":"{{technology}}","detail":"'..tostring(err)..'"}')
+            end
+            """;
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
     /// Poll the crafting queue until it is empty or the timeout expires.
     /// Returns the final queue state as JSON.
     /// </summary>

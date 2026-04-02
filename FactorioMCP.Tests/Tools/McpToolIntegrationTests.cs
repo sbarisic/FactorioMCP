@@ -1,0 +1,422 @@
+using FactorioMCP.Rcon;
+using FactorioMCP.Services;
+using FactorioMCP.Tests.Services;
+using FactorioMCP.Tools;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace FactorioMCP.Tests.Tools;
+
+public class McpToolIntegrationTests
+{
+    private readonly CapturingRconClient _rcon = new();
+    private readonly FactorioService _factorio;
+    private readonly EnergyService _energy;
+    private readonly GoalPlannerService _goals;
+
+    public McpToolIntegrationTests()
+    {
+        _factorio = new FactorioService(_rcon);
+        _energy = new EnergyService(_rcon);
+        _goals = new GoalPlannerService(
+            Path.Combine(Path.GetTempPath(), $"goals-mcp-{Guid.NewGuid():N}.json"));
+    }
+
+    // ── DI Resolution ─────────────────────────────────────────────────
+    // Verify all tool classes can be resolved from the same service registrations
+    // used in Program.cs, ensuring no missing DI wiring.
+
+    private static ServiceProvider BuildTestServiceProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<RconClient, CapturingRconClient>();
+        services.AddSingleton<FactorioService>();
+        services.AddSingleton<EnergyService>();
+
+        var tempPath = Path.Combine(Path.GetTempPath(), $"goals-di-{Guid.NewGuid():N}.json");
+        services.AddSingleton(new GoalPlannerService(tempPath));
+
+        return services.BuildServiceProvider();
+    }
+
+    [Fact]
+    public void MovementTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<MovementTools>(provider));
+    }
+
+    [Fact]
+    public void InventoryTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<InventoryTools>(provider));
+    }
+
+    [Fact]
+    public void EntityTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<EntityTools>(provider));
+    }
+
+    [Fact]
+    public void WorldTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<WorldTools>(provider));
+    }
+
+    [Fact]
+    public void ResearchTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<ResearchTools>(provider));
+    }
+
+    [Fact]
+    public void InteractionTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<InteractionTools>(provider));
+    }
+
+    [Fact]
+    public void WaitTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<WaitTools>(provider));
+    }
+
+    [Fact]
+    public void ChatTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<ChatTools>(provider));
+    }
+
+    [Fact]
+    public void GoalTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<GoalTools>(provider));
+    }
+
+    [Fact]
+    public void EnergyTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<EnergyTools>(provider));
+    }
+
+    // ── MovementTools Delegation ──────────────────────────────────────
+
+    [Fact]
+    public async Task MovementTools_GetPlayerPosition_DelegatesToFactorioService()
+    {
+        var tools = new MovementTools(_factorio);
+
+        await tools.GetPlayerPosition();
+
+        Assert.Contains("position", _rcon.LastCommand!);
+        Assert.Contains("game.connected_players[1]", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task MovementTools_StopWalking_DelegatesToFactorioService()
+    {
+        var tools = new MovementTools(_factorio);
+
+        var result = await tools.StopWalking();
+
+        Assert.Contains("walking", _rcon.LastCommand!);
+        Assert.Equal("Stopped walking.", result);
+    }
+
+    // ── InventoryTools Delegation ─────────────────────────────────────
+
+    [Fact]
+    public async Task InventoryTools_GetInventory_DelegatesToFactorioService()
+    {
+        var tools = new InventoryTools(_factorio);
+
+        await tools.GetInventory();
+
+        Assert.Contains("get_main_inventory", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InventoryTools_Craft_PassesRecipeAndCount()
+    {
+        var tools = new InventoryTools(_factorio);
+
+        await tools.Craft("iron-gear-wheel", 5);
+
+        Assert.Contains("iron-gear-wheel", _rcon.LastCommand!);
+        Assert.Contains("5", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InventoryTools_GetCraftingQueue_DelegatesToFactorioService()
+    {
+        var tools = new InventoryTools(_factorio);
+
+        await tools.GetCraftingQueue();
+
+        Assert.Contains("crafting_queue", _rcon.LastCommand!);
+    }
+
+    // ── EntityTools Delegation ────────────────────────────────────────
+
+    [Fact]
+    public async Task EntityTools_PlaceEntity_PassesAllParameters()
+    {
+        var tools = new EntityTools(_factorio);
+
+        await tools.PlaceEntity("stone-furnace", 10.5, -3.2, "south");
+
+        Assert.Contains("stone-furnace", _rcon.LastCommand!);
+        Assert.Contains("10.5", _rcon.LastCommand!);
+        Assert.Contains("-3.2", _rcon.LastCommand!);
+        Assert.Contains("south", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task EntityTools_MineEntity_PassesCoordinates()
+    {
+        var tools = new EntityTools(_factorio);
+
+        await tools.MineEntity(5, -2);
+
+        Assert.Contains("find_entities_filtered", _rcon.LastCommand!);
+    }
+
+    // ── WorldTools Delegation ─────────────────────────────────────────
+
+    [Fact]
+    public async Task WorldTools_GetNearbyEntities_PassesRadius()
+    {
+        var tools = new WorldTools(_factorio);
+
+        await tools.GetNearbyEntities(25);
+
+        Assert.Contains("find_entities_filtered", _rcon.LastCommand!);
+        Assert.Contains("25", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task WorldTools_CheckDistance_PassesCoordinates()
+    {
+        var tools = new WorldTools(_factorio);
+
+        await tools.CheckDistance(100, -50);
+
+        Assert.Contains("100", _rcon.LastCommand!);
+        Assert.Contains("-50", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task WorldTools_ScanResources_PassesRadius()
+    {
+        var tools = new WorldTools(_factorio);
+
+        await tools.ScanResources(100);
+
+        Assert.Contains("resource", _rcon.LastCommand!);
+        Assert.Contains("100", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task WorldTools_ScanTiles_PassesRadius()
+    {
+        var tools = new WorldTools(_factorio);
+
+        await tools.ScanTiles(32);
+
+        Assert.Contains("find_tiles_filtered", _rcon.LastCommand!);
+        Assert.Contains("32", _rcon.LastCommand!);
+    }
+
+    // ── InteractionTools Delegation ───────────────────────────────────
+
+    [Fact]
+    public async Task InteractionTools_InsertItems_PassesAllParameters()
+    {
+        var tools = new InteractionTools(_factorio);
+
+        await tools.InsertItems(5, -2, "coal", 10, "fuel");
+
+        Assert.Contains("coal", _rcon.LastCommand!);
+        Assert.Contains("10", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InteractionTools_RemoveItems_PassesAllParameters()
+    {
+        var tools = new InteractionTools(_factorio);
+
+        await tools.RemoveItems(5, -2, "iron-plate", 20, "furnace_result");
+
+        Assert.Contains("iron-plate", _rcon.LastCommand!);
+        Assert.Contains("20", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InteractionTools_InspectEntity_PassesCoordinates()
+    {
+        var tools = new InteractionTools(_factorio);
+
+        await tools.InspectEntity(10, 20);
+
+        Assert.Contains("10", _rcon.LastCommand!);
+        Assert.Contains("20", _rcon.LastCommand!);
+    }
+
+    // ── ChatTools Delegation ──────────────────────────────────────────
+
+    [Fact]
+    public async Task ChatTools_InitializeChatListener_DelegatesToFactorioService()
+    {
+        var tools = new ChatTools(_factorio);
+
+        await tools.InitializeChatListener();
+
+        Assert.Contains("on_console_chat", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ChatTools_GetChatMessages_PassesSinceTick()
+    {
+        var tools = new ChatTools(_factorio);
+
+        await tools.GetChatMessages(sinceTick: 500);
+
+        Assert.Contains("chat_log", _rcon.LastCommand!);
+        Assert.Contains("500", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ChatTools_SendChatMessage_PassesMessage()
+    {
+        var tools = new ChatTools(_factorio);
+
+        await tools.SendChatMessage("Hello from AI");
+
+        Assert.Contains("Hello from AI", _rcon.LastCommand!);
+        Assert.Contains("[AI]", _rcon.LastCommand!);
+    }
+
+    // ── GoalTools Delegation ──────────────────────────────────────────
+
+    [Fact]
+    public async Task GoalTools_SetGoal_DelegatesToGoalPlannerService()
+    {
+        var tools = new GoalTools(_goals);
+
+        var result = await tools.SetGoal("Build iron smelting");
+
+        Assert.Contains("created", result);
+        Assert.Contains("Build iron smelting", result);
+    }
+
+    [Fact]
+    public async Task GoalTools_SetGoal_PassesSteps()
+    {
+        var tools = new GoalTools(_goals);
+
+        var result = await tools.SetGoal("Smelt iron", ["Mine ore", "Build furnace"]);
+
+        Assert.Contains("step_count", result);
+    }
+
+    [Fact]
+    public async Task GoalTools_GetActiveGoal_DelegatesToGoalPlannerService()
+    {
+        var tools = new GoalTools(_goals);
+        await tools.SetGoal("Test goal");
+
+        var result = await tools.GetActiveGoal();
+
+        Assert.Contains("Test goal", result);
+    }
+
+    [Fact]
+    public async Task GoalTools_GetAllGoals_DelegatesToGoalPlannerService()
+    {
+        var tools = new GoalTools(_goals);
+        await tools.SetGoal("Goal A");
+
+        var result = await tools.GetAllGoals();
+
+        Assert.Contains("Goal A", result);
+    }
+
+    // ── EnergyTools Delegation ────────────────────────────────────────
+
+    [Fact]
+    public async Task EnergyTools_GetElectricNetwork_PassesRadius()
+    {
+        var tools = new EnergyTools(_energy);
+
+        await tools.GetElectricNetwork(radius: 75);
+
+        Assert.Contains("electric-pole", _rcon.LastCommand!);
+        Assert.Contains("75", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task EnergyTools_GetElectricNetwork_UsesDefaultRadius()
+    {
+        var tools = new EnergyTools(_energy);
+
+        await tools.GetElectricNetwork();
+
+        Assert.Contains("radius=50", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task EnergyTools_InspectEntityPower_PassesCoordinates()
+    {
+        var tools = new EnergyTools(_energy);
+
+        await tools.InspectEntityPower(12.5, -7.3);
+
+        Assert.Contains("12.5", _rcon.LastCommand!);
+        Assert.Contains("-7.3", _rcon.LastCommand!);
+        Assert.Contains("is_connected_to_electric_network", _rcon.LastCommand!);
+    }
+
+    // ── ResearchTools Delegation ───────────────────────────────────────
+
+    [Fact]
+    public async Task ResearchTools_GetResearchStatus_DelegatesToFactorioService()
+    {
+        var tools = new ResearchTools(_factorio);
+
+        await tools.GetResearchStatus();
+
+        Assert.Contains("current_research", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ResearchTools_GetAvailableTechnologies_DelegatesToFactorioService()
+    {
+        var tools = new ResearchTools(_factorio);
+
+        await tools.GetAvailableTechnologies();
+
+        Assert.Contains("force.technologies", _rcon.LastCommand!);
+        Assert.Contains("research_unit_count", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ResearchTools_StartResearch_PassesTechnology()
+    {
+        var tools = new ResearchTools(_factorio);
+
+        await tools.StartResearch("automation");
+
+        Assert.Contains("automation", _rcon.LastCommand!);
+        Assert.Contains("add_research", _rcon.LastCommand!);
+    }
+}

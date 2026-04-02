@@ -37,14 +37,6 @@ internal sealed class WorldTools(FactorioService factorio)
     }
 
     [McpServerTool, Description(
-        "Get the current research status and progress for the player's force. " +
-        "Shows the technology being researched and its completion percentage.")]
-    public Task<string> GetResearchStatus(CancellationToken cancellationToken = default)
-    {
-        return factorio.GetResearchStatusAsync(cancellationToken);
-    }
-
-    [McpServerTool, Description(
         "Scan for resource patches (ores, oil, etc.) within a radius of the player. " +
         "Returns a summary of each resource type found: name, number of patches, total amount, " +
         "and approximate center coordinates. Useful for finding where to mine.")]
