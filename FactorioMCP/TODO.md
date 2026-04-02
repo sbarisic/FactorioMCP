@@ -50,7 +50,8 @@ FactorioMCP.Tests → FactorioMCP
 |--------|--------|-------------|
 | RCON Client | ✅ Functional | Low-level Source RCON protocol over TCP with auto-reconnection and exponential backoff |
 | Factorio Service | ✅ Functional | High-level game operations (movement, crafting, building, world queries) |
-| MCP Tools | ✅ Functional | Movement, inventory/crafting, entity placement/mining, entity interaction (insert/remove items, inspect), world scanning, and proximity checking tools exposed via MCP SDK |
+| Goal Planner | ✅ Functional | AI goal tracking with state machine lifecycle, ordered steps, suspend/resume, and JSON file persistence |
+| MCP Tools | ✅ Functional | Movement, inventory/crafting, entity placement/mining, entity interaction (insert/remove items, inspect), world scanning, proximity checking, chat message, and goal planning tools exposed via MCP SDK |
 | MCP Hosting | ✅ Functional | Program.cs wiring with DI, configuration, stdio transport |
 | Realistic Behaviors | ✅ Functional | Walking with real physics, crafting with real queue, proximity validation on place/mine, wait/polling for crafting completion, position arrival, and game tick timing — no cheating |
 
@@ -77,6 +78,7 @@ RCON connection settings are read from environment variables:
 | `FACTORIO_RCON_HOST` | `127.0.0.1` | RCON server host |
 | `FACTORIO_RCON_PORT` | `27015` | RCON server port |
 | `FACTORIO_RCON_PASSWORD` | `mypassword` | RCON password |
+| `FACTORIO_GOALS_FILE` | `goals.json` | File path for goal planner persistence |
 
 ---
 
@@ -84,8 +86,7 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **Chat Message Reaction** — Read and respond to in-game chat messages. Would enable AI to respond to player messages in multiplayer or see its own messages for confirmation. ⚠️ Note: `game.get_message_log()` does not exist in the Factorio Lua API. The `on_console_chat` event requires a mod handler (not available via RCON). May require the **Helper Factorio Mod** (ON HOLD) or a creative RCON-only workaround. **(CPX 3)**
-- [ ] **Goal Planner & State Machine** — Set goals, track progress, persist current objective so the AI can resume tasks after interruptions. **(CPX 5)**
+*No high priority items*
 
 ### Medium Priority
 

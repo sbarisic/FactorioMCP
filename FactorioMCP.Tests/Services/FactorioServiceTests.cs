@@ -614,8 +614,11 @@ public class FactorioServiceTests
         await _service.InsertItemsAsync(0, 0, "coal", 5);
         await _service.RemoveItemsAsync(0, 0, "iron-plate", 10);
         await _service.InspectEntityAsync(0, 0);
+        await _service.InitializeChatListenerAsync();
+        await _service.GetChatMessagesAsync();
+        await _service.SendChatMessageAsync("hello");
 
-        Assert.Equal(18, _rcon.AllCommands.Count);
+        Assert.Equal(21, _rcon.AllCommands.Count);
         Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command ", cmd));
     }
 
@@ -1167,6 +1170,165 @@ public class FactorioServiceTests
         await _service.InspectEntityAsync(0, 0);
 
         Assert.Contains("mining_target", _rcon.LastCommand!);
+    }
+
+    // ── InitializeChatListener ────────────────────────────────────────
+
+    [Fact]
+    public async Task InitializeChatListenerAsync_RegistersEventHandler()
+    {
+        await _service.InitializeChatListenerAsync();
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+        Assert.Contains("on_console_chat", _rcon.LastCommand);
+        Assert.Contains("storage.chat_log", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task InitializeChatListenerAsync_PreservesExistingMessages()
+    {
+        await _service.InitializeChatListenerAsync();
+
+        Assert.Contains("storage.chat_log = storage.chat_log or {}", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InitializeChatListenerAsync_CapturesPlayerName()
+    {
+        await _service.InitializeChatListenerAsync();
+
+        Assert.Contains("game.get_player", _rcon.LastCommand!);
+        Assert.Contains("player_name", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InitializeChatListenerAsync_OutputsJsonStatus()
+    {
+        await _service.InitializeChatListenerAsync();
+
+        Assert.Contains("\"status\":\"initialized\"", _rcon.LastCommand!);
+        Assert.Contains("\"existing_messages\":", _rcon.LastCommand!);
+    }
+
+    // ── GetChatMessages ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetChatMessagesAsync_QueriesChatLog()
+    {
+        await _service.GetChatMessagesAsync();
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+        Assert.Contains("storage.chat_log", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GetChatMessagesAsync_DefaultSinceTickIsZero()
+    {
+        await _service.GetChatMessagesAsync();
+
+        Assert.Contains("since_tick = 0", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetChatMessagesAsync_FiltersBySinceTick()
+    {
+        await _service.GetChatMessagesAsync(12345);
+
+        Assert.Contains("since_tick = 12345", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetChatMessagesAsync_OutputsJsonWithMessages()
+    {
+        await _service.GetChatMessagesAsync();
+
+        Assert.Contains("\"messages\":[", _rcon.LastCommand!);
+        Assert.Contains("\"count\":", _rcon.LastCommand!);
+        Assert.Contains("\"latest_tick\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetChatMessagesAsync_IncludesJsonEscaping()
+    {
+        await _service.GetChatMessagesAsync();
+
+        Assert.Contains("json_escape", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetChatMessagesAsync_ThrowsOnNegativeSinceTick()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.GetChatMessagesAsync(-1));
+    }
+
+    // ── SendChatMessage ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task SendChatMessageAsync_SendsMessageViaGamePrint()
+    {
+        await _service.SendChatMessageAsync("Hello world");
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+        Assert.Contains("game.print", _rcon.LastCommand);
+        Assert.Contains("Hello world", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task SendChatMessageAsync_TagsWithAiPrefix()
+    {
+        await _service.SendChatMessageAsync("test message");
+
+        Assert.Contains("[AI]", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task SendChatMessageAsync_EscapesQuotes()
+    {
+        await _service.SendChatMessageAsync("He said \"hello\"");
+
+        Assert.Contains("\\\"hello\\\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task SendChatMessageAsync_EscapesBackslashes()
+    {
+        await _service.SendChatMessageAsync("path\\to\\file");
+
+        Assert.Contains("\\\\", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task SendChatMessageAsync_EscapesNewlines()
+    {
+        await _service.SendChatMessageAsync("line1\nline2");
+
+        Assert.Contains("\\n", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task SendChatMessageAsync_OutputsJsonStatus()
+    {
+        await _service.SendChatMessageAsync("test");
+
+        Assert.Contains("\"status\":\"sent\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task SendChatMessageAsync_ThrowsOnNullMessage()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => _service.SendChatMessageAsync(null!));
+    }
+
+    [Fact]
+    public async Task SendChatMessageAsync_ThrowsOnWhitespaceMessage()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.SendChatMessageAsync("   "));
     }
 }
 

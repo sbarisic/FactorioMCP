@@ -12,6 +12,7 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.Services
     .AddSingleton<RconClient>()
     .AddSingleton<FactorioService>()
+    .AddSingleton<GoalPlannerService>()
     .AddHostedService<RconConnectionService>()
     .AddMcpServer(options =>
     {
