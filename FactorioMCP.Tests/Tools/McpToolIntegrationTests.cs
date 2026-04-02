@@ -534,6 +534,18 @@ public class McpToolIntegrationTests
         Assert.Contains("tech.effects", _rcon.LastCommand!);
     }
 
+    [Fact]
+    public async Task RecipeTools_CheckCraftFeasibility_PassesRecipeAndCount()
+    {
+        var tools = new RecipeTools(_factorio, _queue);
+
+        await tools.CheckCraftFeasibility("transport-belt", 10);
+
+        Assert.Contains("transport-belt", _rcon.LastCommand!);
+        Assert.Contains("get_craftable_count", _rcon.LastCommand!);
+        Assert.Contains("10", _rcon.LastCommand!);
+    }
+
     // ── BuildingTools DI Resolution ───────────────────────────────────
 
     [Fact]

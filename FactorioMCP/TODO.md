@@ -89,11 +89,11 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-*(none remaining)*
+- [ ] **Factory Status Command** — Implement a comprehensive status query tool that returns current inventory levels, building statuses, nearby entities, active goals and their progress, and relevant environmental information (nearby resources, threats). Helps the AI make informed decisions based on current game state. **(CPX 3)**
 
 ### Medium Priority
 
-*(none remaining)*
+- [ ] **Logistics Flow Tracking** — Track how buildings connect via belts and inserters, recording which entity outputs to which. Create new MCP commands to query and manage item flow through the factory, enabling the AI to plan and execute complex logistics operations. **(CPX 4)**
 
 ### Low Priority
 
@@ -112,15 +112,16 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-*No high priority items*
+- [ ] **Inserter Placement Guidance** — Improve inserter-related tools to help the AI understand correct positioning (adjacent to target entity, not one tile away) and rotation semantics (pickup side vs drop side). Add a placement preview tool that, given a position and direction, reports which entity the inserter would pick up from and where it would drop — enabling the AI to validate placement before committing. Currently the AI frequently misplaces inserters, leading to failed automation setups. **(CPX 3)**
+- [ ] **Belt Placement & Routing Guidance** — Help the AI understand transport belt mechanics including correct placement, directionality, routing items between entities, and connecting belt networks. The AI currently does not use belts at all, which prevents building any non-trivial factory layouts. May require enhanced tool descriptions, examples, or dedicated belt-routing helpers. **(CPX 3)**
 
 ### Medium Priority
 
-*No medium priority items*
+- [ ] **Realistic Mining Duration** — Mining via `player.mine_entity()` in RCON executes instantly in a single tick with no animation or time cost. Investigate whether the Factorio 2 Lua API supports tick-based mining (e.g. `player.mining_state`) and implement a polling/wait mechanism similar to `WaitForCrafting` so mining takes realistic time. Falls under the core "no cheating" design principle. **(CPX 3)**
 
 ### Low Priority
 
-- [ ] **Multiplayer Player Targeting** — Support specifying which player to control in multiplayer games instead of always using `game.player` (which is only valid in singleplayer RCON context). Use `game.players[name]` or `game.connected_players`. See [`LuaGameScript`](LUA_API.md#rcon--game) and [RCON notes](LUA_API.md#rcon-specific-notes). **(CPX 3)**
+- [ ] **Multiplayer Player Targeting**
 
 ### ON HOLD
 
@@ -132,7 +133,7 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-*No high priority items*
+- [ ] **AI Prompt Guide (PROMPT.md)** — Create a prompt reference document covering all tool use scenarios, base building strategies, and common pitfalls (inserter placement, belt routing, entity spacing). Should include worked examples of correct automation setups to help the AI avoid repeated mistakes. Complements the Inserter Placement and Belt Routing improvements. **(CPX 2)**
 
 ### Medium Priority
 
@@ -174,7 +175,7 @@ RCON connection settings are read from environment variables:
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
-*(none)*
+*(empty — all items categorized)*
 
 ---
 

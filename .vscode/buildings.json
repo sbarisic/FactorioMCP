@@ -4,7 +4,7 @@
     "x": 85,
     "y": -25,
     "direction": "north",
-    "label": null,
+    "label": "Iron smelting array",
     "placed_at": "2026-04-02T16:32:37.9647993Z"
   },
   {
@@ -14,5 +14,61 @@
     "direction": "north",
     "label": null,
     "placed_at": "2026-04-02T16:36:10.8154696Z"
+  },
+  {
+    "entity_name": "burner-mining-drill",
+    "x": 74.5,
+    "y": -28.5,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T17:29:30.7445121Z"
+  },
+  {
+    "entity_name": "burner-inserter",
+    "x": 77,
+    "y": -28,
+    "direction": "east",
+    "label": null,
+    "placed_at": "2026-04-02T17:29:36.1309138Z"
+  },
+  {
+    "entity_name": "stone-furnace",
+    "x": 79,
+    "y": -27,
+    "direction": "north",
+    "label": "Iron smelting array #2",
+    "placed_at": "2026-04-02T17:37:38.2960476Z"
+  },
+  {
+    "entity_name": "stone-furnace",
+    "x": 79,
+    "y": -25,
+    "direction": "north",
+    "label": "Iron smelting array #3",
+    "placed_at": "2026-04-02T17:37:50.7476913Z"
+  },
+  {
+    "entity_name": "stone-furnace",
+    "x": 79,
+    "y": -23,
+    "direction": "north",
+    "label": "Iron smelting array #4",
+    "placed_at": "2026-04-02T17:38:13.7134815Z"
+  },
+  {
+    "entity_name": "burner-inserter",
+    "x": 77.5,
+    "y": -25.5,
+    "direction": "east",
+    "label": null,
+    "placed_at": "2026-04-02T17:39:14.429573Z"
+  },
+  {
+    "entity_name": "burner-inserter",
+    "x": 77.5,
+    "y": -23.5,
+    "direction": "east",
+    "label": null,
+    "placed_at": "2026-04-02T17:39:18.2461044Z"
   }
 ]

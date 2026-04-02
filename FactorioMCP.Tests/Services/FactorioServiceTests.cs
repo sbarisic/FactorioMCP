@@ -1974,6 +1974,114 @@ public class FactorioServiceTests
         await Assert.ThrowsAsync<ArgumentNullException>(
             () => _service.GetEntityInventoryAsync(10, 20, null!));
     }
+
+    // ── CheckCraftFeasibility ────────────────────────────────────
+
+    [Fact]
+    public async Task CheckCraftFeasibilityAsync_SendsSilentCommand()
+    {
+        await _service.CheckCraftFeasibilityAsync("iron-gear-wheel");
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task CheckCraftFeasibilityAsync_LooksUpRecipeByName()
+    {
+        await _service.CheckCraftFeasibilityAsync("electronic-circuit");
+
+        Assert.Contains("force.recipes[\"electronic-circuit\"]", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task CheckCraftFeasibilityAsync_ChecksRecipeEnabled()
+    {
+        await _service.CheckCraftFeasibilityAsync("iron-gear-wheel");
+
+        Assert.Contains("recipe.enabled", _rcon.LastCommand!);
+        Assert.Contains("recipe_not_unlocked", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task CheckCraftFeasibilityAsync_UsesGetCraftableCount()
+    {
+        await _service.CheckCraftFeasibilityAsync("iron-gear-wheel");
+
+        Assert.Contains("get_craftable_count", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task CheckCraftFeasibilityAsync_ChecksIngredientAvailability()
+    {
+        await _service.CheckCraftFeasibilityAsync("iron-gear-wheel");
+
+        Assert.Contains("get_item_count", _rcon.LastCommand!);
+        Assert.Contains("\"needed\":", _rcon.LastCommand!);
+        Assert.Contains("\"available\":", _rcon.LastCommand!);
+        Assert.Contains("\"missing\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task CheckCraftFeasibilityAsync_OutputsCanCraftAndCraftableCount()
+    {
+        await _service.CheckCraftFeasibilityAsync("iron-gear-wheel");
+
+        Assert.Contains("\"can_craft\":", _rcon.LastCommand!);
+        Assert.Contains("\"craftable_count\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task CheckCraftFeasibilityAsync_DefaultCountIsOne()
+    {
+        await _service.CheckCraftFeasibilityAsync("iron-gear-wheel");
+
+        Assert.Contains("local count = 1", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task CheckCraftFeasibilityAsync_FormatsCountWithInvariantCulture()
+    {
+        await _service.CheckCraftFeasibilityAsync("iron-gear-wheel", 50);
+
+        Assert.Contains("local count = 50", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task CheckCraftFeasibilityAsync_ReportsUnknownRecipeError()
+    {
+        await _service.CheckCraftFeasibilityAsync("not-a-recipe");
+
+        Assert.Contains("\"error\":\"unknown_recipe\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task CheckCraftFeasibilityAsync_ThrowsOnNullRecipe()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => _service.CheckCraftFeasibilityAsync(null!));
+    }
+
+    [Fact]
+    public async Task CheckCraftFeasibilityAsync_ThrowsOnWhitespaceRecipe()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.CheckCraftFeasibilityAsync("  "));
+    }
+
+    [Fact]
+    public async Task CheckCraftFeasibilityAsync_ThrowsOnZeroCount()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.CheckCraftFeasibilityAsync("iron-gear-wheel", 0));
+    }
+
+    [Fact]
+    public async Task CheckCraftFeasibilityAsync_ThrowsOnNegativeCount()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.CheckCraftFeasibilityAsync("iron-gear-wheel", -1));
+    }
 }
 
 /// <summary>

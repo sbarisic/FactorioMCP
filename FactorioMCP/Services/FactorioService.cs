@@ -530,6 +530,48 @@ internal sealed class FactorioService(RconClient rcon)
     }
 
     /// <summary>
+    /// Check whether a recipe can be crafted with the player's current inventory.
+    /// Reports the maximum craftable count and per-ingredient breakdown showing
+    /// how many are needed, available, and missing.
+    /// Uses <c>LuaControl.get_craftable_count()</c> for accurate results that
+    /// account for intermediate crafting.
+    /// </summary>
+    public Task<string> CheckCraftFeasibilityAsync(string recipe, int count = 1, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(recipe);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(count);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local recipe = player.force.recipes["{{recipe}}"]
+            if not recipe then
+                rcon.print('{"success":false,"error":"unknown_recipe","recipe":"{{recipe}}"}')
+                return
+            end
+            if not recipe.enabled then
+                rcon.print('{"success":false,"error":"recipe_not_unlocked","recipe":"{{recipe}}"}')
+                return
+            end
+            local count = {{count}}
+            local craftable = player.get_craftable_count(recipe)
+            local can_craft = craftable >= count
+            local ings = {}
+            for _, i in pairs(recipe.ingredients) do
+                local needed = i.amount * count
+                local available = 0
+                if i.type == "item" then
+                    available = player.get_item_count(i.name)
+                end
+                local missing = math.max(0, needed - available)
+                ings[#ings+1] = '{"name":"'..i.name..'","type":"'..i.type..'","needed":'..needed..',"available":'..available..',"missing":'..missing..'}'
+            end
+            rcon.print('{"success":true,"recipe":"'..recipe.name..'","count":'..count..',"can_craft":'..tostring(can_craft)..',"craftable_count":'..craftable..',"ingredients":['..table.concat(ings, ",")..']}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
     /// Poll the crafting queue until it is empty or the timeout expires.
     /// Returns the final queue state as JSON.
     /// </summary>

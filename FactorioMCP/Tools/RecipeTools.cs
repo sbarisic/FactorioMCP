@@ -42,4 +42,19 @@ internal sealed class RecipeTools(FactorioService factorio, GameCommandQueue que
     {
         return queue.ExecuteAsync(nameof(GetTechnologyDetails), ct => factorio.GetTechnologyDetailsAsync(technology, ct), cancellationToken);
     }
+
+    [McpServerTool, Description(
+        "Check whether a recipe can be crafted with the player's current inventory. " +
+        "Returns whether crafting is possible, the maximum craftable count, and a per-ingredient " +
+        "breakdown showing how many are needed, available, and missing. " +
+        "Use this before crafting to verify you have the materials, or to plan resource gathering.")]
+    public Task<string> CheckCraftFeasibility(
+        [Description("Recipe name to check (e.g. 'iron-gear-wheel', 'electronic-circuit', 'transport-belt')")]
+        string recipe,
+        [Description("Number of items you want to craft (default 1)")]
+        int count = 1,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(CheckCraftFeasibility), ct => factorio.CheckCraftFeasibilityAsync(recipe, count, ct), cancellationToken);
+    }
 }
