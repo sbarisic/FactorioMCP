@@ -428,6 +428,91 @@ internal sealed class FactorioService(RconClient rcon)
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
 
+    // ── Recipe & Technology Queries ──────────────────────────────────
+
+    /// <summary>
+    /// Get details about a specific recipe — ingredients, products, crafting time, and category.
+    /// </summary>
+    public Task<string> GetRecipeDetailsAsync(string recipe, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(recipe);
+
+        var lua = $$"""
+            local recipe = game.connected_players[1].force.recipes["{{recipe}}"]
+            if not recipe then
+                rcon.print('{"success":false,"error":"unknown_recipe","recipe":"{{recipe}}"}')
+                return
+            end
+            local ings = {}
+            for _, i in pairs(recipe.ingredients) do
+                ings[#ings+1] = '{"type":"'..i.type..'","name":"'..i.name..'","amount":'..i.amount..'}'
+            end
+            local prods = {}
+            for _, p in pairs(recipe.products) do
+                local amt = p.amount or ((p.amount_min + p.amount_max) / 2)
+                local prob = p.probability or 1
+                prods[#prods+1] = '{"type":"'..p.type..'","name":"'..p.name..'","amount":'..amt..',"probability":'..prob..'}'
+            end
+            rcon.print('{"success":true,"name":"'..recipe.name..'","enabled":'..tostring(recipe.enabled)..',"energy":'..recipe.energy..',"category":"'..recipe.category..'","ingredients":['..table.concat(ings, ",")..'],"products":['..table.concat(prods, ",")..']}')
+            """;
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Get all recipes currently available (enabled/unlocked) for the player's force.
+    /// Returns each recipe's name, category, and crafting time.
+    /// </summary>
+    public Task<string> GetAvailableRecipesAsync(CancellationToken cancellationToken = default)
+    {
+        return rcon.ExecuteLuaAsync("""
+            local force = game.connected_players[1].force
+            local parts = {}
+            for name, recipe in pairs(force.recipes) do
+                if recipe.enabled then
+                    parts[#parts+1] = '{"name":"'..name..'","category":"'..recipe.category..'","energy":'..recipe.energy..'}'
+                end
+            end
+            rcon.print('{"recipes":['..table.concat(parts, ",")..'],"count":'..#parts..'}')
+            """, cancellationToken);
+    }
+
+    /// <summary>
+    /// Get details about a specific technology — prerequisites, effects (recipe unlocks),
+    /// research cost, and ingredients.
+    /// </summary>
+    public Task<string> GetTechnologyDetailsAsync(string technology, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(technology);
+
+        var lua = $$"""
+            local tech = game.connected_players[1].force.technologies["{{technology}}"]
+            if not tech then
+                rcon.print('{"success":false,"error":"unknown_technology","technology":"{{technology}}"}')
+                return
+            end
+            local prereqs = {}
+            for name, _ in pairs(tech.prerequisites) do
+                prereqs[#prereqs+1] = '"'..name..'"'
+            end
+            local effects = {}
+            for _, e in pairs(tech.effects) do
+                if e.type == "unlock-recipe" then
+                    effects[#effects+1] = '{"type":"unlock-recipe","recipe":"'..e.recipe..'"}'
+                else
+                    effects[#effects+1] = '{"type":"'..e.type..'"}'
+                end
+            end
+            local ings = {}
+            for _, ing in pairs(tech.research_unit_ingredients) do
+                ings[#ings+1] = '{"name":"'..ing.name..'","count":'..ing.amount..'}'
+            end
+            rcon.print('{"success":true,"name":"'..tech.name..'","researched":'..tostring(tech.researched)..',"enabled":'..tostring(tech.enabled)..',"cost":'..tech.research_unit_count..',"prerequisites":['..table.concat(prereqs, ",")..'],"effects":['..table.concat(effects, ",")..'],"ingredients":['..table.concat(ings, ",")..']}')
+            """;
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
     /// <summary>
     /// Poll the crafting queue until it is empty or the timeout expires.
     /// Returns the final queue state as JSON.

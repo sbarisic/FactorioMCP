@@ -52,7 +52,8 @@ FactorioMCP.Tests → FactorioMCP
 | Factorio Service | ✅ Functional | High-level game operations (movement, crafting, building, world queries) |
 | Energy Service | ✅ Functional | Electric network statistics (production/consumption/satisfaction) and per-entity power inspection |
 | Goal Planner | ✅ Functional | AI goal tracking with state machine lifecycle, ordered steps, suspend/resume, and JSON file persistence |
-| MCP Tools | ✅ Functional | Movement, inventory/crafting, entity placement/mining, entity interaction (insert/remove items, inspect), world scanning, proximity checking, chat message, goal planning, energy management, and research tools exposed via MCP SDK |
+| Building Memory | ✅ Functional | Tracks placed buildings with spatial queries, auto-tracking on place/mine, labels, and JSON file persistence |
+| MCP Tools | ✅ Functional | Movement, inventory/crafting, entity placement/mining, entity interaction (insert/remove items, inspect), world scanning, proximity checking, chat message, goal planning, energy management, research, building memory tools exposed via MCP SDK |
 | MCP Hosting | ✅ Functional | Program.cs wiring with DI, configuration, stdio transport |
 | Realistic Behaviors | ✅ Functional | Walking with real physics, crafting with real queue, proximity validation on place/mine, wait/polling for crafting completion, position arrival, and game tick timing — no cheating |
 
@@ -80,6 +81,7 @@ RCON connection settings are read from environment variables:
 | `FACTORIO_RCON_PORT` | `27015` | RCON server port |
 | `FACTORIO_RCON_PASSWORD` | `mypassword` | RCON password |
 | `FACTORIO_GOALS_FILE` | `goals.json` | File path for goal planner persistence |
+| `FACTORIO_BUILDINGS_FILE` | `buildings.json` | File path for building memory persistence |
 
 ---
 
@@ -88,13 +90,11 @@ RCON connection settings are read from environment variables:
 ### High Priority
 
 - [ ] **Blueprint & Ghost Support** — Place blueprints or ghost entities for planned construction. Manage blueprint books. **(CPX 4)**
-- [ ] **Building Memory & State Tracking** — Remember placed building locations, track building upgrades, maintain a spatial index of the player's factory. **(CPX 4)**
 
 ### Medium Priority
 
-- [ ] **Raw Lua Execution Tool** — Execute arbitrary Lua code for advanced operations not covered by specific tools. Include safety warning in tool description. **(CPX 1)**
-- [ ] **Recipe & Technology Query Tools** — Query available recipes, recipe ingredients/products, technology prerequisites. Helps the AI plan crafting chains. **(CPX 2)**
 - [ ] **Inventory Management Tools** — Drop items, swap items, transfer between inventories, and other inventory operations beyond crafting. **(CPX 2)**
+- [ ] **Remote Area Scanning Tools** — Query entities, resources, and terrain at arbitrary map coordinates instead of only near the player. Extends existing scan tools (`GetNearbyEntities`, `ScanResources`, `ScanTiles`) with x/y center parameters for long-range planning without walking. **(CPX 2)**
 
 ### Low Priority
 
@@ -179,7 +179,7 @@ RCON connection settings are read from environment variables:
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
-- Add ability to "look at" the minimap and query map information (entities, terrain) at a distance instead of just nearby. This would allow the AI to plan more effectively without needing to walk around to scan everything
+*No uncategorized items*
 
 ---
 

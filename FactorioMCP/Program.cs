@@ -14,6 +14,7 @@ builder.Services
     .AddSingleton<FactorioService>()
     .AddSingleton<EnergyService>()
     .AddSingleton<GoalPlannerService>()
+    .AddSingleton<BuildingMemoryService>()
     .AddHostedService<RconConnectionService>()
     .AddMcpServer(options =>
     {

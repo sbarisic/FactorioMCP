@@ -13,6 +13,7 @@ public class McpToolIntegrationTests
     private readonly FactorioService _factorio;
     private readonly EnergyService _energy;
     private readonly GoalPlannerService _goals;
+    private readonly BuildingMemoryService _buildingMemory;
 
     public McpToolIntegrationTests()
     {
@@ -20,6 +21,8 @@ public class McpToolIntegrationTests
         _energy = new EnergyService(_rcon);
         _goals = new GoalPlannerService(
             Path.Combine(Path.GetTempPath(), $"goals-mcp-{Guid.NewGuid():N}.json"));
+        _buildingMemory = new BuildingMemoryService(
+            Path.Combine(Path.GetTempPath(), $"buildings-mcp-{Guid.NewGuid():N}.json"));
     }
 
     // ── DI Resolution ─────────────────────────────────────────────────
@@ -35,6 +38,9 @@ public class McpToolIntegrationTests
 
         var tempPath = Path.Combine(Path.GetTempPath(), $"goals-di-{Guid.NewGuid():N}.json");
         services.AddSingleton(new GoalPlannerService(tempPath));
+
+        var buildingsPath = Path.Combine(Path.GetTempPath(), $"buildings-di-{Guid.NewGuid():N}.json");
+        services.AddSingleton(new BuildingMemoryService(buildingsPath));
 
         return services.BuildServiceProvider();
     }
@@ -72,6 +78,20 @@ public class McpToolIntegrationTests
     {
         using var provider = BuildTestServiceProvider();
         Assert.NotNull(ActivatorUtilities.CreateInstance<ResearchTools>(provider));
+    }
+
+    [Fact]
+    public void LuaTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<LuaTools>(provider));
+    }
+
+    [Fact]
+    public void RecipeTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<RecipeTools>(provider));
     }
 
     [Fact]
@@ -171,7 +191,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task EntityTools_PlaceEntity_PassesAllParameters()
     {
-        var tools = new EntityTools(_factorio);
+        var tools = new EntityTools(_factorio, _buildingMemory);
 
         await tools.PlaceEntity("stone-furnace", 10.5, -3.2, "south");
 
@@ -184,7 +204,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task EntityTools_MineEntity_PassesCoordinates()
     {
-        var tools = new EntityTools(_factorio);
+        var tools = new EntityTools(_factorio, _buildingMemory);
 
         await tools.MineEntity(5, -2);
 
@@ -418,5 +438,124 @@ public class McpToolIntegrationTests
 
         Assert.Contains("automation", _rcon.LastCommand!);
         Assert.Contains("add_research", _rcon.LastCommand!);
+    }
+
+    // ── LuaTools Delegation ───────────────────────────────────────────
+
+    [Fact]
+    public async Task LuaTools_ExecuteLua_DelegatesToFactorioService()
+    {
+        var tools = new LuaTools(_factorio);
+
+        await tools.ExecuteLua("rcon.print('hello')");
+
+        Assert.Equal("/silent-command rcon.print('hello')", _rcon.LastCommand!);
+    }
+
+    // ── RecipeTools Delegation ────────────────────────────────────────
+
+    [Fact]
+    public async Task RecipeTools_GetRecipeDetails_PassesRecipeName()
+    {
+        var tools = new RecipeTools(_factorio);
+
+        await tools.GetRecipeDetails("iron-gear-wheel");
+
+        Assert.Contains("iron-gear-wheel", _rcon.LastCommand!);
+        Assert.Contains("force.recipes", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task RecipeTools_GetAvailableRecipes_DelegatesToFactorioService()
+    {
+        var tools = new RecipeTools(_factorio);
+
+        await tools.GetAvailableRecipes();
+
+        Assert.Contains("force.recipes", _rcon.LastCommand!);
+        Assert.Contains("recipe.enabled", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task RecipeTools_GetTechnologyDetails_PassesTechnologyName()
+    {
+        var tools = new RecipeTools(_factorio);
+
+        await tools.GetTechnologyDetails("automation");
+
+        Assert.Contains("automation", _rcon.LastCommand!);
+        Assert.Contains("force.technologies", _rcon.LastCommand!);
+        Assert.Contains("tech.effects", _rcon.LastCommand!);
+    }
+
+    // ── BuildingTools DI Resolution ───────────────────────────────────
+
+    [Fact]
+    public void BuildingTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<BuildingTools>(provider));
+    }
+
+    // ── BuildingTools Delegation ──────────────────────────────────────
+
+    [Fact]
+    public async Task BuildingTools_GetAllBuildings_DelegatesToBuildingMemoryService()
+    {
+        var tools = new BuildingTools(_buildingMemory);
+
+        var result = await tools.GetAllBuildings();
+
+        Assert.Contains("ok", result);
+        Assert.Contains("count", result);
+    }
+
+    [Fact]
+    public async Task BuildingTools_GetBuildingsNear_PassesParameters()
+    {
+        var tools = new BuildingTools(_buildingMemory);
+
+        var result = await tools.GetBuildingsNear(10, -5, 30);
+
+        Assert.Contains("ok", result);
+        Assert.Contains("10", result);
+        Assert.Contains("-5", result);
+    }
+
+    [Fact]
+    public async Task BuildingTools_FindBuildingsByType_PassesEntityName()
+    {
+        var tools = new BuildingTools(_buildingMemory);
+
+        var result = await tools.FindBuildingsByType("stone-furnace");
+
+        Assert.Contains("ok", result);
+        Assert.Contains("stone-furnace", result);
+    }
+
+    [Fact]
+    public async Task BuildingTools_GetBuildingSummary_DelegatesToBuildingMemoryService()
+    {
+        var tools = new BuildingTools(_buildingMemory);
+
+        var result = await tools.GetBuildingSummary();
+
+        Assert.Contains("ok", result);
+        Assert.Contains("total_buildings", result);
+    }
+
+    // ── EntityTools Auto-Tracking ─────────────────────────────────────
+
+    [Fact]
+    public async Task EntityTools_PlaceEntity_DoesNotTrackOnFailure()
+    {
+        // CapturingRconClient returns empty string (not a success JSON),
+        // so building should not be tracked
+        var tools = new EntityTools(_factorio, _buildingMemory);
+
+        await tools.PlaceEntity("stone-furnace", 5, 5);
+
+        var summary = await _buildingMemory.GetBuildingSummaryAsync();
+        Assert.Contains("\"total_buildings\":0", summary);
     }
 }
