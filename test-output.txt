@@ -7,25 +7,25 @@ game.players: [player count: 1
 ]
 connected_players: [connected: Cartman300
 ]
-game.players[1]: [player[1]: Cartman300 at 1.69921875,30.41015625
+game.players[1]: [player[1]: Cartman300 at 1.69921875,58.76953125
 ]
 game version: [version: 2.0.76
 ]
 
 ═══ SERVICE METHOD RESULTS ═══
-GetPlayerPosition: [{"x":1.69921875,"y":30.41015625}
+GetPlayerPosition: [{"x":1.69921875,"y":58.76953125}
 ]
-GetInventory: [{"items":[{"name":"burner-mining-drill","count":1},{"name":"stone-furnace","count":1},{"name":"wood","count":5},{"name":"coal","count":7},{"name":"stone","count":29}]}
+GetInventory: [{"items":[{"name":"burner-mining-drill","count":1},{"name":"stone-furnace","count":1},{"name":"wood","count":5},{"name":"coal","count":12},{"name":"stone","count":79}]}
 ]
-GetNearbyEntities: [{"entities":[{"name":"dry-tree","x":3,"y":29.3125},{"name":"character","x":1.69921875,"y":30.41015625},{"name":"big-rock-white","x":-0.75,"y":34.8125}]}
+GetNearbyEntities: [{"entities":[{"name":"character","x":1.69921875,"y":58.76953125}]}
 ]
 GetResearchStatus: [{"researching":false}
 ]
-GetGameTick: [{"tick":123076}
+GetGameTick: [{"tick":220863}
 ]
 GetCraftingQueue: [{"queue":[]}
 ]
-CheckDistance(0,0): [{"distance":30.5,"build_in_range":false,"build_limit":10,"reach_in_range":false,"reach_limit":10}
+CheckDistance(0,0): [{"distance":58.8,"build_in_range":false,"build_limit":10,"reach_in_range":false,"reach_limit":10}
 ]
 
 ═══ DIAGNOSTICS COMPLETE ═══

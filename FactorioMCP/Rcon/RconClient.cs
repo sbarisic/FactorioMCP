@@ -127,13 +127,40 @@ internal class RconClient : IAsyncDisposable, IDisposable
 
     /// <summary>
     /// Send a command and read the response on an already-established connection.
+    /// Uses the multi-packet protocol: sends a follow-up sentinel packet to detect
+    /// when the server has finished sending all response fragments.
     /// </summary>
     private async Task<string> ExecuteCoreAsync(string command, CancellationToken cancellationToken)
     {
-        var id = Interlocked.Increment(ref _nextRequestId);
-        await SendPacketAsync(id, RconPacketType.ExecCommand, command, cancellationToken).ConfigureAwait(false);
-        var response = await ReadPacketAsync(cancellationToken).ConfigureAwait(false);
-        return response.Body;
+        var commandId = Interlocked.Increment(ref _nextRequestId);
+        var sentinelId = Interlocked.Increment(ref _nextRequestId);
+
+        // Send the actual command
+        await SendPacketAsync(commandId, RconPacketType.ExecCommand, command, cancellationToken).ConfigureAwait(false);
+
+        // Send sentinel — an empty RESPONSE_VALUE packet the server will echo back after the command response
+        await SendPacketAsync(sentinelId, RconPacketType.ResponseValue, "", cancellationToken).ConfigureAwait(false);
+
+        // Read packets until we receive the sentinel echo
+        var responseBuilder = new System.Text.StringBuilder();
+
+        while (true)
+        {
+            var packet = await ReadPacketAsync(cancellationToken).ConfigureAwait(false);
+
+            if (packet.Id == sentinelId)
+            {
+                // Sentinel echo received — all command response packets have been read
+                break;
+            }
+
+            if (packet.Id == commandId)
+            {
+                responseBuilder.Append(packet.Body);
+            }
+        }
+
+        return responseBuilder.ToString();
     }
 
     /// <summary>

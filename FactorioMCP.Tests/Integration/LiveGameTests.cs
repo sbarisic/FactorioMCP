@@ -12,7 +12,9 @@ namespace FactorioMCP.Tests.Integration;
 /// with password "mypassword".
 ///
 /// Run manually — these are NOT intended for CI.
+/// Use: dotnet test --filter "Category!=Integration" to exclude.
 /// </summary>
+[Trait("Category", "Integration")]
 public sealed class LiveGameTests : IAsyncLifetime
 {
     private readonly ITestOutputHelper _output;

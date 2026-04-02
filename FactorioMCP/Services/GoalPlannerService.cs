@@ -76,7 +76,9 @@ internal sealed class GoalPlannerService
                 goal.Id,
                 GoalStatus = goal.Status,
                 goal.Description,
-                StepCount = goal.Steps.Count
+                StepCount = goal.Steps.Count,
+                goal.CreatedAt,
+                goal.UpdatedAt
             });
         }
         finally
@@ -135,6 +137,7 @@ internal sealed class GoalPlannerService
                     GoalStatus = g.Status,
                     StepProgress = $"{g.Steps.Count(s => s.Status == StepStatus.Completed)}/{g.Steps.Count}",
                     g.CreatedAt,
+                    g.UpdatedAt,
                     g.CompletedAt
                 })
             });
@@ -174,6 +177,7 @@ internal sealed class GoalPlannerService
             if (next is not null)
                 next.Status = StepStatus.InProgress;
 
+            active.UpdatedAt = DateTime.UtcNow;
             var remaining = active.Steps.Count(s => s.Status == StepStatus.Pending);
             await PersistAsync(cancellationToken);
 
@@ -183,7 +187,8 @@ internal sealed class GoalPlannerService
                 CompletedStep = current.Description,
                 NextStep = next?.Description,
                 StepsRemaining = remaining,
-                AllStepsComplete = next is null && remaining == 0
+                AllStepsComplete = next is null && remaining == 0,
+                active.UpdatedAt
             });
         }
         finally
@@ -224,13 +229,15 @@ internal sealed class GoalPlannerService
                     next.Status = StepStatus.InProgress;
             }
 
+            active.UpdatedAt = DateTime.UtcNow;
             await PersistAsync(cancellationToken);
 
             return Respond(new
             {
                 Status = "added",
                 AddedCount = steps.Count,
-                TotalSteps = active.Steps.Count
+                TotalSteps = active.Steps.Count,
+                active.UpdatedAt
             });
         }
         finally
@@ -240,7 +247,7 @@ internal sealed class GoalPlannerService
     }
 
     /// <summary>
-    /// Marks the active goal as completed. In-progress steps are marked completed,
+    /// Marks the active goal as completed.
     /// remaining pending steps are marked skipped.
     /// </summary>
     public async Task<string> CompleteGoalAsync(
@@ -258,6 +265,7 @@ internal sealed class GoalPlannerService
 
             active.Status = GoalStatus.Completed;
             active.CompletedAt = DateTime.UtcNow;
+            active.UpdatedAt = DateTime.UtcNow;
             if (notes is not null)
                 active.Notes = notes;
 
@@ -273,7 +281,10 @@ internal sealed class GoalPlannerService
             {
                 Status = "completed",
                 active.Id,
-                active.Description
+                active.Description,
+                active.CreatedAt,
+                active.UpdatedAt,
+                active.CompletedAt
             });
         }
         finally
@@ -303,6 +314,7 @@ internal sealed class GoalPlannerService
             active.Status = GoalStatus.Failed;
             active.FailureReason = reason;
             active.CompletedAt = DateTime.UtcNow;
+            active.UpdatedAt = DateTime.UtcNow;
             await PersistAsync(cancellationToken);
 
             return Respond(new
@@ -310,7 +322,10 @@ internal sealed class GoalPlannerService
                 Status = "failed",
                 active.Id,
                 active.Description,
-                Reason = reason
+                Reason = reason,
+                active.CreatedAt,
+                active.UpdatedAt,
+                active.CompletedAt
             });
         }
         finally
@@ -335,13 +350,15 @@ internal sealed class GoalPlannerService
                 return Respond(new { Status = "error", Error = "no_active_goal" });
 
             active.Status = GoalStatus.Suspended;
+            active.UpdatedAt = DateTime.UtcNow;
             await PersistAsync(cancellationToken);
 
             return Respond(new
             {
                 Status = "suspended",
                 active.Id,
-                active.Description
+                active.Description,
+                active.UpdatedAt
             });
         }
         finally
@@ -375,13 +392,15 @@ internal sealed class GoalPlannerService
                 return Respond(new { Status = "error", Error = "goal_not_suspended", GoalStatus = goal.Status });
 
             ActivateGoal(goal);
+            goal.UpdatedAt = DateTime.UtcNow;
             await PersistAsync(cancellationToken);
 
             return Respond(new
             {
                 Status = "resumed",
                 goal.Id,
-                goal.Description
+                goal.Description,
+                goal.UpdatedAt
             });
         }
         finally
@@ -415,6 +434,8 @@ internal sealed class GoalPlannerService
             goal.Description,
             goal.Notes,
             goal.CreatedAt,
+            goal.UpdatedAt,
+            goal.CompletedAt,
             CurrentStep = goal.Steps.Find(s => s.Status == StepStatus.InProgress)?.Description,
             StepsCompleted = goal.Steps.Count(s => s.Status == StepStatus.Completed),
             TotalSteps = goal.Steps.Count,

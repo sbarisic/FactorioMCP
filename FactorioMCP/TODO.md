@@ -104,7 +104,7 @@ RCON connection settings are read from environment variables:
 ### ON HOLD
 
 - [ ] **Helper Factorio Mod** — Optional Lua mod installed in Factorio that exposes `remote.call()` interfaces for advanced async state tracking (crafting completion events, walking arrival detection, pathfinding). Only needed if RCON polling proves too limited. See [`LUA_API.md` events](LUA_API.md#key-events) and [RCON notes](LUA_API.md#rcon-specific-notes). **(CPX 5)**
-- [ ] **MCP Resources (Read-Only State)** — Expose game state as MCP Resources (production stats, map info, recipe database) using `[McpServerResource]` for passive context without tool calls. See [`LuaFlowStatistics`](LUA_API.md#energy), [`LuaForce`](LUA_API.md#research--recipes), and [`LuaGameScript`](LUA_API.md#rcon--game). **(CPX 3)**
+
 
 ---
 
@@ -120,7 +120,6 @@ RCON connection settings are read from environment variables:
 
 ### Low Priority
 
-- [ ] **RCON Multi-Packet Response Handling**
 - [ ] **Multiplayer Player Targeting** — Support specifying which player to control in multiplayer games instead of always using `game.player` (which is only valid in singleplayer RCON context). Use `game.players[name]` or `game.connected_players`. See [`LuaGameScript`](LUA_API.md#rcon--game) and [RCON notes](LUA_API.md#rcon-specific-notes). **(CPX 3)**
 
 ### ON HOLD
@@ -141,8 +140,7 @@ RCON connection settings are read from environment variables:
 
 ### Low Priority
 
-- [ ] **LM Studio Setup Guide** — Add LM Studio connection instructions to the README as a recommended local-model setup. Include default model suggestion (`qwen/qwen3-vl-4b`), MCP client configuration, and any LM Studio-specific notes for connecting to the stdio MCP server. **(CPX 1)**
-- [ ] **Architecture Decision Records** — Document key decisions: why RCON over mod API, why realistic AI constraints, why stdio transport. **(CPX 1)**
+*No low priority items*
 
 ### On Hold
 
@@ -176,7 +174,7 @@ RCON connection settings are read from environment variables:
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
-- Add to goals and planning the ability to save time when the plan was created or updated, so the AI has some sense of time
+- Add a function similar to WalkForDuration, but instead of walking for a duration, walk in a direction until a certain condition is met (e.g. proximity to target, stuck detection, etc). This would be useful for more dynamic movement behaviors where the AI needs to adjust its path based on the environment.
 
 ---
 
@@ -192,7 +190,7 @@ RCON connection settings are read from environment variables:
 
 ### Low Priority
 
-- [ ] **RCON Integration Tests (Manual)** — Tests that connect to a real Factorio RCON instance. Marked as `[Explicit]`/skipped by default so they don't run in CI. Validates auth, command execution, and error handling against the real game. **(CPX 2)**
+*No low priority items*
 
 ---
 

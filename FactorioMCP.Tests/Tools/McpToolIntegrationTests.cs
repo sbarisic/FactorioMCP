@@ -1,4 +1,5 @@
 using FactorioMCP.Rcon;
+using FactorioMCP.Resources;
 using FactorioMCP.Services;
 using FactorioMCP.Tests.Services;
 using FactorioMCP.Tools;
@@ -659,5 +660,81 @@ public class McpToolIntegrationTests
 
         var summary = await _buildingMemory.GetBuildingSummaryAsync();
         Assert.Contains("\"total_buildings\":0", summary);
+    }
+
+    // ── Resource DI Resolution ────────────────────────────────────────
+
+    [Fact]
+    public void GameStateResources_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<GameStateResources>(provider));
+    }
+
+    // ── Resource Delegation ───────────────────────────────────────────
+
+    [Fact]
+    public async Task GameStateResources_GetPlayerPosition_DelegatesToService()
+    {
+        var resources = new GameStateResources(_factorio, _energy);
+        await resources.GetPlayerPosition();
+        Assert.Contains("game.connected_players", _rcon.LastCommand);
+        Assert.Contains("position", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GameStateResources_GetPlayerInventory_DelegatesToService()
+    {
+        var resources = new GameStateResources(_factorio, _energy);
+        await resources.GetPlayerInventory();
+        Assert.Contains("get_main_inventory", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GameStateResources_GetCraftingQueue_DelegatesToService()
+    {
+        var resources = new GameStateResources(_factorio, _energy);
+        await resources.GetCraftingQueue();
+        Assert.Contains("crafting_queue", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GameStateResources_GetResearchStatus_DelegatesToService()
+    {
+        var resources = new GameStateResources(_factorio, _energy);
+        await resources.GetResearchStatus();
+        Assert.Contains("current_research", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GameStateResources_GetAvailableRecipes_DelegatesToService()
+    {
+        var resources = new GameStateResources(_factorio, _energy);
+        await resources.GetAvailableRecipes();
+        Assert.Contains("recipes", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GameStateResources_GetElectricNetwork_DelegatesToService()
+    {
+        var resources = new GameStateResources(_factorio, _energy);
+        await resources.GetElectricNetwork();
+        Assert.Contains("electric", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GameStateResources_GetGameTick_DelegatesToService()
+    {
+        var resources = new GameStateResources(_factorio, _energy);
+        await resources.GetGameTick();
+        Assert.Contains("game.tick", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GameStateResources_GetAvailableTechnologies_DelegatesToService()
+    {
+        var resources = new GameStateResources(_factorio, _energy);
+        await resources.GetAvailableTechnologies();
+        Assert.Contains("technologies", _rcon.LastCommand);
     }
 }

@@ -93,6 +93,34 @@ Add to your `.vscode/mcp.json`:
 
 </details>
 
+### LM Studio (Local Models)
+
+[LM Studio](https://lmstudio.ai/) can connect to MCP servers via its built-in MCP client. This is a good option for running a local model without cloud API costs.
+
+1. **Install LM Studio** and download a model (recommended: `qwen3-32b` or similar with tool-calling support).
+
+2. **Enable MCP** in LM Studio: go to **Settings → MCP** (or the MCP tab in the chat sidebar).
+
+3. **Add the FactorioMCP server** with this configuration:
+
+   ```json
+   {
+     "factorio": {
+       "command": "dotnet",
+       "args": ["run", "--project", "path/to/FactorioMCP"],
+       "env": {
+         "FACTORIO_RCON_HOST": "127.0.0.1",
+         "FACTORIO_RCON_PORT": "27015",
+         "FACTORIO_RCON_PASSWORD": "mypassword"
+       }
+     }
+   }
+   ```
+
+4. **Start a chat** with the model — tools will appear in the MCP tools panel. The model will call tools to interact with Factorio.
+
+> **Note:** Local models may have weaker tool-calling compared to cloud models. If the model struggles to use tools correctly, try a larger parameter model or one specifically fine-tuned for function calling.
+
 ## Available Tools
 
 > **Full reference**: See [TOOLS.md](TOOLS.md) for detailed parameters, return values, and AI prompt engineering tips.
@@ -202,6 +230,16 @@ Add to your `.vscode/mcp.json`:
 | `UpdateBuildingLabel` | Set or remove a label on a tracked building. |
 | `ClearBuildingMemory` | Clear all tracked buildings from AI memory (not from game world). |
 
+### Blueprints & Ghosts
+
+| Tool | Description |
+|------|-------------|
+| `PlaceGhostEntity` | Place a ghost (construction plan) for an entity at map coordinates. |
+| `PlaceBlueprintString` | Import and build a blueprint string at a position. |
+| `GetGhostEntities` | Scan for ghost entities in an area. |
+| `CreateBlueprintFromArea` | Capture an area as an exportable blueprint string. |
+| `RevokeGhostEntity` | Remove a ghost entity at a position. |
+
 ### Advanced
 
 | Tool | Description |
@@ -222,24 +260,28 @@ FactorioMCP/
 ├── Services/
 │   ├── FactorioService.cs              # High-level game operations via Lua
 │   ├── EnergyService.cs                # Electric network inspection via Lua
+│   ├── BlueprintService.cs             # Blueprint and ghost entity operations
 │   ├── GoalPlannerService.cs           # Goal tracking with JSON persistence
 │   ├── BuildingMemoryService.cs        # Building tracking with JSON persistence
 │   ├── GameCommandQueue.cs             # Serializes concurrent MCP tool calls
 │   └── RconConnectionService.cs        # RCON connection on startup
-└── Tools/
-    ├── MovementTools.cs                # Walk, stop, get position
-    ├── InventoryTools.cs               # Inventory, crafting
-    ├── EntityTools.cs                  # Place/mine entities
-    ├── InteractionTools.cs             # Insert/remove items, inspect entities
-    ├── WorldTools.cs                   # Nearby entities, distance, scan
-    ├── WaitTools.cs                    # Wait for crafting, position, ticks
-    ├── ChatTools.cs                    # Chat message listener, send/receive
-    ├── GoalTools.cs                    # Goal planning and tracking
-    ├── EnergyTools.cs                  # Electric network and power inspection
-    ├── ResearchTools.cs                # Research status, start research
-    ├── RecipeTools.cs                  # Recipe and technology queries
-    ├── BuildingTools.cs                # Building memory queries
-    └── LuaTools.cs                     # Raw Lua execution
+├── Tools/
+│   ├── MovementTools.cs                # Walk, stop, get position
+│   ├── InventoryTools.cs               # Inventory, crafting
+│   ├── EntityTools.cs                  # Place/mine entities
+│   ├── InteractionTools.cs             # Insert/remove items, inspect entities
+│   ├── WorldTools.cs                   # Nearby entities, distance, scan
+│   ├── WaitTools.cs                    # Wait for crafting, position, ticks
+│   ├── ChatTools.cs                    # Chat message listener, send/receive
+│   ├── GoalTools.cs                    # Goal planning and tracking
+│   ├── EnergyTools.cs                  # Electric network and power inspection
+│   ├── ResearchTools.cs                # Research status, start research
+│   ├── RecipeTools.cs                  # Recipe and technology queries
+│   ├── BuildingTools.cs                # Building memory queries
+│   ├── BlueprintTools.cs               # Blueprint and ghost entity tools
+│   └── LuaTools.cs                     # Raw Lua execution
+└── Resources/
+    └── GameStateResources.cs           # MCP Resources (read-only game state)
 
 FactorioMCP.Tests/                      # Unit tests (xUnit)
 ```

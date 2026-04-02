@@ -28,6 +28,7 @@ builder.Services
     })
     .WithStdioServerTransport()
     .WithToolsFromAssembly()
+    .WithResourcesFromAssembly()
     .WithRequestFilters(filters =>
     {
         McpRequestFilter<CallToolRequestParams, CallToolResult> filter = next =>

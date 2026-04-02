@@ -47,5 +47,6 @@ internal sealed class Goal
     public string? FailureReason { get; set; }
     public string? Notes { get; set; }
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAt { get; set; }
 }

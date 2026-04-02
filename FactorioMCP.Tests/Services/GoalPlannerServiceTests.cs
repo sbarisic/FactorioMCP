@@ -491,4 +491,161 @@ public class GoalPlannerServiceTests
         Assert.Equal("Build furnace", active.GetProperty("description").GetString());
         Assert.Equal("Craft furnace", active.GetProperty("current_step").GetString());
     }
+
+    // ── Timestamp Tests ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task SetGoalAsync_IncludesCreatedAtTimestamp()
+    {
+        var service = CreateService();
+        var before = DateTime.UtcNow;
+
+        var result = Parse(await service.SetGoalAsync("Test goal"));
+
+        var createdAt = result.GetProperty("created_at").GetDateTime();
+        Assert.True(createdAt >= before);
+        Assert.True(createdAt <= DateTime.UtcNow);
+    }
+
+    [Fact]
+    public async Task SetGoalAsync_IncludesUpdatedAtTimestamp()
+    {
+        var service = CreateService();
+
+        var result = Parse(await service.SetGoalAsync("Test goal"));
+
+        Assert.True(result.TryGetProperty("updated_at", out _));
+    }
+
+    [Fact]
+    public async Task GetActiveGoalAsync_IncludesAllTimestamps()
+    {
+        var service = CreateService();
+        await service.SetGoalAsync("Test goal", ["Step 1"]);
+
+        var result = Parse(await service.GetActiveGoalAsync());
+
+        Assert.True(result.TryGetProperty("created_at", out _));
+        Assert.True(result.TryGetProperty("updated_at", out _));
+        Assert.True(result.TryGetProperty("completed_at", out _));
+    }
+
+    [Fact]
+    public async Task GetAllGoalsAsync_IncludesUpdatedAtTimestamp()
+    {
+        var service = CreateService();
+        await service.SetGoalAsync("Test goal");
+
+        var result = Parse(await service.GetAllGoalsAsync());
+        var goal = result.GetProperty("goals").EnumerateArray().First();
+
+        Assert.True(goal.TryGetProperty("created_at", out _));
+        Assert.True(goal.TryGetProperty("updated_at", out _));
+    }
+
+    [Fact]
+    public async Task AdvanceGoalStepAsync_UpdatesTimestamp()
+    {
+        var service = CreateService();
+        await service.SetGoalAsync("Test", ["Step 1", "Step 2"]);
+
+        var result = Parse(await service.AdvanceGoalStepAsync());
+
+        Assert.True(result.TryGetProperty("updated_at", out _));
+    }
+
+    [Fact]
+    public async Task AddGoalStepsAsync_UpdatesTimestamp()
+    {
+        var service = CreateService();
+        await service.SetGoalAsync("Test", ["Step 1"]);
+
+        var result = Parse(await service.AddGoalStepsAsync(["Step 2"]));
+
+        Assert.True(result.TryGetProperty("updated_at", out _));
+    }
+
+    [Fact]
+    public async Task CompleteGoalAsync_IncludesAllTimestamps()
+    {
+        var service = CreateService();
+        await service.SetGoalAsync("Test");
+
+        var result = Parse(await service.CompleteGoalAsync());
+
+        Assert.True(result.TryGetProperty("created_at", out _));
+        Assert.True(result.TryGetProperty("updated_at", out _));
+        Assert.True(result.TryGetProperty("completed_at", out _));
+    }
+
+    [Fact]
+    public async Task FailGoalAsync_IncludesAllTimestamps()
+    {
+        var service = CreateService();
+        await service.SetGoalAsync("Test");
+
+        var result = Parse(await service.FailGoalAsync("reason"));
+
+        Assert.True(result.TryGetProperty("created_at", out _));
+        Assert.True(result.TryGetProperty("updated_at", out _));
+        Assert.True(result.TryGetProperty("completed_at", out _));
+    }
+
+    [Fact]
+    public async Task SuspendGoalAsync_IncludesUpdatedAtTimestamp()
+    {
+        var service = CreateService();
+        await service.SetGoalAsync("Test");
+
+        var result = Parse(await service.SuspendGoalAsync());
+
+        Assert.True(result.TryGetProperty("updated_at", out _));
+    }
+
+    [Fact]
+    public async Task ResumeGoalAsync_IncludesUpdatedAtTimestamp()
+    {
+        var service = CreateService();
+        var created = Parse(await service.SetGoalAsync("Test"));
+        var goalId = created.GetProperty("id").GetString()!;
+        await service.SuspendGoalAsync();
+
+        var result = Parse(await service.ResumeGoalAsync(goalId));
+
+        Assert.True(result.TryGetProperty("updated_at", out _));
+    }
+
+    [Fact]
+    public async Task UpdatedAt_ChangesOnModification()
+    {
+        var service = CreateService();
+        var created = Parse(await service.SetGoalAsync("Test", ["Step 1", "Step 2"]));
+        var createdAt = created.GetProperty("updated_at").GetDateTime();
+
+        // Small delay to ensure timestamp difference
+        await Task.Delay(10);
+
+        var advanced = Parse(await service.AdvanceGoalStepAsync());
+        var updatedAt = advanced.GetProperty("updated_at").GetDateTime();
+
+        Assert.True(updatedAt >= createdAt, "UpdatedAt should be >= the creation time after modification");
+    }
+
+    [Fact]
+    public async Task Timestamps_PersistAcrossServiceInstances()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"goals-{Guid.NewGuid():N}.json");
+        var service1 = new GoalPlannerService(path);
+        await service1.SetGoalAsync("Test");
+        await service1.CompleteGoalAsync();
+
+        var service2 = new GoalPlannerService(path);
+        var result = Parse(await service2.GetAllGoalsAsync());
+        var goal = result.GetProperty("goals").EnumerateArray().First();
+
+        Assert.True(goal.TryGetProperty("created_at", out _));
+        Assert.True(goal.TryGetProperty("updated_at", out _));
+        Assert.True(goal.TryGetProperty("completed_at", out var completedAt));
+        Assert.NotEqual(JsonValueKind.Null, completedAt.ValueKind);
+    }
 }
