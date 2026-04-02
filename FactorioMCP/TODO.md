@@ -89,11 +89,11 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **Factory Status Command** — Implement a comprehensive status query tool that returns current inventory levels, building statuses, nearby entities, active goals and their progress, and relevant environmental information (nearby resources, threats). Helps the AI make informed decisions based on current game state. **(CPX 3)**
+- [ ] **Logistics Flow Tracking** — Given a specific entity, trace the full tree of linked entities through belts and inserters, including flow direction. Track miner output positions and directions as flow starting points. Record which entity outputs to which, enabling the AI to understand how items move through the factory, plan logistics, debug crafting chains, and ensure belts feed into chests so items don't pile up. Create MCP tools to query and visualize the item flow graph. **(CPX 4)**
 
 ### Medium Priority
 
-- [ ] **Logistics Flow Tracking** — Track how buildings connect via belts and inserters, recording which entity outputs to which. Create new MCP commands to query and manage item flow through the factory, enabling the AI to plan and execute complex logistics operations. **(CPX 4)**
+- [ ] **Power Network Topology** — Trace how electricity flows through the physical network from producers (boilers, solar panels) through electric poles to consumers. Map the pole connectivity graph and show which entities are powered by which network segment. Complements existing `GetElectricNetwork` (aggregate stats) and `InspectEntityPower` (per-entity) with topological awareness for planning expansions and diagnosing coverage gaps. **(CPX 3)**
 
 ### Low Priority
 
@@ -112,12 +112,11 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **Inserter Placement Guidance** — Improve inserter-related tools to help the AI understand correct positioning (adjacent to target entity, not one tile away) and rotation semantics (pickup side vs drop side). Add a placement preview tool that, given a position and direction, reports which entity the inserter would pick up from and where it would drop — enabling the AI to validate placement before committing. Currently the AI frequently misplaces inserters, leading to failed automation setups. **(CPX 3)**
-- [ ] **Belt Placement & Routing Guidance** — Help the AI understand transport belt mechanics including correct placement, directionality, routing items between entities, and connecting belt networks. The AI currently does not use belts at all, which prevents building any non-trivial factory layouts. May require enhanced tool descriptions, examples, or dedicated belt-routing helpers. **(CPX 3)**
+*No high priority items*
 
 ### Medium Priority
 
-- [ ] **Realistic Mining Duration** — Mining via `player.mine_entity()` in RCON executes instantly in a single tick with no animation or time cost. Investigate whether the Factorio 2 Lua API supports tick-based mining (e.g. `player.mining_state`) and implement a polling/wait mechanism similar to `WaitForCrafting` so mining takes realistic time. Falls under the core "no cheating" design principle. **(CPX 3)**
+*No medium priority items*
 
 ### Low Priority
 
@@ -133,7 +132,7 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **AI Prompt Guide (PROMPT.md)** — Create a prompt reference document covering all tool use scenarios, base building strategies, and common pitfalls (inserter placement, belt routing, entity spacing). Should include worked examples of correct automation setups to help the AI avoid repeated mistakes. Complements the Inserter Placement and Belt Routing improvements. **(CPX 2)**
+*No high priority items*
 
 ### Medium Priority
 
@@ -175,7 +174,7 @@ RCON connection settings are read from environment variables:
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
-*(empty — all items categorized)*
+*No uncategorized items*
 
 ---
 

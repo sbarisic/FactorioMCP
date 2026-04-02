@@ -42,8 +42,10 @@ You play by the same rules as a human player:
 ### Building & Mining
 | Tool | Purpose |
 |------|---------|
-| `PlaceEntity` | Place an entity from your inventory at (x, y) with a facing direction. Must be in range and have the item. Automatically tracked in building memory |
-| `MineEntity` | Mine/remove an entity at (x, y). Must be in reach range. Mined items go to your inventory. Reports `inventory_full` if items couldn't fit — resource entities are preserved when nothing fits. Automatically removed from building memory |
+| `PlaceEntity` | Place an entity from your inventory at (x, y) with a facing direction. Must be in range and have the item. Automatically tracked in building memory. For inserters: the direction controls item flow — inserters pick up from the OPPOSITE side and drop to the FACING side |
+| `MineEntity` | Mine/remove a building (non-resource entity) at (x, y). Must be in reach range. Mined items go to your inventory. Automatically removed from building memory. For mining ore patches, use `MineResource` instead |
+| `MineResource` | Mine resource entities (ore patches) with realistic timing — mines one unit at a time using normal game mechanics. Specify how many units to mine. Returns actual mined count, remaining amount, and depleted status |
+| `PreviewInserterPlacement` | Preview what an inserter would pick up from and drop to at a given position and direction, WITHOUT placing it. Shows pickup/drop tile positions and entities found there. Use before placing inserters to verify correct setup |
 
 ### Entity Interaction
 | Tool | Purpose |
@@ -69,6 +71,7 @@ You play by the same rules as a human player:
 | `GetRecipeDetails` | Get details about a recipe — ingredients, products, crafting time, category |
 | `GetAvailableRecipes` | List all currently unlocked recipes with category and crafting time |
 | `GetTechnologyDetails` | Get details about a technology — prerequisites, effects/unlocks, cost, required science packs |
+| `CheckCraftFeasibility` | Check whether a recipe can be crafted with current inventory. Returns max craftable count and per-ingredient breakdown (needed, available, missing). Use before crafting to verify materials or plan gathering |
 
 ### Energy & Power
 | Tool | Purpose |
@@ -123,6 +126,11 @@ You play by the same rules as a human player:
 | `WaitForTicks` | Wait for N game ticks to pass (60 ticks = 1 second at normal speed) |
 | `GetGameTick` | Get the current game tick |
 
+### Status
+| Tool | Purpose |
+|------|---------|
+| `GetFactoryStatus` | Get a comprehensive factory status snapshot in one call: player position, full inventory, crafting queue, research progress, nearby resources and entities, electric power status, building summary, and active goal. Use this for a broad overview before making decisions |
+
 ### Advanced
 | Tool | Purpose |
 |------|---------|
@@ -150,13 +158,13 @@ WalkToPosition(targetX: 20, targetY: 0, tolerance: 2)
 Early game, you mine resources directly:
 
 1. **Scan** with `ScanResources` to find resource patches (e.g. `iron-ore`, `copper-ore`, `stone`, `coal`) and their locations
-2. **Walk close** to the resource
-3. **Mine** with `MineEntity` at the resource's coordinates — this gives you raw ore in your inventory
-4. **Repeat** — mine multiple tiles to stockpile resources
+2. **Walk close** to the resource (must be within reach distance)
+3. **Mine** with `MineResource` at the resource's coordinates — specify how many units to mine. Mining takes real time (one unit at a time), similar to how crafting takes real time
+4. **Repeat** — mine from multiple tiles to stockpile resources
 
 ### Pattern: Crafting Items
 
-1. **Check inventory** with `GetInventory` to confirm you have the ingredients
+1. **Check feasibility** with `CheckCraftFeasibility` to verify you have all ingredients and see what's missing
 2. **Look up the recipe** with `GetRecipeDetails` if unsure about ingredients
 3. **Craft** with `Craft` — specify the recipe name and count
 4. **Wait** with `WaitForCrafting` — crafting takes real time, don't try to use items before they're ready
@@ -164,9 +172,8 @@ Early game, you mine resources directly:
 
 **Example — crafting iron gear wheels:**
 ```
-GetRecipeDetails(recipe: "iron-gear-wheel") → needs 2 iron-plate each
-GetInventory → have 10 iron-plate
-Craft(recipe: "iron-gear-wheel", count: 5) → needs 2 iron-plate each = 10 total ✓
+CheckCraftFeasibility(recipe: "iron-gear-wheel", count: 5) → can_craft: true, craftable_count: 5
+Craft(recipe: "iron-gear-wheel", count: 5) → queued: 5
 WaitForCrafting → wait until queue empties
 GetInventory → now have 5 iron-gear-wheel
 ```
@@ -251,6 +258,47 @@ Use blueprints to plan and replicate factory layouts:
 4. **Capture layouts** — use `CreateBlueprintFromArea` to save a working section as a blueprint string
 5. **Replicate** — use `PlaceBlueprintString` to stamp that layout elsewhere
 
+### Pattern: Placing Inserters
+
+Inserters move items between adjacent entities. Getting them right is critical for automation.
+
+**How inserter direction works:**
+- The `direction` parameter is the **DROP direction** (where items go TO)
+- The inserter **picks up from the OPPOSITE side** (where items come FROM)
+- Each side is exactly **1 tile** from the inserter center
+
+| Inserter Direction | Picks up from | Drops to |
+|-------------------|---------------|----------|
+| `north` | South tile (y+1) | North tile (y-1) |
+| `south` | North tile (y-1) | South tile (y+1) |
+| `east` | West tile (x-1) | East tile (x+1) |
+| `west` | East tile (x+1) | West tile (x-1) |
+
+**Workflow:**
+1. **Identify source and destination** — which entity produces items and which consumes them
+2. **Position the inserter between them** — exactly 1 tile from each entity's center
+3. **Preview first** — use `PreviewInserterPlacement(x, y, direction)` to verify the pickup/drop targets match your intent
+4. **Check the preview result** — confirm `pickup.entities` contains your source and `drop.entities` contains your destination
+5. **Place the inserter** — use `PlaceEntity` with the same position and direction
+6. **Fuel if burner** — burner inserters need coal via `InsertItems(x, y, "coal", count, "fuel")`
+
+**Example — inserter from mining drill to furnace:**
+```
+# Drill at (5, 3), furnace at (7, 3), inserter goes at (6, 3)
+# Inserter faces east: picks up from west (drill at 5,3) → drops to east (furnace at 7,3)
+PreviewInserterPlacement(x: 6, y: 3, direction: "east")
+→ pickup: {x:5, y:3, entities:[{name:"burner-mining-drill"}]}
+→ drop: {x:7, y:3, entities:[{name:"stone-furnace"}]}
+PlaceEntity(entityName: "burner-inserter", x: 6, y: 3, direction: "east")
+InsertItems(x: 6, y: 3, itemName: "coal", count: 5, inventoryType: "fuel")
+```
+
+**Common inserter mistakes:**
+- ❌ Placing the inserter 2 tiles away from entities instead of 1
+- ❌ Getting the direction backwards (pickup and drop are swapped)
+- ❌ Forgetting to fuel burner inserters
+- ❌ Not previewing before placing — always use `PreviewInserterPlacement` first
+
 ### Pattern: Managing Power
 
 Once you have electric entities:
@@ -328,7 +376,7 @@ Understanding the dependency chains helps you plan what to craft. Use `GetRecipe
 
 1. **Don't try to place entities without checking range first.** Use `CheckDistance` or accept that `PlaceEntity` will return an `out_of_range` error, then walk closer.
 
-2. **Don't craft without checking ingredients.** If you try to craft `iron-gear-wheel` without `iron-plate` in your inventory, the response will report `no_materials`. Use `GetRecipeDetails` to check what's needed.
+2. **Don't craft without checking feasibility.** Use `CheckCraftFeasibility` before crafting to verify you have all ingredients and see exactly what's missing. This is more efficient than checking inventory manually.
 
 3. **Don't assume crafting is instant.** Always call `WaitForCrafting` after `Craft` before attempting to use the crafted items.
 
@@ -336,7 +384,7 @@ Understanding the dependency chains helps you plan what to craft. Use `GetRecipe
 
 5. **Don't try to interact with entities far away.** Build distance and reach distance are limited (typically ~6 tiles). Walk to within range first.
 
-6. **Don't ignore `inventory_full` warnings.** When `MineEntity`, `RemoveItems`, or `TransferAllItems` reports `inventory_full`, stop gathering and make room — drop items, craft them into higher-tier products, or store them in a chest.
+6. **Don't ignore `inventory_full` warnings.** When `RemoveItems` or `TransferAllItems` reports `inventory_full`, stop gathering and make room — drop items, craft them into higher-tier products, or store them in a chest.
 
 7. **Don't place entities on top of each other.** Scan the area with `GetNearbyEntities` first to find open spots.
 

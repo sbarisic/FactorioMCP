@@ -16,6 +16,8 @@ builder.Services
     .AddSingleton<BlueprintService>()
     .AddSingleton<GoalPlannerService>()
     .AddSingleton<BuildingMemoryService>()
+    .AddSingleton<BeltPlannerService>()
+    .AddSingleton<MiningService>()
     .AddSingleton<GameCommandQueue>()
     .AddHostedService<RconConnectionService>()
     .AddMcpServer(options =>

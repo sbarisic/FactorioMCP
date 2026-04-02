@@ -243,12 +243,12 @@ internal sealed class FactorioService(RconClient rcon)
     }
 
     /// <summary>
-    /// Mine/remove an entity at the specified position. Mined items go to the player's inventory.
-    /// Uses player.mine_entity() for non-resource entities which handles inventory transfer
-    /// and raises proper game events. For resource entities (ores), manually harvests the
-    /// resource amount and inserts products into inventory since player.mine_entity() fails
-    /// on resources in Factorio 2.
+    /// Mine/remove a non-resource entity (building) at the specified position.
+    /// Mined items go to the player's inventory. Uses player.mine_entity() which handles
+    /// inventory transfer and raises proper game events.
     /// Prioritizes non-resource entities when multiple entities overlap at the same position.
+    /// If only resource entities exist at the position, returns an error directing the AI
+    /// to use MineResource instead (realistic tick-based mining).
     /// Validates proximity before mining.
     /// </summary>
     public Task<string> MineEntityAtAsync(double x, double y, CancellationToken cancellationToken = default)
@@ -277,37 +277,17 @@ internal sealed class FactorioService(RconClient rcon)
             local e = entities[1]
             local name = e.name
             if e.type == "resource" then
-                -- Resource entities cannot be mined with player.mine_entity() in Factorio 2.
-                -- Manually harvest: get resource amount, insert products, then destroy.
-                local amount = e.amount or 1
-                local products = e.prototype.mineable_properties.products
-                local total_expected = 0
-                local total_inserted = 0
-                if products then
-                    for _, prod in pairs(products) do
-                        local qty = prod.amount or math.floor((prod.amount_min + prod.amount_max) / 2)
-                        qty = math.ceil(qty * amount)
-                        if qty > 0 then
-                            total_expected = total_expected + qty
-                            local inserted = player.insert{name=prod.name, count=qty}
-                            total_inserted = total_inserted + inserted
-                        end
-                    end
-                end
-                if total_inserted == 0 and total_expected > 0 then
-                    rcon.print('{"success":false,"error":"inventory_full","entity":"'..name..'"}')
-                    return
-                end
-                e.destroy()
-                local inv_full = total_inserted < total_expected
-                rcon.print('{"success":true,"entity":"'..name..'","amount":'..amount..',"inventory_full":'..tostring(inv_full)..'}')  
+                -- Resource entities must be mined with MineResource for realistic timing
+                rcon.print('{"success":false,"error":"use_mine_resource","entity":"'..name..'"'..
+                    ',"amount":'..(e.amount or 0)..
+                    ',"message":"Resource entities must be mined with the MineResource tool for realistic mining duration"}')
+                return
+            end
+            local mined = player.mine_entity(e, true)
+            if mined then
+                rcon.print('{"success":true,"entity":"'..name..'"}')
             else
-                local mined = player.mine_entity(e, true)
-                if mined then
-                    rcon.print('{"success":true,"entity":"'..name..'"}')
-                else
-                    rcon.print('{"success":false,"error":"mine_failed","entity":"'..name..'"}')
-                end
+                rcon.print('{"success":false,"error":"mine_failed","entity":"'..name..'"}')
             end
             """);
 
@@ -1213,6 +1193,200 @@ internal sealed class FactorioService(RconClient rcon)
                 parts[#parts+1] = '{"name":"'..item.name..'","count":'..item.count..'}'
             end
             rcon.print('{"success":true,"entity":"'..e.name..'","inventory_type":"{{inventoryType}}","items":['..table.concat(parts, ",")..'],"slots":'..#inv..',"empty_slots":'..inv.count_empty_stacks()..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Get a comprehensive factory status snapshot in a single RCON call.
+    /// Returns player position, inventory summary, crafting queue, research status,
+    /// nearby resource summary, and electric network summary. Building memory and
+    /// goal status are C#-side and must be queried separately.
+    /// </summary>
+    public Task<string> GetFactoryStatusAsync(
+        double resourceScanRadius = 50,
+        double entityScanRadius = 20,
+        double electricPoleRadius = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local surface = player.surface
+            local pos = player.position
+
+            -- Position
+            local pos_json = '"position":{"x":'..string.format("%.1f", pos.x)..',"y":'..string.format("%.1f", pos.y)..'}'
+
+            -- Inventory summary
+            local inv = player.get_main_inventory()
+            local items = {}
+            for i = 1, #inv do
+                local stack = inv[i]
+                if stack.valid_for_read then
+                    items[stack.name] = (items[stack.name] or 0) + stack.count
+                end
+            end
+            local inv_parts = {}
+            for name, count in pairs(items) do
+                inv_parts[#inv_parts+1] = '{"name":"'..name..'","count":'..count..'}'
+            end
+            local inv_json = '"inventory":{"items":['..table.concat(inv_parts, ",")..'],"total_slots":'..#inv..',"free_slots":'..inv.count_empty_stacks()..'}'
+
+            -- Crafting queue
+            local queue = player.crafting_queue
+            local queue_parts = {}
+            if queue then
+                for _, item in pairs(queue) do
+                    queue_parts[#queue_parts+1] = '{"recipe":"'..item.recipe..'","count":'..item.count..'}'
+                end
+            end
+            local craft_json = '"crafting_queue":['..table.concat(queue_parts, ",")..']'
+
+            -- Research
+            local tech = player.force.current_research
+            local research_json
+            if tech then
+                research_json = '"research":{"active":true,"technology":"'..tech.name..'","progress":'..string.format("%.3f", tech.research_progress)..'}'
+            else
+                research_json = '"research":{"active":false}'
+            end
+
+            -- Nearby resources (compact summary)
+            local resources = surface.find_entities_filtered{position=pos, radius={{resourceScanRadius}}, type="resource"}
+            local res_summary = {}
+            for _, r in pairs(resources) do
+                local key = r.name
+                if not res_summary[key] then
+                    res_summary[key] = {name=r.name, count=0, total_amount=0, cx=0, cy=0}
+                end
+                local s = res_summary[key]
+                s.count = s.count + 1
+                s.total_amount = s.total_amount + r.amount
+                s.cx = s.cx + r.position.x
+                s.cy = s.cy + r.position.y
+            end
+            local res_parts = {}
+            for _, s in pairs(res_summary) do
+                res_parts[#res_parts+1] = '{"name":"'..s.name..'","patches":'..s.count..',"total_amount":'..s.total_amount..',"center_x":'..string.format("%.1f", s.cx/s.count)..',"center_y":'..string.format("%.1f", s.cy/s.count)..'}'
+            end
+            local resources_json = '"nearby_resources":{"scan_radius":{{resourceScanRadius}},"resources":['..table.concat(res_parts, ",")..']}'
+
+            -- Nearby entities summary (non-resource, grouped by type)
+            local entities = surface.find_entities_filtered{position=pos, radius={{entityScanRadius}}}
+            local ent_summary = {}
+            for _, e in pairs(entities) do
+                if e.type ~= "resource" and e.name ~= "character" then
+                    ent_summary[e.name] = (ent_summary[e.name] or 0) + 1
+                end
+            end
+            local ent_parts = {}
+            for name, count in pairs(ent_summary) do
+                ent_parts[#ent_parts+1] = '{"name":"'..name..'","count":'..count..'}'
+            end
+            local entities_json = '"nearby_entities":{"scan_radius":{{entityScanRadius}},"types":['..table.concat(ent_parts, ",")..']}'
+
+            -- Electric network (simplified)
+            local power_json
+            local poles = surface.find_entities_filtered{type="electric-pole", position=pos, radius={{electricPoleRadius}}}
+            if #poles > 0 then
+                table.sort(poles, function(a, b)
+                    local da = (a.position.x - pos.x)^2 + (a.position.y - pos.y)^2
+                    local db = (b.position.x - pos.x)^2 + (b.position.y - pos.y)^2
+                    return da < db
+                end)
+                local pole = poles[1]
+                local stats = pole.electric_network_statistics
+                local prec = defines.flow_precision_index.five_seconds
+                local total_prod = 0
+                for name, _ in pairs(stats.output_counts) do
+                    total_prod = total_prod + stats.get_flow_count{name=name, category="output", precision_index=prec}
+                end
+                local total_cons = 0
+                for name, _ in pairs(stats.input_counts) do
+                    total_cons = total_cons + stats.get_flow_count{name=name, category="input", precision_index=prec}
+                end
+                local satisfaction = 100.0
+                if total_cons > 0 then satisfaction = math.min(100, (total_prod / total_cons) * 100) end
+                power_json = '"power":{"available":true,"production_watts":'..string.format("%.1f", total_prod * 60)..',"consumption_watts":'..string.format("%.1f", total_cons * 60)..',"satisfaction_percent":'..string.format("%.1f", satisfaction)..'}'
+            else
+                power_json = '"power":{"available":false}'
+            end
+
+            rcon.print('{'..pos_json..','..inv_json..','..craft_json..','..research_json..','..resources_json..','..entities_json..','..power_json..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Preview what an inserter placed at the given position and direction would pick up from
+    /// and drop to. Reports the calculated pickup/drop tile positions and any entities found there.
+    /// Does NOT actually place anything — purely informational for planning inserter layouts.
+    /// </summary>
+    public Task<string> PreviewInserterPlacementAsync(
+        double x,
+        double y,
+        string direction = "north",
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(direction);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local dir = defines.direction.{{direction}}
+            local ix, iy = {{x}}, {{y}}
+
+            -- Direction offsets: the direction the inserter faces is the DROP direction
+            local offsets = {
+                [defines.direction.north]     = {dx=0,  dy=-1},
+                [defines.direction.south]     = {dx=0,  dy=1},
+                [defines.direction.east]      = {dx=1,  dy=0},
+                [defines.direction.west]      = {dx=-1, dy=0},
+                [defines.direction.northeast] = {dx=1,  dy=-1},
+                [defines.direction.northwest] = {dx=-1, dy=-1},
+                [defines.direction.southeast] = {dx=1,  dy=1},
+                [defines.direction.southwest] = {dx=-1, dy=1}
+            }
+            local off = offsets[dir]
+            if not off then
+                rcon.print('{"success":false,"error":"invalid_direction","direction":"{{direction}}"}')
+                return
+            end
+
+            -- Drop position is in the facing direction, pickup is opposite
+            local drop_x, drop_y = ix + off.dx, iy + off.dy
+            local pickup_x, pickup_y = ix - off.dx, iy - off.dy
+
+            local surface = game.connected_players[1].surface
+
+            -- Find entities at drop position
+            local drop_entities = surface.find_entities_filtered{position={drop_x, drop_y}, radius=0.5}
+            local drop_parts = {}
+            for _, e in pairs(drop_entities) do
+                if e.name ~= "character" then
+                    drop_parts[#drop_parts+1] = '{"name":"'..e.name..'","type":"'..e.type..'"}'
+                end
+            end
+
+            -- Find entities at pickup position
+            local pickup_entities = surface.find_entities_filtered{position={pickup_x, pickup_y}, radius=0.5}
+            local pickup_parts = {}
+            for _, e in pairs(pickup_entities) do
+                if e.name ~= "character" then
+                    pickup_parts[#pickup_parts+1] = '{"name":"'..e.name..'","type":"'..e.type..'"}'
+                end
+            end
+
+            -- Check if an inserter can actually be placed here
+            local can_place = surface.can_place_entity{name="burner-inserter", position={ix, iy}, force=game.connected_players[1].force, direction=dir}
+
+            rcon.print('{"success":true'..
+                ',"inserter_position":{"x":'..ix..',"y":'..iy..'}'..
+                ',"direction":"{{direction}}"'..
+                ',"pickup":{"x":'..pickup_x..',"y":'..pickup_y..',"entities":['..table.concat(pickup_parts, ",")..']}'..
+                ',"drop":{"x":'..drop_x..',"y":'..drop_y..',"entities":['..table.concat(drop_parts, ",")..']}'..
+                ',"can_place":'..tostring(can_place)..
+                '}')
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);

@@ -4,6 +4,7 @@ using FactorioMCP.Services;
 using FactorioMCP.Tests.Services;
 using FactorioMCP.Tools;
 using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
 using Xunit;
 
 namespace FactorioMCP.Tests.Tools;
@@ -16,6 +17,7 @@ public class McpToolIntegrationTests
     private readonly BlueprintService _blueprints;
     private readonly GoalPlannerService _goals;
     private readonly BuildingMemoryService _buildingMemory;
+    private readonly MiningService _mining;
     private readonly GameCommandQueue _queue = new();
 
     public McpToolIntegrationTests()
@@ -23,6 +25,7 @@ public class McpToolIntegrationTests
         _factorio = new FactorioService(_rcon);
         _energy = new EnergyService(_rcon);
         _blueprints = new BlueprintService(_rcon);
+        _mining = new MiningService(_rcon);
         _goals = new GoalPlannerService(
             Path.Combine(Path.GetTempPath(), $"goals-mcp-{Guid.NewGuid():N}.json"));
         _buildingMemory = new BuildingMemoryService(
@@ -40,6 +43,7 @@ public class McpToolIntegrationTests
         services.AddSingleton<FactorioService>();
         services.AddSingleton<EnergyService>();
         services.AddSingleton<BlueprintService>();
+        services.AddSingleton<MiningService>();
         services.AddSingleton<GameCommandQueue>();
 
         var tempPath = Path.Combine(Path.GetTempPath(), $"goals-di-{Guid.NewGuid():N}.json");
@@ -237,7 +241,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task EntityTools_PlaceEntity_PassesAllParameters()
     {
-        var tools = new EntityTools(_factorio, _buildingMemory, _queue);
+        var tools = new EntityTools(_factorio, _mining, _buildingMemory, _queue);
 
         await tools.PlaceEntity("stone-furnace", 10.5, -3.2, "south");
 
@@ -250,7 +254,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task EntityTools_MineEntity_PassesCoordinates()
     {
-        var tools = new EntityTools(_factorio, _buildingMemory, _queue);
+        var tools = new EntityTools(_factorio, _mining, _buildingMemory, _queue);
 
         await tools.MineEntity(5, -2);
 
@@ -666,12 +670,29 @@ public class McpToolIntegrationTests
     {
         // CapturingRconClient returns empty string (not a success JSON),
         // so building should not be tracked
-        var tools = new EntityTools(_factorio, _buildingMemory, _queue);
+        var tools = new EntityTools(_factorio, _mining, _buildingMemory, _queue);
 
         await tools.PlaceEntity("stone-furnace", 5, 5);
 
         var summary = await _buildingMemory.GetBuildingSummaryAsync();
         Assert.Contains("\"total_buildings\":0", summary);
+    }
+
+    // ── EntityTools MineResource Delegation ───────────────────────────
+
+    [Fact]
+    public async Task EntityTools_MineResource_DelegatesToMiningService()
+    {
+        var tools = new EntityTools(_factorio, _mining, _buildingMemory, _queue);
+
+        // CapturingRconClient returns empty string which will cause JSON parse to fail,
+        // but we can verify the RCON command was sent correctly
+        try { await tools.MineResource(5, 5, 3); } catch { }
+
+        Assert.NotEmpty(_rcon.AllCommands);
+        // First command should be StartMiningResource
+        Assert.Contains("update_selected_entity", _rcon.AllCommands[0]);
+        Assert.Contains("mining_state", _rcon.AllCommands[0]);
     }
 
     // ── Resource DI Resolution ────────────────────────────────────────
@@ -748,5 +769,158 @@ public class McpToolIntegrationTests
         var resources = new GameStateResources(_factorio, _energy);
         await resources.GetAvailableTechnologies();
         Assert.Contains("technologies", _rcon.LastCommand);
+    }
+
+    // ── StatusTools DI Resolution ─────────────────────────────────────
+
+    [Fact]
+    public void StatusTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<StatusTools>(provider));
+    }
+
+    // ── StatusTools Delegation ────────────────────────────────────────
+
+    [Fact]
+    public async Task StatusTools_GetFactoryStatus_DelegatesToFactorioService()
+    {
+        var tools = new StatusTools(_factorio, _buildingMemory, _goals, _queue);
+
+        var result = await tools.GetFactoryStatus();
+
+        // Verify Lua script was sent to RCON
+        Assert.Contains("get_main_inventory", _rcon.LastCommand!);
+        Assert.Contains("crafting_queue", _rcon.LastCommand!);
+        Assert.Contains("current_research", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StatusTools_GetFactoryStatus_PassesCustomRadii()
+    {
+        var tools = new StatusTools(_factorio, _buildingMemory, _goals, _queue);
+
+        await tools.GetFactoryStatus(
+            resourceScanRadius: 100,
+            entityScanRadius: 30,
+            electricPoleRadius: 75);
+
+        Assert.Contains("100", _rcon.LastCommand!);
+        Assert.Contains("30", _rcon.LastCommand!);
+        Assert.Contains("75", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StatusTools_GetFactoryStatus_IncludesBuildingSummary()
+    {
+        var tools = new StatusTools(_factorio, _buildingMemory, _goals, _queue);
+
+        var result = await tools.GetFactoryStatus();
+
+        Assert.Contains("building_summary", result);
+        Assert.Contains("total_buildings", result);
+    }
+
+    [Fact]
+    public async Task StatusTools_GetFactoryStatus_IncludesActiveGoal()
+    {
+        // Set up an active goal first
+        await _goals.SetGoalAsync("Test factory goal", ["Step 1", "Step 2"]);
+        var tools = new StatusTools(_factorio, _buildingMemory, _goals, _queue);
+
+        var result = await tools.GetFactoryStatus();
+
+        Assert.Contains("active_goal", result);
+        Assert.Contains("Test factory goal", result);
+    }
+
+    [Fact]
+    public async Task StatusTools_GetFactoryStatus_MergesGameStateWithCSharpState()
+    {
+        var tools = new StatusTools(_factorio, _buildingMemory, _goals, _queue);
+
+        var result = await tools.GetFactoryStatus();
+
+        // Result should contain both building_summary and active_goal keys
+        Assert.Contains("\"building_summary\":", result);
+        Assert.Contains("\"active_goal\":", result);
+    }
+
+    // ── EntityTools PreviewInserterPlacement ───────────────────────────
+
+    [Fact]
+    public async Task EntityTools_PreviewInserterPlacement_DelegatesToFactorioService()
+    {
+        var tools = new EntityTools(_factorio, _mining, _buildingMemory, _queue);
+
+        await tools.PreviewInserterPlacement(5, 3, "north");
+
+        Assert.Contains("find_entities_filtered", _rcon.LastCommand!);
+        Assert.Contains("can_place_entity", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task EntityTools_PreviewInserterPlacement_PassesDirectionParameter()
+    {
+        var tools = new EntityTools(_factorio, _mining, _buildingMemory, _queue);
+
+        await tools.PreviewInserterPlacement(10, 20, "east");
+
+        Assert.Contains("defines.direction.east", _rcon.LastCommand!);
+        Assert.Contains("\"east\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task EntityTools_PreviewInserterPlacement_PassesCoordinates()
+    {
+        var tools = new EntityTools(_factorio, _mining, _buildingMemory, _queue);
+
+        await tools.PreviewInserterPlacement(7.5, -3.5, "south");
+
+        Assert.Contains("7.5", _rcon.LastCommand!);
+        Assert.Contains("-3.5", _rcon.LastCommand!);
+    }
+
+    // ── BeltTools ────────────────────────────────────────────────────
+
+    [Fact]
+    public void BeltTools_PlanBeltRoute_DelegatesToBeltPlannerService()
+    {
+        var planner = new BeltPlannerService();
+        var tools = new BeltTools(planner);
+
+        var result = tools.PlanBeltRoute(0, 0, 5, 0);
+
+        using var doc = JsonDocument.Parse(result);
+        Assert.True(doc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal(6, doc.RootElement.GetProperty("belt_count").GetInt32());
+    }
+
+    [Fact]
+    public void BeltTools_PlanBeltRoute_PassesTurnPreference()
+    {
+        var planner = new BeltPlannerService();
+        var tools = new BeltTools(planner);
+
+        var resultH = tools.PlanBeltRoute(0, 0, 3, 2, "horizontal_first");
+        var resultV = tools.PlanBeltRoute(0, 0, 3, 2, "vertical_first");
+
+        using var docH = JsonDocument.Parse(resultH);
+        using var docV = JsonDocument.Parse(resultV);
+
+        // Horizontal first: first belt at (0,0) faces east
+        Assert.Equal("east", docH.RootElement.GetProperty("steps")[0].GetProperty("direction").GetString());
+        // Vertical first: first belt at (0,0) faces south
+        Assert.Equal("south", docV.RootElement.GetProperty("steps")[0].GetProperty("direction").GetString());
+    }
+
+    [Fact]
+    public void BeltTools_GetBeltDirectionHelp_ReturnsValidJson()
+    {
+        var result = BeltTools.GetBeltDirectionHelp();
+
+        using var doc = JsonDocument.Parse(result);
+        Assert.True(doc.RootElement.TryGetProperty("directions", out _));
+        Assert.True(doc.RootElement.TryGetProperty("tips", out _));
     }
 }

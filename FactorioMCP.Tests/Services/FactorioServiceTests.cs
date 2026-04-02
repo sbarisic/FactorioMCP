@@ -444,22 +444,23 @@ public class FactorioServiceTests
     }
 
     [Fact]
-    public async Task MineEntityAtAsync_HandlesResourceEntitiesWithDestroy()
+    public async Task MineEntityAtAsync_RedirectsResourceEntitiesToMineResource()
     {
         await _service.MineEntityAtAsync(0, 0);
 
         Assert.Contains("e.type == \"resource\"", _rcon.LastCommand!);
-        Assert.Contains("e.destroy()", _rcon.LastCommand!);
-        Assert.Contains("player.insert", _rcon.LastCommand!);
-        Assert.Contains("mineable_properties", _rcon.LastCommand!);
+        Assert.Contains("use_mine_resource", _rcon.LastCommand!);
+        Assert.DoesNotContain("e.destroy()", _rcon.LastCommand!);
+        Assert.DoesNotContain("player.insert", _rcon.LastCommand!);
     }
 
     [Fact]
-    public async Task MineEntityAtAsync_ReturnsAmountForResourceEntities()
+    public async Task MineEntityAtAsync_ResourceRedirectIncludesEntityInfo()
     {
         await _service.MineEntityAtAsync(0, 0);
 
-        Assert.Contains("\"amount\":", _rcon.LastCommand!);
+        Assert.Contains("e.amount", _rcon.LastCommand!);
+        Assert.Contains("MineResource", _rcon.LastCommand!);
     }
 
     // ── GetNearbyEntities ────────────────────────────────────────────
@@ -2081,6 +2082,252 @@ public class FactorioServiceTests
     {
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => _service.CheckCraftFeasibilityAsync("iron-gear-wheel", -1));
+    }
+
+    // ── GetFactoryStatus ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetFactoryStatusAsync_SendsComprehensiveLuaScript()
+    {
+        await _service.GetFactoryStatusAsync();
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GetFactoryStatusAsync_IncludesPositionQuery()
+    {
+        await _service.GetFactoryStatusAsync();
+
+        Assert.Contains("player.position", _rcon.LastCommand!);
+        Assert.Contains("\"position\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetFactoryStatusAsync_IncludesInventoryQuery()
+    {
+        await _service.GetFactoryStatusAsync();
+
+        Assert.Contains("get_main_inventory", _rcon.LastCommand!);
+        Assert.Contains("\"inventory\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetFactoryStatusAsync_IncludesCraftingQueueQuery()
+    {
+        await _service.GetFactoryStatusAsync();
+
+        Assert.Contains("crafting_queue", _rcon.LastCommand!);
+        Assert.Contains("\"crafting_queue\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetFactoryStatusAsync_IncludesResearchQuery()
+    {
+        await _service.GetFactoryStatusAsync();
+
+        Assert.Contains("current_research", _rcon.LastCommand!);
+        Assert.Contains("\"research\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetFactoryStatusAsync_IncludesResourceScan()
+    {
+        await _service.GetFactoryStatusAsync();
+
+        Assert.Contains("type=\"resource\"", _rcon.LastCommand!);
+        Assert.Contains("\"nearby_resources\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetFactoryStatusAsync_IncludesEntityScan()
+    {
+        await _service.GetFactoryStatusAsync();
+
+        Assert.Contains("\"nearby_entities\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetFactoryStatusAsync_IncludesPowerQuery()
+    {
+        await _service.GetFactoryStatusAsync();
+
+        Assert.Contains("electric-pole", _rcon.LastCommand!);
+        Assert.Contains("\"power\":", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetFactoryStatusAsync_UsesDefaultRadii()
+    {
+        await _service.GetFactoryStatusAsync();
+
+        // Default resource scan radius = 50, entity scan = 20, electric pole = 50
+        Assert.Contains("radius=50", _rcon.LastCommand!);
+        Assert.Contains("radius=20", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetFactoryStatusAsync_PassesCustomRadii()
+    {
+        await _service.GetFactoryStatusAsync(
+            resourceScanRadius: 100,
+            entityScanRadius: 30,
+            electricPoleRadius: 75);
+
+        Assert.Contains("100", _rcon.LastCommand!);
+        Assert.Contains("30", _rcon.LastCommand!);
+        Assert.Contains("75", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetFactoryStatusAsync_IsSingleRconCall()
+    {
+        _rcon.AllCommands.Clear();
+
+        await _service.GetFactoryStatusAsync();
+
+        Assert.Single(_rcon.AllCommands);
+    }
+
+    [Fact]
+    public async Task GetFactoryStatusAsync_OutputsAllSectionsInSingleJsonObject()
+    {
+        await _service.GetFactoryStatusAsync();
+
+        // Verify the script outputs one JSON object with all sections
+        Assert.Contains("rcon.print('{'", _rcon.LastCommand!);
+        Assert.Contains("pos_json", _rcon.LastCommand!);
+        Assert.Contains("inv_json", _rcon.LastCommand!);
+        Assert.Contains("craft_json", _rcon.LastCommand!);
+        Assert.Contains("research_json", _rcon.LastCommand!);
+        Assert.Contains("resources_json", _rcon.LastCommand!);
+        Assert.Contains("entities_json", _rcon.LastCommand!);
+        Assert.Contains("power_json", _rcon.LastCommand!);
+    }
+
+    // ── PreviewInserterPlacement ───────────────────────────────────────
+
+    [Fact]
+    public async Task PreviewInserterPlacementAsync_SendsLuaScript()
+    {
+        await _service.PreviewInserterPlacementAsync(5, 3, "north");
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task PreviewInserterPlacementAsync_IncludesPosition()
+    {
+        await _service.PreviewInserterPlacementAsync(5, 3, "north");
+
+        Assert.Contains("5", _rcon.LastCommand!);
+        Assert.Contains("3", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewInserterPlacementAsync_IncludesDirection()
+    {
+        await _service.PreviewInserterPlacementAsync(5, 3, "south");
+
+        Assert.Contains("defines.direction.south", _rcon.LastCommand!);
+        Assert.Contains("\"south\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewInserterPlacementAsync_CalculatesPickupAndDropPositions()
+    {
+        await _service.PreviewInserterPlacementAsync(5, 3, "north");
+
+        // Script should calculate drop (north = y-1) and pickup (south = y+1) positions
+        Assert.Contains("drop_x, drop_y", _rcon.LastCommand!);
+        Assert.Contains("pickup_x, pickup_y", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewInserterPlacementAsync_ScansForEntitiesAtBothPositions()
+    {
+        await _service.PreviewInserterPlacementAsync(5, 3, "north");
+
+        Assert.Contains("find_entities_filtered", _rcon.LastCommand!);
+        Assert.Contains("pickup", _rcon.LastCommand!);
+        Assert.Contains("drop", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewInserterPlacementAsync_ChecksCanPlace()
+    {
+        await _service.PreviewInserterPlacementAsync(5, 3, "north");
+
+        Assert.Contains("can_place_entity", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewInserterPlacementAsync_OutputsJsonWithAllSections()
+    {
+        await _service.PreviewInserterPlacementAsync(5, 3, "east");
+
+        Assert.Contains("\"inserter_position\":", _rcon.LastCommand!);
+        Assert.Contains("\"pickup\":", _rcon.LastCommand!);
+        Assert.Contains("\"drop\":", _rcon.LastCommand!);
+        Assert.Contains("\"can_place\":", _rcon.LastCommand!);
+    }
+
+    [Theory]
+    [InlineData("north")]
+    [InlineData("south")]
+    [InlineData("east")]
+    [InlineData("west")]
+    public async Task PreviewInserterPlacementAsync_SupportsCardinalDirections(string direction)
+    {
+        await _service.PreviewInserterPlacementAsync(0, 0, direction);
+
+        Assert.Contains($"defines.direction.{direction}", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewInserterPlacementAsync_IsSingleRconCall()
+    {
+        _rcon.AllCommands.Clear();
+
+        await _service.PreviewInserterPlacementAsync(5, 3, "north");
+
+        Assert.Single(_rcon.AllCommands);
+    }
+
+    [Fact]
+    public async Task PreviewInserterPlacementAsync_ThrowsOnNullDirection()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => _service.PreviewInserterPlacementAsync(0, 0, null!));
+    }
+
+    [Fact]
+    public async Task PreviewInserterPlacementAsync_ThrowsOnWhitespaceDirection()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.PreviewInserterPlacementAsync(0, 0, "  "));
+    }
+
+    [Fact]
+    public async Task PreviewInserterPlacementAsync_UsesDirectionOffsetTable()
+    {
+        await _service.PreviewInserterPlacementAsync(10, 20, "north");
+
+        // Verify the Lua uses an offset table for direction calculation
+        Assert.Contains("offsets", _rcon.LastCommand!);
+        Assert.Contains("dx", _rcon.LastCommand!);
+        Assert.Contains("dy", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewInserterPlacementAsync_FiltersOutPlayerCharacter()
+    {
+        await _service.PreviewInserterPlacementAsync(5, 3, "north");
+
+        // Script should filter out the player character entity from results
+        Assert.Contains("\"character\"", _rcon.LastCommand!);
     }
 }
 
