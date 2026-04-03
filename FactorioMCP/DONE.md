@@ -88,6 +88,7 @@ Items completed from the [TODO list](TODO.md).
 ## Code Cleanup
 
 - [x] **Removed WalkForDuration Tool (CPX 2)** — Removed `WalkForDuration` MCP tool from `MovementTools.cs`. It encouraged bad AI behavior (walking for a fixed duration instead of toward a target). AI should use `WalkToPosition` instead.
+- [x] **Split Oversized Test File (CPX 4)** — `FactorioServiceTests.cs` (2356 lines) exceeded the 900-line limit. Removed duplicated test methods that were already extracted to partial files (Research, Wait, Interaction, Transfer). Created three new partial files: `FactorioServiceTests.Movement.cs` (Walk, StopWalking, GetPlayerPosition), `FactorioServiceTests.Inventory.cs` (GetInventory, Craft, GetCraftingQueue), `FactorioServiceTests.Entity.cs` (PlaceEntity, MineEntity, GetNearbyEntities, CheckDistance). Main file now contains only shared test infrastructure (CapturingRconClient, ScriptedRconClient, constructor) and cross-cutting tests. All 8 files under 500 lines. `FactorioService.cs` was already properly split into 7 partial files (131-505 lines each).
 
 ---
 
