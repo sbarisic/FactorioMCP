@@ -90,7 +90,6 @@ RCON connection settings are read from environment variables:
 ### High Priority
 
 - [ ] **High-Level Task Primitives** — Compound tools that collapse 10–20 atomic calls into 1. `GatherResource(resource, count)`: find patch → walk → mine → handle timeout. `RefuelEntity(x, y, fuel, min_amount)`: check fuel level → walk → insert fuel. `Smelt(resource, count)`: find furnace → insert ore + fuel → wait → collect output. **(CPX 4)**
-- [ ] **Semantic Area Perception** — `SummarizeArea`: returns structured overview of resources nearby, machines, free space, and threats. `WhatAmILookingAt(direction)`: raycast-style directional query. `FindBuildableArea(width, height)`: locate a flat empty region suitable for building. **(CPX 3)**
 - [ ] **Smart Inserter Placement** — `place_inserter(target_x, target_y, side, direction)`: accept a target entity and a side (top/bottom/left/right) plus direction (inbound/outbound). C# backend calculates the exact tile offset based on entity size. Also `insert_between(source_pos, destination_pos)` to auto-place an inserter in the 1-tile gap between two entities with correct orientation. **(CPX 3)**
 - [ ] **Ghost Placement Validation** — LLM places ghost entities first, C# validates placement (prototype, orientation, connectivity). Returns corrective errors like "Inserter at {10,11} is pointing at a wall, not the Assembler" to create a feedback loop before committing real entities. **(CPX 3)**
 

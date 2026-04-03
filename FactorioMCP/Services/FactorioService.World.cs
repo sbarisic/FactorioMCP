@@ -369,4 +369,253 @@ internal sealed partial class FactorioService
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
+
+    /// <summary>
+    /// Summarize an area around the player or a given center, returning a structured
+    /// overview of resources, machines (grouped by type with status), threats
+    /// (enemies), and free-space estimate.
+    /// </summary>
+    public Task<string> SummarizeAreaAsync(double radius = 50, double? centerX = null, double? centerY = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+
+        var posExpr = centerX.HasValue && centerY.HasValue
+            ? string.Create(CultureInfo.InvariantCulture, $"{{{centerX.Value},{centerY.Value}}}")
+            : "player.position";
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local surface = player.surface
+            local center = {{posExpr}}
+
+            -- Resources
+            local res = surface.find_entities_filtered{position=center, radius={{radius}}, type="resource"}
+            local res_sum = {}
+            for _, r in pairs(res) do
+                local key = r.name
+                if not res_sum[key] then
+                    res_sum[key] = {name=r.name, count=0, total_amount=0, sx=0, sy=0}
+                end
+                local s = res_sum[key]
+                s.count = s.count + 1
+                s.total_amount = s.total_amount + r.amount
+                s.sx = s.sx + r.position.x
+                s.sy = s.sy + r.position.y
+            end
+            local res_parts = {}
+            for _, s in pairs(res_sum) do
+                res_parts[#res_parts+1] = '{"name":"'..s.name..'","count":'..s.count..',"total_amount":'..s.total_amount..',"center_x":'..string.format("%.1f", s.sx/s.count)..',"center_y":'..string.format("%.1f", s.sy/s.count)..'}'
+            end
+
+            -- Machines / structures (non-resource, non-character entities)
+            local all = surface.find_entities_filtered{position=center, radius={{radius}}}
+            local machines = {}
+            local entity_count = 0
+            for _, e in pairs(all) do
+                if e.type ~= "resource" and e.name ~= "character" then
+                    entity_count = entity_count + 1
+                    local key = e.name
+                    if not machines[key] then
+                        machines[key] = {name=e.name, type=e.type, count=0, working=0, idle=0}
+                    end
+                    local m = machines[key]
+                    m.count = m.count + 1
+                    local st = e.status
+                    if st == defines.entity_status.working or st == defines.entity_status.normal then
+                        m.working = m.working + 1
+                    elseif st ~= nil then
+                        m.idle = m.idle + 1
+                    end
+                end
+            end
+            local mach_parts = {}
+            for _, m in pairs(machines) do
+                mach_parts[#mach_parts+1] = '{"name":"'..m.name..'","type":"'..m.type..'","count":'..m.count..',"working":'..m.working..',"idle":'..m.idle..'}'
+            end
+
+            -- Threats (enemies)
+            local enemies = surface.find_entities_filtered{position=center, radius={{radius}}, force="enemy"}
+            local threat_sum = {}
+            for _, e in pairs(enemies) do
+                threat_sum[e.name] = (threat_sum[e.name] or 0) + 1
+            end
+            local threat_parts = {}
+            for name, count in pairs(threat_sum) do
+                threat_parts[#threat_parts+1] = '{"name":"'..name..'","count":'..count..'}'
+            end
+
+            -- Free space estimate: total tiles minus occupied tiles
+            local r = {{radius}}
+            local total_tiles = math.floor((2*r)*(2*r))
+            local occupied = entity_count + #res
+            local free_pct = 100 * (1 - occupied / total_tiles)
+            if free_pct < 0 then free_pct = 0 end
+
+            local free_json = '"free_space":{"total_tiles":'..total_tiles..',"occupied":'..occupied..',"free_percent":'..string.format("%.1f", free_pct)..'}'
+
+            rcon.print('{"center_x":'..string.format("%.1f", center[1] or center.x or 0)..',"center_y":'..string.format("%.1f", center[2] or center.y or 0)..',"radius":{{radius}},'
+                ..'"resources":['..table.concat(res_parts, ",")..'],'
+                ..'"machines":['..table.concat(mach_parts, ",")..'],'
+                ..'"threats":['..table.concat(threat_parts, ",")..'],'
+                ..free_json..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Look in a compass direction from the player and report what entities
+    /// are along that line within the specified range. Uses a narrow cone
+    /// (width parameter) to capture entities along the look direction.
+    /// </summary>
+    public Task<string> LookInDirectionAsync(string direction, double range = 30, double width = 3, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(direction);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(range);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+
+        // Calculate direction vector for the scan rectangle
+        // Factorio coords: +X = east, +Y = south
+        var (dx, dy) = direction.ToLowerInvariant() switch
+        {
+            "north" => (0.0, -1.0),
+            "south" => (0.0, 1.0),
+            "east" => (1.0, 0.0),
+            "west" => (-1.0, 0.0),
+            "northeast" => (0.707, -0.707),
+            "northwest" => (-0.707, -0.707),
+            "southeast" => (0.707, 0.707),
+            "southwest" => (-0.707, 0.707),
+            _ => throw new ArgumentException($"Invalid direction: {direction}. Use north/south/east/west/northeast/northwest/southeast/southwest.")
+        };
+
+        // perpendicular vector
+        var (px, py) = (-dy, dx);
+        var halfWidth = width / 2.0;
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local pos = player.position
+            local surface = player.surface
+            local dx, dy = {{dx}}, {{dy}}
+            local px, py = {{px}}, {{py}}
+            local range = {{range}}
+            local hw = {{halfWidth}}
+
+            -- Build a bounding box for the directional scan area
+            local x1 = math.min(pos.x, pos.x + dx*range) - math.abs(px)*hw - 1
+            local y1 = math.min(pos.y, pos.y + dy*range) - math.abs(py)*hw - 1
+            local x2 = math.max(pos.x, pos.x + dx*range) + math.abs(px)*hw + 1
+            local y2 = math.max(pos.y, pos.y + dy*range) + math.abs(py)*hw + 1
+
+            local entities = surface.find_entities_filtered{area={{"{"}}{x1, y1}, {x2, y2}{{"}"}} }
+
+            -- Filter to entities within the narrow cone
+            local results = {}
+            local dir_names = {}
+            for k, v in pairs(defines.direction) do dir_names[v] = k end
+
+            for _, e in pairs(entities) do
+                if e.name ~= "character" then
+                    local ex = e.position.x - pos.x
+                    local ey = e.position.y - pos.y
+                    -- Project onto direction vector
+                    local proj = ex*dx + ey*dy
+                    -- Perpendicular distance
+                    local perp = math.abs(ex*px + ey*py)
+                    if proj > 0 and proj <= range and perp <= hw then
+                        local dist = math.sqrt(ex*ex + ey*ey)
+                        local entry = '{"name":"'..e.name..'","type":"'..e.type..'","x":'..string.format("%.1f", e.position.x)..',"y":'..string.format("%.1f", e.position.y)..',"distance":'..string.format("%.1f", dist)
+                        local dn = dir_names[e.direction]
+                        if dn then entry = entry..',"direction":"'..dn..'"' end
+                        if e.amount then entry = entry..',"amount":'..e.amount end
+                        entry = entry..'}'
+                        results[#results+1] = {dist=dist, json=entry}
+                    end
+                end
+            end
+
+            -- Sort by distance (closest first)
+            table.sort(results, function(a, b) return a.dist < b.dist end)
+
+            local parts = {}
+            for _, r in pairs(results) do
+                parts[#parts+1] = r.json
+            end
+
+            rcon.print('{"direction":"{{direction}}","range":{{range}},"width":{{width}},"entities":['..table.concat(parts, ",")..'],"total_found":'..#parts..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Find a buildable rectangular area (width × height) near the player or a given center.
+    /// Scans outward in a spiral-like pattern checking for tile regions free of entities
+    /// and non-water tiles. Returns the first suitable area found.
+    /// </summary>
+    public Task<string> FindBuildableAreaAsync(int width, int height, double searchRadius = 50, double? centerX = null, double? centerY = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(searchRadius);
+
+        var posExpr = centerX.HasValue && centerY.HasValue
+            ? string.Create(CultureInfo.InvariantCulture, $"{{{centerX.Value},{centerY.Value}}}")
+            : "player.position";
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local surface = player.surface
+            local center = {{posExpr}}
+            local cx = center[1] or center.x
+            local cy = center[2] or center.y
+            local w = {{width}}
+            local h = {{height}}
+            local search_r = {{searchRadius}}
+
+            -- Scan in expanding rings from center, step by 2 tiles
+            local best = nil
+            local step = 2
+            for dist = 0, search_r, step do
+                for ox = -dist, dist, step do
+                    for oy = -dist, dist, step do
+                        -- Only check cells on the current ring (skip inner)
+                        if math.abs(ox) == dist or math.abs(oy) == dist or dist == 0 then
+                            local ax = math.floor(cx + ox)
+                            local ay = math.floor(cy + oy)
+                            -- Check for water tiles
+                            local tiles = surface.find_tiles_filtered{
+                                area={{"{"}}{ax, ay}, {ax+w, ay+h}{{"}"}},
+                                name={"water", "deepwater", "water-green", "water-mud", "water-shallow"}
+                            }
+                            if #tiles == 0 then
+                                -- Check for blocking entities (non-resource)
+                                local blocking = surface.find_entities_filtered{
+                                    area={{"{"}}{ax, ay}, {ax+w, ay+h}{{"}"}},
+                                    type={"resource", "character"},
+                                    invert=true
+                                }
+                                if #blocking == 0 then
+                                    local d = math.sqrt((ax + w/2 - cx)^2 + (ay + h/2 - cy)^2)
+                                    best = {x=ax, y=ay, distance=d}
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    if best then break end
+                end
+                if best then break end
+            end
+
+            if best then
+                rcon.print('{"success":true,"x":'..best.x..',"y":'..best.y..',"width":'..w..',"height":'..h..',"center_x":'..string.format("%.1f", best.x + w/2)..',"center_y":'..string.format("%.1f", best.y + h/2)..',"distance":'..string.format("%.1f", best.distance)..'}')
+            else
+                rcon.print('{"success":false,"error":"no_area_found","width":'..w..',"height":'..h..',"search_radius":'..search_r..'}')
+            end
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
 }

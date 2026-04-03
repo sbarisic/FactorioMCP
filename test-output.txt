@@ -7,25 +7,25 @@ game.players: [player count: 1
 ]
 connected_players: [connected: Cartman300
 ]
-game.players[1]: [player[1]: Cartman300 at 40.23046875,-24.5
+game.players[1]: [player[1]: Cartman300 at 40.171875,11.125
 ]
 game version: [version: 2.0.76
 ]
 
 ═══ SERVICE METHOD RESULTS ═══
-GetPlayerPosition: [{"x":40.23046875,"y":-24.5}
+GetPlayerPosition: [{"x":40.171875,"y":11.125}
 ]
-GetInventory: [{"items":[{"name":"iron-chest","count":1},{"name":"express-underground-belt","count":12},{"name":"express-splitter","count":6},{"name":"express-loader","count":6},{"name":"substation","count":10},{"name":"burner-mining-drill","count":1},{"name":"stone-furnace","count":1},{"name":"wood","count":13},{"name":"coal","count":2},{"name":"iron-plate","count":8},{"name":"iron-gear-wheel","count":3},{"name":"pistol","count":1},{"name":"firearm-magazine","count":10},{"name":"electric-energy-interface","count":10},{"name":"heat-interface","count":10},{"name":"infinity-chest","count":10},{"name":"infinity-pipe","count":10}],"total_slots":90,"free_slots":73}
+GetInventory: [{"items":[{"name":"iron-chest","count":1},{"name":"express-underground-belt","count":12},{"name":"express-splitter","count":6},{"name":"express-loader","count":6},{"name":"substation","count":10},{"name":"burner-mining-drill","count":1},{"name":"stone-furnace","count":1},{"name":"wood","count":17},{"name":"coal","count":2},{"name":"iron-plate","count":8},{"name":"iron-gear-wheel","count":4},{"name":"pistol","count":1},{"name":"firearm-magazine","count":10},{"name":"electric-energy-interface","count":10},{"name":"heat-interface","count":10},{"name":"infinity-chest","count":10},{"name":"infinity-pipe","count":10}],"total_slots":90,"free_slots":73}
 ]
-GetNearbyEntities: [{"entities":[{"name":"character","x":40.23046875,"y":-24.5,"direction":"south"}]}
+GetNearbyEntities: [{"entities":[{"name":"character","x":40.171875,"y":11.125,"direction":"south"},{"name":"dead-dry-hairy-tree","x":48.5625,"y":12.125,"direction":"north"}]}
 ]
 GetResearchStatus: [{"researching":false}
 ]
-GetGameTick: [{"tick":356116}
+GetGameTick: [{"tick":548588}
 ]
 GetCraftingQueue: [{"queue":[]}
 ]
-CheckDistance(0,0): [{"distance":47.1,"build_in_range":false,"build_limit":28,"reach_in_range":false,"reach_limit":28}
+CheckDistance(0,0): [{"distance":41.7,"build_in_range":false,"build_limit":28,"reach_in_range":false,"reach_limit":28}
 ]
 
 ═══ DIAGNOSTICS COMPLETE ═══
