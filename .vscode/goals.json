@@ -67,5 +67,47 @@
     "created_at": "2026-04-02T17:32:18.6591517Z",
     "updated_at": "2026-04-02T17:40:49.3331394Z",
     "completed_at": "2026-04-02T17:40:49.3331392Z"
+  },
+  {
+    "id": "201d33a6",
+    "description": "Build automated iron plate production with multiple drill-furnace chains",
+    "status": "active",
+    "steps": [
+      {
+        "description": "Collect iron plates from furnace at (79,-27)",
+        "status": "in_progress",
+        "notes": null
+      },
+      {
+        "description": "Smelt iron-ore in inventory to get more iron plates",
+        "status": "pending",
+        "notes": null
+      },
+      {
+        "description": "Craft more stone furnaces and burner mining drills",
+        "status": "pending",
+        "notes": null
+      },
+      {
+        "description": "Set up drill\u2192inserter\u2192furnace chains for idle furnaces",
+        "status": "pending",
+        "notes": null
+      },
+      {
+        "description": "Find and set up copper ore smelting",
+        "status": "pending",
+        "notes": null
+      },
+      {
+        "description": "Build towards first assembling machine",
+        "status": "pending",
+        "notes": null
+      }
+    ],
+    "failure_reason": null,
+    "notes": null,
+    "created_at": "2026-04-02T20:19:19.8760756Z",
+    "updated_at": "2026-04-02T20:19:19.8760756Z",
+    "completed_at": null
   }
 ]

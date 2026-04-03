@@ -312,9 +312,17 @@ internal sealed class FactorioService(RconClient rcon)
             local entities = player.surface.find_entities_filtered{
                 position=center, radius={{radius}}
             }
+            local dir_names = {}
+            for k, v in pairs(defines.direction) do dir_names[v] = k end
             local parts = {}
             for _, e in pairs(entities) do
-                parts[#parts+1] = '{"name":"'..e.name..'","x":'..e.position.x..',"y":'..e.position.y..'}'
+                local entry = '{"name":"'..e.name..'","x":'..e.position.x..',"y":'..e.position.y
+                local dn = dir_names[e.direction]
+                if dn then
+                    entry = entry..',"direction":"'..dn..'"'
+                end
+                entry = entry..'}'
+                parts[#parts+1] = entry
             end
             rcon.print('{"entities":['..table.concat(parts, ",")..']}') 
             """);
@@ -977,6 +985,48 @@ internal sealed class FactorioService(RconClient rcon)
             -- Mining target (for mining drills)
             if e.mining_target then
                 result = result..',"mining_target":"'..e.mining_target.name..'"'
+            end
+            -- Direction (for all directional entities)
+            local dir_names = {}
+            for k, v in pairs(defines.direction) do dir_names[v] = k end
+            local dir_name = dir_names[e.direction]
+            if dir_name then
+                result = result..',"direction":"'..dir_name..'"'
+            end
+            -- Inserter pickup/drop info
+            if e.type == "inserter" then
+                local offsets = {
+                    [defines.direction.north]     = {dx=0,  dy=-1},
+                    [defines.direction.south]     = {dx=0,  dy=1},
+                    [defines.direction.east]      = {dx=1,  dy=0},
+                    [defines.direction.west]      = {dx=-1, dy=0},
+                    [defines.direction.northeast] = {dx=1,  dy=-1},
+                    [defines.direction.northwest] = {dx=-1, dy=-1},
+                    [defines.direction.southeast] = {dx=1,  dy=1},
+                    [defines.direction.southwest] = {dx=-1, dy=1}
+                }
+                local off = offsets[e.direction]
+                if off then
+                    local drop_x, drop_y = e.position.x + off.dx, e.position.y + off.dy
+                    local pickup_x, pickup_y = e.position.x - off.dx, e.position.y - off.dy
+                    local drop_ents = surface.find_entities_filtered{position={drop_x, drop_y}, radius=0.5}
+                    local drop_parts = {}
+                    for _, de in pairs(drop_ents) do
+                        if de.name ~= "character" and de ~= e then
+                            drop_parts[#drop_parts+1] = '"'..de.name..'"'
+                        end
+                    end
+                    local pickup_ents = surface.find_entities_filtered{position={pickup_x, pickup_y}, radius=0.5}
+                    local pickup_parts = {}
+                    for _, pe in pairs(pickup_ents) do
+                        if pe.name ~= "character" and pe ~= e then
+                            pickup_parts[#pickup_parts+1] = '"'..pe.name..'"'
+                        end
+                    end
+                    result = result..',"inserter_info":{"drop":{"x":'..drop_x..',"y":'..drop_y..',"entities":['..table.concat(drop_parts, ",")..']}'
+                    result = result..',"pickup":{"x":'..pickup_x..',"y":'..pickup_y..',"entities":['..table.concat(pickup_parts, ",")..']}'
+                    result = result..'}'
+                end
             end
             result = result..'}'
             rcon.print(result)

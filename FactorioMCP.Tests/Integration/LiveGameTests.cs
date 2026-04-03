@@ -524,6 +524,61 @@ public sealed class LiveGameTests : IAsyncLifetime
         _output.WriteLine("\n═══ SCAN COMPLETE ═══");
     }
 
+    // ── 14. Inserter Direction Verification ──────────────────────────
+
+    [Fact]
+    public async Task InserterDirection_VerifyDropAndPickupPositions()
+    {
+        _output.WriteLine("═══ INSERTER DIRECTION VERIFICATION ═══\n");
+
+        // Get player position for nearby placement
+        var posResult = await _service.GetPlayerPositionAsync();
+        var pos = Parse(posResult);
+        var px = Math.Floor(pos.GetProperty("x").GetDouble()) + 0.5;
+        var py = Math.Floor(pos.GetProperty("y").GetDouble()) + 0.5;
+        _output.WriteLine($"Player at ({px}, {py})");
+
+        // Test all four cardinal directions with PreviewInserterPlacement
+        var directions = new (string dir, double dropDx, double dropDy)[]
+        {
+            ("north", 0, -1),
+            ("south", 0, 1),
+            ("east", 1, 0),
+            ("west", -1, 0)
+        };
+
+        // Use an offset position so we don't overlap with the player
+        var testX = px + 3;
+        var testY = py + 3;
+
+        foreach (var (dir, expectedDropDx, expectedDropDy) in directions)
+        {
+            var previewResult = await _service.PreviewInserterPlacementAsync(testX, testY, dir);
+            _output.WriteLine($"\n[Preview {dir}] {previewResult}");
+
+            var json = Parse(previewResult);
+            Assert.True(json.GetProperty("success").GetBoolean(), $"Preview should succeed for direction {dir}");
+
+            // Verify drop position matches direction
+            var drop = json.GetProperty("drop");
+            var dropX = drop.GetProperty("x").GetDouble();
+            var dropY = drop.GetProperty("y").GetDouble();
+            Assert.Equal(testX + expectedDropDx, dropX, 0.1);
+            Assert.Equal(testY + expectedDropDy, dropY, 0.1);
+            _output.WriteLine($"  ✓ Drop ({dir}): ({dropX}, {dropY}) — correct");
+
+            // Verify pickup is opposite
+            var pickup = json.GetProperty("pickup");
+            var pickupX = pickup.GetProperty("x").GetDouble();
+            var pickupY = pickup.GetProperty("y").GetDouble();
+            Assert.Equal(testX - expectedDropDx, pickupX, 0.1);
+            Assert.Equal(testY - expectedDropDy, pickupY, 0.1);
+            _output.WriteLine($"  ✓ Pickup (opposite of {dir}): ({pickupX}, {pickupY}) — correct");
+        }
+
+        _output.WriteLine("\n═══ INSERTER DIRECTION VERIFICATION COMPLETE ═══");
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────
 
     private static string GetDirection(double fromX, double fromY, double toX, double toY)

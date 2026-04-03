@@ -50,9 +50,11 @@ internal sealed class InteractionTools(FactorioService factorio, GameCommandQueu
     }
 
     [McpServerTool, Description(
-        "Inspect an entity at the specified position to see its status, inventory contents, " +
+        "Inspect an entity at the specified position to see its status, direction, inventory contents, " +
         "fuel level, recipe, and other details. Use this to check if a furnace is working, " +
-        "what a machine is producing, or how much fuel remains.")]
+        "what a machine is producing, or how much fuel remains. " +
+        "For inserters, also shows pickup/drop tile positions and what entities are at each side — " +
+        "use this to verify an inserter is correctly oriented after placement.")]
     public Task<string> InspectEntity(
         [Description("X coordinate of the entity to inspect")]
         double x,

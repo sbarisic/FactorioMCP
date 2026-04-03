@@ -17,11 +17,11 @@ internal sealed class EntityTools(FactorioService factorio, MiningService mining
         "Place an entity from the player's inventory at the specified map coordinates. " +
         "Validates proximity (must be within build distance), inventory contents, and position validity before placing. " +
         "Automatically tracks the placed building in memory for future queries. " +
-        "INSERTER TIPS: For inserters (burner-inserter, inserter, long-handed-inserter, fast-inserter, etc.), " +
-        "the 'direction' parameter controls which way items flow. An inserter PICKS UP from the OPPOSITE side " +
-        "of its direction and DROPS to the side it faces. For example, a north-facing inserter picks up from " +
-        "the south tile and drops to the north tile. Place inserters directly adjacent to source and target " +
-        "entities (1 tile away, not 2). Use PreviewInserterPlacement to verify pickup/drop targets before placing. " +
+        "INSERTER DIRECTION (CRITICAL): The 'direction' parameter is the DROP direction — the side where the inserter " +
+        "places items DOWN. Pickup is ALWAYS from the OPPOSITE side. Think: 'direction = where items go TO'. " +
+        "Example: To move items FROM a chest (south) INTO a furnace (north), the inserter between them faces NORTH " +
+        "(drops north into furnace, picks up south from chest). " +
+        "ALWAYS use PreviewInserterPlacement first to verify pickup/drop targets before placing an inserter. " +
         "BELT TIPS: For transport belts, the 'direction' is the direction items FLOW (the way arrows point). " +
         "Use PlanBeltRoute to calculate a full belt path between two points, then place each tile with this tool.")]
     public Task<string> PlaceEntity(
@@ -32,7 +32,8 @@ internal sealed class EntityTools(FactorioService factorio, MiningService mining
         [Description("Y coordinate on the map")]
         double y,
         [Description("Direction the entity faces: north, south, east, west, northeast, northwest, southeast, southwest. " +
-                     "For inserters: this is the DROP direction (items flow this way). Pickup is from the opposite side.")]
+                     "INSERTER CRITICAL: direction = DROP side (where items are placed). Pickup is OPPOSITE. " +
+                     "To move items from A to B, point direction TOWARD B.")]
         string direction = "north",
         CancellationToken cancellationToken = default)
     {

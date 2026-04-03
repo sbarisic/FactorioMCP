@@ -1,74 +1,194 @@
 [
   {
-    "entity_name": "stone-furnace",
-    "x": 85,
-    "y": -25,
-    "direction": "north",
-    "label": "Iron smelting array",
-    "placed_at": "2026-04-02T16:32:37.9647993Z"
-  },
-  {
     "entity_name": "burner-mining-drill",
-    "x": 82,
-    "y": -25,
-    "direction": "north",
-    "label": null,
-    "placed_at": "2026-04-02T16:36:10.8154696Z"
-  },
-  {
-    "entity_name": "burner-mining-drill",
-    "x": 74.5,
-    "y": -28.5,
+    "x": 70,
+    "y": -27,
     "direction": "south",
     "label": null,
-    "placed_at": "2026-04-02T17:29:30.7445121Z"
+    "placed_at": "2026-04-02T20:34:40.062429Z"
   },
   {
-    "entity_name": "burner-inserter",
-    "x": 77,
-    "y": -28,
-    "direction": "east",
+    "entity_name": "burner-mining-drill",
+    "x": 73,
+    "y": -27,
+    "direction": "south",
     "label": null,
-    "placed_at": "2026-04-02T17:29:36.1309138Z"
+    "placed_at": "2026-04-02T20:34:40.0804522Z"
   },
   {
-    "entity_name": "stone-furnace",
+    "entity_name": "burner-mining-drill",
+    "x": 76,
+    "y": -27,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:34:40.0973094Z"
+  },
+  {
+    "entity_name": "burner-mining-drill",
     "x": 79,
     "y": -27,
-    "direction": "north",
-    "label": "Iron smelting array #2",
-    "placed_at": "2026-04-02T17:37:38.2960476Z"
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:34:42.9974143Z"
   },
   {
-    "entity_name": "stone-furnace",
+    "entity_name": "basic-transport-belt",
+    "x": 70,
+    "y": -25,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:35:01.6961018Z"
+  },
+  {
+    "entity_name": "basic-transport-belt",
+    "x": 73,
+    "y": -25,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:35:01.7131487Z"
+  },
+  {
+    "entity_name": "basic-transport-belt",
+    "x": 76,
+    "y": -25,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:35:01.7308136Z"
+  },
+  {
+    "entity_name": "basic-transport-belt",
     "x": 79,
     "y": -25,
-    "direction": "north",
-    "label": "Iron smelting array #3",
-    "placed_at": "2026-04-02T17:37:50.7476913Z"
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:35:01.7462453Z"
+  },
+  {
+    "entity_name": "basic-transport-belt",
+    "x": 77,
+    "y": -25,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:35:12.0293806Z"
+  },
+  {
+    "entity_name": "basic-transport-belt",
+    "x": 71,
+    "y": -25,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:35:12.0459278Z"
+  },
+  {
+    "entity_name": "basic-transport-belt",
+    "x": 80,
+    "y": -25,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:35:12.0628959Z"
+  },
+  {
+    "entity_name": "basic-transport-belt",
+    "x": 74,
+    "y": -25,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:35:12.0799026Z"
   },
   {
     "entity_name": "stone-furnace",
     "x": 79,
-    "y": -23,
+    "y": -22,
     "direction": "north",
-    "label": "Iron smelting array #4",
-    "placed_at": "2026-04-02T17:38:13.7134815Z"
+    "label": null,
+    "placed_at": "2026-04-02T20:36:11.895536Z"
   },
   {
-    "entity_name": "burner-inserter",
-    "x": 77.5,
+    "entity_name": "stone-furnace",
+    "x": 73,
+    "y": -22,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-02T20:36:11.9126491Z"
+  },
+  {
+    "entity_name": "stone-furnace",
+    "x": 76,
+    "y": -22,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-02T20:36:11.9294731Z"
+  },
+  {
+    "entity_name": "stone-furnace",
+    "x": 70,
+    "y": -22,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-02T20:36:11.9459804Z"
+  },
+  {
+    "entity_name": "basic-transport-belt",
+    "x": 70.5,
     "y": -25.5,
-    "direction": "east",
+    "direction": "south",
     "label": null,
-    "placed_at": "2026-04-02T17:39:14.429573Z"
+    "placed_at": "2026-04-02T20:37:30.1631051Z"
+  },
+  {
+    "entity_name": "basic-transport-belt",
+    "x": 76.5,
+    "y": -25.5,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:37:41.5140753Z"
+  },
+  {
+    "entity_name": "basic-transport-belt",
+    "x": 79.5,
+    "y": -25.5,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:37:41.530216Z"
+  },
+  {
+    "entity_name": "basic-transport-belt",
+    "x": 73.5,
+    "y": -25.5,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:37:41.5477863Z"
   },
   {
     "entity_name": "burner-inserter",
-    "x": 77.5,
-    "y": -23.5,
-    "direction": "east",
+    "x": 73.5,
+    "y": -24.5,
+    "direction": "south",
     "label": null,
-    "placed_at": "2026-04-02T17:39:18.2461044Z"
+    "placed_at": "2026-04-02T20:39:48.0970575Z"
+  },
+  {
+    "entity_name": "burner-inserter",
+    "x": 76.5,
+    "y": -24.5,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:39:48.1128647Z"
+  },
+  {
+    "entity_name": "burner-inserter",
+    "x": 70.5,
+    "y": -24.5,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:39:48.1306484Z"
+  },
+  {
+    "entity_name": "burner-inserter",
+    "x": 79.5,
+    "y": -24.5,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-02T20:39:48.1464486Z"
   }
 ]
