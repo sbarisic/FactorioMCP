@@ -100,8 +100,11 @@ public partial class FactorioServiceTests
         await _service.DropItemsAsync("iron-plate", 10);
         await _service.TransferAllItemsAsync(0, 0);
         await _service.GetEntityInventoryAsync(0, 0);
+        await _service.FindNearestEntityAsync("stone-furnace");
+        await _service.FindBestResourcePatchAsync("iron-ore");
+        await _service.RotateEntityAsync(0, 0);
 
-        Assert.Equal(29, _rcon.AllCommands.Count);
+        Assert.Equal(32, _rcon.AllCommands.Count);
         Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command ", cmd));
     }
 }

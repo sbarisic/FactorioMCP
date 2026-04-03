@@ -306,6 +306,88 @@ internal sealed class BuildingMemoryService
     }
 
     /// <summary>
+    /// Returns the closest building of the specified type to the given position.
+    /// </summary>
+    public async Task<string> GetClosestBuildingOfTypeAsync(
+        string entityName,
+        double playerX,
+        double playerY,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(entityName);
+
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            var buildings = await EnsureLoadedAsync(cancellationToken);
+            var matches = buildings
+                .Where(b => string.Equals(b.EntityName, entityName, StringComparison.OrdinalIgnoreCase))
+                .Select(b => new
+                {
+                    b.EntityName,
+                    b.X,
+                    b.Y,
+                    b.Direction,
+                    b.Label,
+                    Distance = Math.Round(DistanceTo(b, playerX, playerY), 1)
+                })
+                .OrderBy(b => b.Distance)
+                .ToList();
+
+            if (matches.Count == 0)
+            {
+                return Respond(new
+                {
+                    Status = "not_found",
+                    EntityName = entityName,
+                    Message = $"No tracked buildings of type '{entityName}' found"
+                });
+            }
+
+            var closest = matches[0];
+
+            return Respond(new
+            {
+                Status = "ok",
+                Closest = closest,
+                TotalMatches = matches.Count,
+                Others = matches.Count > 1 ? matches.Skip(1).Take(3) : Enumerable.Empty<object>()
+            });
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Updates the direction of the tracked building at the specified position.
+    /// </summary>
+    public async Task UpdateBuildingDirectionAsync(
+        double x,
+        double y,
+        string newDirection,
+        CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            var buildings = await EnsureLoadedAsync(cancellationToken);
+            var building = buildings.Find(b => IsAtPosition(b, x, y));
+
+            if (building is not null)
+            {
+                building.Direction = newDirection;
+                await PersistAsync(cancellationToken);
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>
     /// Removes all tracked buildings from memory.
     /// </summary>
     public async Task<string> ClearAllBuildingsAsync(CancellationToken cancellationToken = default)

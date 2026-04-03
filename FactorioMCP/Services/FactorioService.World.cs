@@ -261,4 +261,112 @@ internal sealed partial class FactorioService
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
+
+    /// <summary>
+    /// Find the nearest entity of the specified type or name within a search radius.
+    /// Returns position, distance, and entity details. Searches by entity name first,
+    /// then falls back to entity type if no match is found by name.
+    /// </summary>
+    public Task<string> FindNearestEntityAsync(string entityType, double radius = 100, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(entityType);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local pos = player.position
+            local surface = player.surface
+            local filter = "{{entityType}}"
+            local entities = surface.find_entities_filtered{name=filter, position=pos, radius={{radius}}}
+            if #entities == 0 then
+                entities = surface.find_entities_filtered{type=filter, position=pos, radius={{radius}}}
+            end
+            if #entities == 0 then
+                rcon.print('{"success":false,"error":"not_found","filter":"'..filter..'","radius":{{radius}}}')
+                return
+            end
+            local best = nil
+            local best_dist = math.huge
+            for _, e in pairs(entities) do
+                local dx = e.position.x - pos.x
+                local dy = e.position.y - pos.y
+                local d = math.sqrt(dx*dx + dy*dy)
+                if d < best_dist then
+                    best = e
+                    best_dist = d
+                end
+            end
+            local dir_names = {}
+            for k, v in pairs(defines.direction) do dir_names[v] = k end
+            local result = '{"success":true,"entity":"'..best.name..'","type":"'..best.type..'","x":'..best.position.x..',"y":'..best.position.y..',"distance":'..string.format("%.1f", best_dist)
+            local dn = dir_names[best.direction]
+            if dn then result = result..',"direction":"'..dn..'"' end
+            if best.amount then result = result..',"amount":'..best.amount end
+            result = result..',"total_found":'..#entities..'}'
+            rcon.print(result)
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Find the best resource patch of the specified resource type within a search radius.
+    /// "Best" is determined by a heuristic: closest patches with high amounts are preferred.
+    /// Returns the patch center, total amount, entity count, distance, and nearby alternative patches.
+    /// </summary>
+    public Task<string> FindBestResourcePatchAsync(string resourceName, double radius = 200, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local pos = player.position
+            local surface = player.surface
+            local resources = surface.find_entities_filtered{name="{{resourceName}}", position=pos, radius={{radius}}, type="resource"}
+            if #resources == 0 then
+                rcon.print('{"success":false,"error":"not_found","resource":"{{resourceName}}","radius":{{radius}}}')
+                return
+            end
+            -- Cluster resources into patches using a grid (8-tile cells)
+            local cell_size = 8
+            local cells = {}
+            for _, r in pairs(resources) do
+                local cx = math.floor(r.position.x / cell_size)
+                local cy = math.floor(r.position.y / cell_size)
+                local key = cx..","..cy
+                if not cells[key] then
+                    cells[key] = {count=0, total_amount=0, sum_x=0, sum_y=0}
+                end
+                local c = cells[key]
+                c.count = c.count + 1
+                c.total_amount = c.total_amount + r.amount
+                c.sum_x = c.sum_x + r.position.x
+                c.sum_y = c.sum_y + r.position.y
+            end
+            -- Build patch list with center and distance
+            local patches = {}
+            for _, c in pairs(cells) do
+                local cx = c.sum_x / c.count
+                local cy = c.sum_y / c.count
+                local dx = cx - pos.x
+                local dy = cy - pos.y
+                local dist = math.sqrt(dx*dx + dy*dy)
+                patches[#patches+1] = {center_x=cx, center_y=cy, count=c.count, total_amount=c.total_amount, distance=dist}
+            end
+            -- Sort by heuristic: score = total_amount / (distance + 10) — prefer close, rich patches
+            table.sort(patches, function(a, b)
+                return (a.total_amount / (a.distance + 10)) > (b.total_amount / (b.distance + 10))
+            end)
+            local best = patches[1]
+            local alt_parts = {}
+            for i = 2, math.min(#patches, 4) do
+                local p = patches[i]
+                alt_parts[#alt_parts+1] = '{"center_x":'..string.format("%.1f", p.center_x)..',"center_y":'..string.format("%.1f", p.center_y)..',"count":'..p.count..',"total_amount":'..p.total_amount..',"distance":'..string.format("%.1f", p.distance)..'}'
+            end
+            rcon.print('{"success":true,"resource":"{{resourceName}}","best_patch":{"center_x":'..string.format("%.1f", best.center_x)..',"center_y":'..string.format("%.1f", best.center_y)..',"count":'..best.count..',"total_amount":'..best.total_amount..',"distance":'..string.format("%.1f", best.distance)..'},"total_entities":'..#resources..',"total_patches":'..#patches..',"alternatives":['..table.concat(alt_parts, ",")..']}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
 }

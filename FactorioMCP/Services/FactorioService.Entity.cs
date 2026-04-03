@@ -101,7 +101,54 @@ internal sealed partial class FactorioService
     }
 
     /// <summary>
-    /// Insert items from the player's inventory into an entity's inventory at the specified position.
+    /// Rotate a non-resource entity at the specified position.
+    /// Uses the built-in LuaEntity.rotate() which handles all entity-type constraints
+    /// and raises proper game events. Validates proximity before interacting.
+    /// </summary>
+    public Task<string> RotateEntityAsync(double x, double y, bool reverse = false, CancellationToken cancellationToken = default)
+    {
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local player_pos = player.position
+            local dx = {{x}} - player_pos.x
+            local dy = {{y}} - player_pos.y
+            local distance = math.sqrt(dx*dx + dy*dy)
+            if distance > player.reach_distance then
+                rcon.print('{"success":false,"error":"out_of_range","distance":'..string.format("%.1f", distance)..',"limit":'..player.reach_distance..'}')
+                return
+            end
+            local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
+            if #entities == 0 then
+                rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
+                return
+            end
+            table.sort(entities, function(a, b)
+                local a_res = a.type == "resource" and 1 or 0
+                local b_res = b.type == "resource" and 1 or 0
+                return a_res < b_res
+            end)
+            local e = nil
+            for _, ent in pairs(entities) do
+                if ent.type ~= "resource" then e = ent break end
+            end
+            if not e then
+                rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
+                return
+            end
+            local dir_names = {}
+            for k, v in pairs(defines.direction) do dir_names[v] = k end
+            local prev_dir = dir_names[e.direction] or "unknown"
+            local rotated = e.rotate({reverse={{(reverse ? "true" : "false")}}, by_player=player})
+            if not rotated then
+                rcon.print('{"success":false,"error":"rotation_failed","entity":"'..e.name..'","direction":"'..prev_dir..'"}')
+                return
+            end
+            local new_dir = dir_names[e.direction] or "unknown"
+            rcon.print('{"success":true,"entity":"'..e.name..'","previous_direction":"'..prev_dir..'","new_direction":"'..new_dir..'","x":'..e.position.x..',"y":'..e.position.y..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
     /// Supports specifying the target inventory slot (fuel, input, output, etc.).
     /// Validates proximity before interacting.
     /// </summary>

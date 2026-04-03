@@ -130,12 +130,61 @@ internal sealed class EntityTools(FactorioService factorio, MiningService mining
             cancellationToken);
     }
 
+    [McpServerTool, Description(
+        "Rotate a building or entity at the specified map coordinates. " +
+        "Cycles through valid directions for the entity type (e.g. north → east → south → west for most entities). " +
+        "Uses the game engine's built-in rotation which respects entity-type constraints. " +
+        "Validates proximity (must be within reach distance) before rotating. " +
+        "Automatically updates the building's direction in memory tracking. " +
+        "Essential for correcting belt direction, inserter orientation, and assembler setup.")]
+    public Task<string> RotateEntity(
+        [Description("X coordinate of the entity to rotate")]
+        double x,
+        [Description("Y coordinate of the entity to rotate")]
+        double y,
+        [Description("If true, rotate counter-clockwise instead of clockwise (default false)")]
+        bool reverse = false,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(RotateEntity), async ct =>
+        {
+            var result = await factorio.RotateEntityAsync(x, y, reverse, ct);
+
+            if (IsSuccessResponse(result, out var newDirection) && newDirection is not null)
+            {
+                await buildingMemory.UpdateBuildingDirectionAsync(x, y, newDirection, ct);
+            }
+
+            return result;
+        }, cancellationToken);
+    }
+
     private static bool IsSuccessResponse(string json)
     {
         try
         {
             using var doc = JsonDocument.Parse(json);
             return doc.RootElement.TryGetProperty("success", out var prop) && prop.GetBoolean();
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsSuccessResponse(string json, out string? newDirection)
+    {
+        newDirection = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("success", out var prop) || !prop.GetBoolean())
+                return false;
+
+            if (doc.RootElement.TryGetProperty("new_direction", out var dirProp))
+                newDirection = dirProp.GetString();
+
+            return true;
         }
         catch (JsonException)
         {

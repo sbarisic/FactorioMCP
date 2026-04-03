@@ -9,7 +9,7 @@ internal sealed class TrackedBuilding
     public required string EntityName { get; init; }
     public required double X { get; init; }
     public required double Y { get; init; }
-    public string Direction { get; init; } = "north";
+    public string Direction { get; set; } = "north";
     public string? Label { get; set; }
     public DateTime PlacedAt { get; init; } = DateTime.UtcNow;
 }

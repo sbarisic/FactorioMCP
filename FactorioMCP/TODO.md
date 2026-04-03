@@ -89,14 +89,30 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **Logistics Flow Tracking** — Given a specific entity, trace the full tree of linked entities through belts and inserters, including flow direction. Track miner output positions and directions as flow starting points. Record which entity outputs to which, enabling the AI to understand how items move through the factory, plan logistics, debug crafting chains, and ensure belts feed into chests so items don't pile up. Create MCP tools to query and visualize the item flow graph. **(CPX 4)**
+- [ ] **High-Level Task Primitives** — Compound tools that collapse 10–20 atomic calls into 1. `GatherResource(resource, count)`: find patch → walk → mine → handle timeout. `RefuelEntity(x, y, fuel, min_amount)`: check fuel level → walk → insert fuel. `Smelt(resource, count)`: find furnace → insert ore + fuel → wait → collect output. **(CPX 4)**
+- [ ] **Smart Navigation** — `MoveToEntity(name|type)`, `MoveToResource(type)`, `MoveToBuilding(label|type)`. Internally scan for best target and walk there. Wraps `WalkToPosition` with intelligence so the LLM doesn't need to scan+pick+walk manually. **(CPX 3)**
+- [ ] **Reactive Waiting** — `WaitForCondition(condition)` e.g. "inventory.iron-plate >= 50". `WaitForEntityState(x, y, status)` e.g. wait for entity to become "idle". Lets the LLM act reactively instead of spamming polling checks. **(CPX 3)**
+- [ ] **Semantic Area Perception** — `SummarizeArea`: returns structured overview of resources nearby, machines, free space, and threats. `WhatAmILookingAt(direction)`: raycast-style directional query. `FindBuildableArea(width, height)`: locate a flat empty region suitable for building. **(CPX 3)**
+- [ ] **Smart Inserter Placement** — `place_inserter(target_x, target_y, side, direction)`: accept a target entity and a side (top/bottom/left/right) plus direction (inbound/outbound). C# backend calculates the exact tile offset based on entity size. Also `insert_between(source_pos, destination_pos)` to auto-place an inserter in the 1-tile gap between two entities with correct orientation. **(CPX 3)**
+- [ ] **Ghost Placement Validation** — LLM places ghost entities first, C# validates placement (prototype, orientation, connectivity). Returns corrective errors like "Inserter at {10,11} is pointing at a wall, not the Assembler" to create a feedback loop before committing real entities. **(CPX 3)**
+- [ ] **Belt Path Tool** — `connect_with_belts(start_pos, end_pos)`: use Factorio Lua pathfinding to draw a belt line between two points instead of requiring the LLM to place individual belt segments. **(CPX 3)**
 
 ### Medium Priority
 
+- [ ] **Factory Analysis Tools** — `GetProductionStatus`: what's being produced, bottlenecks, idle machines. `FindUnpoweredEntities`: list entities without power. `FindIdleMachines`: list machines not working. `FindMissingInputs(x, y)`: returns which input items an assembler/furnace is missing. Essential for AI to understand and debug factory state. **(CPX 3)**
+- [ ] **Logistics Flow Tracking** — Given a specific entity, trace the full tree of linked entities through belts and inserters, including flow direction. Track miner output positions and directions as flow starting points. Record which entity outputs to which, enabling the AI to understand how items move through the factory, plan logistics, debug crafting chains, and ensure belts feed into chests so items don't pile up. Create MCP tools to query and visualize the item flow graph. **(CPX 4)**
+- [ ] **Craft & Factory Planning** — `PlanCraft(item, count)`: returns full recipe tree with required intermediates and raw materials. `PlanFactory(goal)`: given a high-level goal like "automate iron plates", return rough ordered steps. Reduces LLM hallucinated plans. **(CPX 3)**
+- [ ] **Vision Screenshot** — `take_screenshot()`: return a base64 screenshot image for vision models to identify bottlenecks or plan layouts. Overlay entity bounds, directional indicators (inserter drop/pickup positions as absolute coordinates), and metadata as a "Map Legend" to give the image depth/context. **(CPX 3)**
 - [ ] **Power Network Topology** — Trace how electricity flows through the physical network from producers (boilers, solar panels) through electric poles to consumers. Map the pole connectivity graph and show which entities are powered by which network segment. Complements existing `GetElectricNetwork` (aggregate stats) and `InspectEntityPower` (per-entity) with topological awareness for planning expansions and diagnosing coverage gaps. **(CPX 3)**
+- [ ] **Inventory Intelligence** — `EnsureItem(item, count)`: auto-crafts or gathers if the player doesn't have enough. `GetInventorySummary`: returns condensed key-value inventory (fewer tokens than full inventory dump). **(CPX 2)**
 
 ### Low Priority
 
+- [ ] **Pickup Items** — `pickup_items(radius)`: simulate holding the 'F' key to collect items dropped on the ground within a radius. **(CPX 1)**
+- [ ] **Collision Slot Query** — `get_available_slots(x, y)`: return a list of adjacent tiles around an entity that aren't blocked by pipes or buildings (collision masking). **(CPX 2)**
+- [ ] **Smart Entity Placement** — `PlaceEntitySmart(entity, near)` e.g. place a stone-furnace near iron-ore. Backend picks best available position automatically. **(CPX 2)**
+- [ ] **Blueprint Capture** — `blueprint_area(x1, y1, x2, y2)`: capture a region as a blueprint string so the LLM can save and reuse its own designs. **(CPX 2)**
+- [ ] **Utility Tools** — `GetReachableEntities(type, max_distance)`: filter entities by reach distance. `CountItemInWorld(item)`: count item across all containers, not just player inventory. `EstimateTravelTime(x, y)`: estimate walk time to a position. **(CPX 2)**
 - [ ] **Logistics Tools** — Manage logistic robots, request items from logistic network, inspect logistic zones. See [`LuaEntity`](LUA_API.md#world--entities) and [`LuaForce`](LUA_API.md#research--recipes). **(CPX 3)**
 - [ ] **Combat Tools** — Attack entities, manage turrets, check enemy positions, defensive operations. See [`LuaEntity`](LUA_API.md#world--entities) and [`LuaSurface`](LUA_API.md#world--entities). **(CPX 3)**
 - [ ] **Train Management Tools** — Control trains, manage stations, set schedules, inspect train networks. See [`LuaEntity`](LUA_API.md#world--entities) for train/station entities. **(CPX 3)**
@@ -174,24 +190,7 @@ RCON connection settings are read from environment variables:
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
-- `rotate_entity(x, y)` — Rotate a building at given coordinates. Essential for correct belt and assembler orientation.
-- `pickup_items(radius)` — Simulate holding the 'F' key to collect items dropped on the ground within a radius.
-- `take_screenshot()` — Return a base64 screenshot image for vision models to identify bottlenecks or plan layouts. Overlay entity bounds, directional indicators (inserter drop/pickup positions as absolute coordinates), and metadata as a "Map Legend" in the text prompt to give the image depth/context.
-- `blueprint_area(x1, y1, x2, y2)` — Capture a region as a blueprint string so the LLM can save and reuse its own designs.
-- **Smart Inserter Placement** — `place_inserter(target_x, target_y, side, direction)`: Accept a target entity and a side (top/bottom/left/right) plus direction (inbound/outbound). C# backend calculates the exact tile offset based on entity size (3x3, 5x5, etc.) so the LLM doesn't need to do geometry. Also `insert_between(source_pos, destination_pos)` to find the 1-tile gap between two entities and place an inserter with correct orientation automatically.
-- **Belt Path Tool** — `connect_with_belts(start_pos, end_pos)`: Use Factorio Lua pathfinding to draw a belt line between two points instead of requiring the LLM to place individual belt segments.
-- `get_available_slots(x, y)` — Return a list of adjacent tiles around an entity that aren't blocked by pipes or buildings (collision masking).
-- **Ghost Placement Validation** — Encourage the LLM to place ghost entities first, then validate placement in C# (check prototype, orientation, connectivity). Return corrective errors like "Inserter at {10,11} is pointing at a wall, not the Assembler" to create a feedback loop before committing real entities.
-- **Target Selection Helpers** — `FindNearest(type)` returns position + distance of closest entity/resource. `FindBestResourcePatch(resource)` returns closest, largest, or best-heuristic patch. Eliminates token-expensive scan→parse→compare→decide chains the LLM currently performs.
-- **Smart Navigation** — `MoveToEntity(name|type)`, `MoveToResource(type)`, `MoveToBuilding(label|type)`. Internally scan for best target and walk there. Wraps `WalkToPosition` with intelligence so the LLM doesn't need to scan+pick+walk manually.
-- **High-Level Task Primitives** — Compound tools that collapse 10–20 atomic calls into 1. `GatherResource(resource, count)`: find patch → walk → mine → handle timeout. `RefuelEntity(x, y, fuel, min_amount)`: check fuel level → walk → insert fuel. `Smelt(resource, count)`: find furnace → insert ore + fuel → wait → collect output.
-- **Semantic Area Perception** — `SummarizeArea`: returns structured overview of resources nearby, machines, free space, and threats. `WhatAmILookingAt(direction)`: raycast-style directional query describing what's in front of the player. `FindBuildableArea(width, height)`: locate a flat empty region suitable for building.
-- **Factory Analysis Tools** — `GetProductionStatus`: what's being produced, bottlenecks, idle machines. `FindUnpoweredEntities`: list entities without power. `FindIdleMachines`: list machines not working. `FindMissingInputs(x, y)`: returns which input items an assembler/furnace is missing.
-- **Craft & Factory Planning** — `PlanCraft(item, count)`: returns full recipe tree with required intermediates and raw materials. `PlanFactory(goal)`: given a high-level goal like "automate iron plates", return rough ordered steps. Reduces LLM hallucinated plans.
-- **Reactive Waiting** — `WaitForCondition(condition)` e.g. "inventory.iron-plate >= 50". `WaitForEntityState(x, y, status)` e.g. wait for entity to become "idle". Lets the LLM act reactively instead of spamming polling checks.
-- **Inventory Intelligence** — `EnsureItem(item, count)`: auto-crafts or gathers if the player doesn't have enough. `GetInventorySummary`: returns condensed key-value inventory (fewer tokens than full inventory dump).
-- **Smart Entity Placement** — `PlaceEntitySmart(entity, near)` e.g. place a stone-furnace near iron-ore. Backend picks best available position automatically.
-- **Utility Tools** — `GetReachableEntities(type, max_distance)`: filter entities by reach distance. `GetClosestBuildingOfType(type)`: find nearest placed building. `CountItemInWorld(item)`: count item across all containers, not just player inventory. `EstimateTravelTime(x, y)`: estimate walk time to a position.
+*No uncategorized items*
 
 ---
 
@@ -210,6 +209,13 @@ RCON connection settings are read from environment variables:
 *No low priority items*
 
 ---
+
+## Design Principles
+
+- Prefer high-level tools over primitives
+- Avoid forcing LLM to do geometry
+- Minimize number of tool calls
+- Return structured data (not text)
 
 ## Notes
 

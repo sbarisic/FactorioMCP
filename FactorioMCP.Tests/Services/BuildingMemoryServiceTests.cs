@@ -403,4 +403,110 @@ public class BuildingMemoryServiceTests
         var building = result.GetProperty("buildings")[0];
         Assert.Equal("main smelter", building.GetProperty("label").GetString());
     }
+
+    // ── GetClosestBuildingOfType ─────────────────────────────────────
+
+    [Fact]
+    public async Task GetClosestBuildingOfTypeAsync_ReturnsClosest()
+    {
+        var service = CreateService();
+        await service.TrackBuildingAsync("stone-furnace", 10, 0);
+        await service.TrackBuildingAsync("stone-furnace", 30, 0);
+        await service.TrackBuildingAsync("stone-furnace", 50, 0);
+
+        var result = Parse(await service.GetClosestBuildingOfTypeAsync("stone-furnace", 0, 0));
+
+        Assert.Equal("ok", result.GetProperty("status").GetString());
+        var closest = result.GetProperty("closest");
+        Assert.Equal(10, closest.GetProperty("x").GetDouble());
+        Assert.Equal(0, closest.GetProperty("y").GetDouble());
+        Assert.Equal(10.0, closest.GetProperty("distance").GetDouble());
+        Assert.Equal(3, result.GetProperty("total_matches").GetInt32());
+    }
+
+    [Fact]
+    public async Task GetClosestBuildingOfTypeAsync_ReturnsNotFoundForMissingType()
+    {
+        var service = CreateService();
+        await service.TrackBuildingAsync("transport-belt", 5, 5);
+
+        var result = Parse(await service.GetClosestBuildingOfTypeAsync("stone-furnace", 0, 0));
+
+        Assert.Equal("not_found", result.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task GetClosestBuildingOfTypeAsync_ReturnsNotFoundWhenEmpty()
+    {
+        var service = CreateService();
+
+        var result = Parse(await service.GetClosestBuildingOfTypeAsync("stone-furnace", 0, 0));
+
+        Assert.Equal("not_found", result.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task GetClosestBuildingOfTypeAsync_IncludesOthers()
+    {
+        var service = CreateService();
+        await service.TrackBuildingAsync("stone-furnace", 5, 0);
+        await service.TrackBuildingAsync("stone-furnace", 15, 0);
+
+        var result = Parse(await service.GetClosestBuildingOfTypeAsync("stone-furnace", 0, 0));
+
+        Assert.Equal("ok", result.GetProperty("status").GetString());
+        Assert.Equal(2, result.GetProperty("total_matches").GetInt32());
+        var others = result.GetProperty("others");
+        Assert.Equal(1, others.GetArrayLength());
+        Assert.Equal(15, others[0].GetProperty("x").GetDouble());
+    }
+
+    [Fact]
+    public async Task GetClosestBuildingOfTypeAsync_CaseInsensitiveMatch()
+    {
+        var service = CreateService();
+        await service.TrackBuildingAsync("Stone-Furnace", 10, 0);
+
+        var result = Parse(await service.GetClosestBuildingOfTypeAsync("stone-furnace", 0, 0));
+
+        Assert.Equal("ok", result.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task GetClosestBuildingOfTypeAsync_IncludesDirectionAndLabel()
+    {
+        var service = CreateService();
+        await service.TrackBuildingAsync("stone-furnace", 5, 0, "east");
+        await service.UpdateBuildingLabelAsync(5, 0, "iron smelter");
+
+        var result = Parse(await service.GetClosestBuildingOfTypeAsync("stone-furnace", 0, 0));
+
+        var closest = result.GetProperty("closest");
+        Assert.Equal("east", closest.GetProperty("direction").GetString());
+        Assert.Equal("iron smelter", closest.GetProperty("label").GetString());
+    }
+
+    // ── UpdateBuildingDirection ──────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateBuildingDirectionAsync_UpdatesDirection()
+    {
+        var service = CreateService();
+        await service.TrackBuildingAsync("transport-belt", 5, 0, "north");
+
+        await service.UpdateBuildingDirectionAsync(5, 0, "east");
+
+        var result = Parse(await service.FindBuildingsByTypeAsync("transport-belt"));
+        var building = result.GetProperty("buildings")[0];
+        Assert.Equal("east", building.GetProperty("direction").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateBuildingDirectionAsync_NoOpForMissingPosition()
+    {
+        var service = CreateService();
+
+        // Should not throw
+        await service.UpdateBuildingDirectionAsync(99, 99, "east");
+    }
 }
