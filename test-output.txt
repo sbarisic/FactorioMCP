@@ -7,25 +7,25 @@ game.players: [player count: 1
 ]
 connected_players: [connected: Cartman300
 ]
-game.players[1]: [player[1]: Cartman300 at 27.68359375,-16.26171875
+game.players[1]: [player[1]: Cartman300 at 40.23046875,-24.5
 ]
 game version: [version: 2.0.76
 ]
 
 ═══ SERVICE METHOD RESULTS ═══
-GetPlayerPosition: [{"x":27.68359375,"y":-16.26171875}
+GetPlayerPosition: [{"x":40.23046875,"y":-24.5}
 ]
-GetInventory: [{"items":[{"name":"iron-chest","count":1},{"name":"express-transport-belt","count":6},{"name":"express-underground-belt","count":12},{"name":"express-splitter","count":6},{"name":"express-loader","count":6},{"name":"substation","count":10},{"name":"burner-mining-drill","count":1},{"name":"stone-furnace","count":1},{"name":"wood","count":1},{"name":"coal","count":2},{"name":"iron-plate","count":8},{"name":"pistol","count":1},{"name":"firearm-magazine","count":10},{"name":"electric-energy-interface","count":10},{"name":"heat-interface","count":10},{"name":"infinity-chest","count":10},{"name":"infinity-pipe","count":10}],"total_slots":90,"free_slots":73}
+GetInventory: [{"items":[{"name":"iron-chest","count":1},{"name":"express-underground-belt","count":12},{"name":"express-splitter","count":6},{"name":"express-loader","count":6},{"name":"substation","count":10},{"name":"burner-mining-drill","count":1},{"name":"stone-furnace","count":1},{"name":"wood","count":13},{"name":"coal","count":2},{"name":"iron-plate","count":8},{"name":"iron-gear-wheel","count":3},{"name":"pistol","count":1},{"name":"firearm-magazine","count":10},{"name":"electric-energy-interface","count":10},{"name":"heat-interface","count":10},{"name":"infinity-chest","count":10},{"name":"infinity-pipe","count":10}],"total_slots":90,"free_slots":73}
 ]
-GetNearbyEntities: [{"entities":[{"name":"tree-grassland-l","x":26.125,"y":-24.375,"direction":"north"},{"name":"tree-grassland-l","x":25.0625,"y":-22.1875,"direction":"north"},{"name":"tree-grassland-l","x":20.125,"y":-21.0625,"direction":"north"},{"name":"medium-rock","x":22.75,"y":-20.5,"direction":"north"},{"name":"tree-grassland-l","x":24.125,"y":-18.625,"direction":"north"},{"name":"character","x":27.68359375,"y":-16.26171875,"direction":"south"}]}
+GetNearbyEntities: [{"entities":[{"name":"character","x":40.23046875,"y":-24.5,"direction":"south"}]}
 ]
 GetResearchStatus: [{"researching":false}
 ]
-GetGameTick: [{"tick":220050}
+GetGameTick: [{"tick":356116}
 ]
 GetCraftingQueue: [{"queue":[]}
 ]
-CheckDistance(0,0): [{"distance":32.1,"build_in_range":false,"build_limit":28,"reach_in_range":false,"reach_limit":28}
+CheckDistance(0,0): [{"distance":47.1,"build_in_range":false,"build_limit":28,"reach_in_range":false,"reach_limit":28}
 ]
 
 ═══ DIAGNOSTICS COMPLETE ═══

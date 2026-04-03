@@ -146,6 +146,13 @@ public class McpToolIntegrationTests
         Assert.NotNull(ActivatorUtilities.CreateInstance<BlueprintTools>(provider));
     }
 
+    [Fact]
+    public void NavigationTools_ResolvesFromDI()
+    {
+        using var provider = BuildTestServiceProvider();
+        Assert.NotNull(ActivatorUtilities.CreateInstance<NavigationTools>(provider));
+    }
+
     // ── MovementTools Delegation ──────────────────────────────────────
 
     [Fact]

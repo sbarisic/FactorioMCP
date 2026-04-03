@@ -80,4 +80,80 @@ internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue
     {
         return queue.ExecuteAsync(nameof(GetGameTick), factorio.GetGameTickAsync, cancellationToken);
     }
+
+    [McpServerTool, Description(
+        "Wait until the player's inventory contains at least the specified count of an item. " +
+        "Use this after starting crafting or mining to reactively wait for items to appear " +
+        "instead of polling GetInventory repeatedly.")]
+    public Task<string> WaitForItemCount(
+        [Description("Internal item name (e.g. 'iron-plate', 'electronic-circuit')")]
+        string itemName,
+        [Description("Minimum item count to wait for")]
+        int targetCount,
+        [Description("How often to check inventory in seconds (default 1.0)")]
+        double pollIntervalSeconds = 1.0,
+        [Description("Maximum time to wait in seconds before giving up (default 60)")]
+        double timeoutSeconds = 60,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(WaitForItemCount), ct => factorio.WaitForItemCountAsync(
+            itemName, targetCount,
+            TimeSpan.FromSeconds(pollIntervalSeconds),
+            TimeSpan.FromSeconds(timeoutSeconds),
+            ct), cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Wait until an entity at the specified position reaches a target status. " +
+        "Status names follow defines.entity_status: 'working', 'no_fuel', 'no_power', " +
+        "'item_ingredient_shortage', 'no_recipe', 'output_full', 'idle', etc. " +
+        "Use this to reactively wait for machines to finish or detect problems.")]
+    public Task<string> WaitForEntityStatus(
+        [Description("X coordinate of the entity")]
+        double x,
+        [Description("Y coordinate of the entity")]
+        double y,
+        [Description("Target status name (e.g. 'working', 'idle', 'no_fuel')")]
+        string targetStatus,
+        [Description("How often to check entity status in seconds (default 1.0)")]
+        double pollIntervalSeconds = 1.0,
+        [Description("Maximum time to wait in seconds before giving up (default 60)")]
+        double timeoutSeconds = 60,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(WaitForEntityStatus), ct => factorio.WaitForEntityStatusAsync(
+            x, y, targetStatus,
+            TimeSpan.FromSeconds(pollIntervalSeconds),
+            TimeSpan.FromSeconds(timeoutSeconds),
+            ct), cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Wait until an entity's inventory contains at least the specified count of an item. " +
+        "Use this to wait for furnaces to finish smelting, assemblers to produce output, or " +
+        "chests to accumulate items. Inventory types: 'fuel', 'furnace_source', 'furnace_result', " +
+        "'chest', 'assembling_machine_input', 'assembling_machine_output'.")]
+    public Task<string> WaitForEntityInventory(
+        [Description("X coordinate of the entity")]
+        double x,
+        [Description("Y coordinate of the entity")]
+        double y,
+        [Description("Internal item name to check for (e.g. 'iron-plate')")]
+        string itemName,
+        [Description("Minimum item count to wait for")]
+        int targetCount,
+        [Description("Inventory type: 'fuel', 'furnace_source', 'furnace_result', 'chest', 'assembling_machine_input', 'assembling_machine_output'")]
+        string inventoryType = "chest",
+        [Description("How often to check inventory in seconds (default 1.0)")]
+        double pollIntervalSeconds = 1.0,
+        [Description("Maximum time to wait in seconds before giving up (default 60)")]
+        double timeoutSeconds = 60,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(WaitForEntityInventory), ct => factorio.WaitForEntityInventoryAsync(
+            x, y, itemName, targetCount, inventoryType,
+            TimeSpan.FromSeconds(pollIntervalSeconds),
+            TimeSpan.FromSeconds(timeoutSeconds),
+            ct), cancellationToken);
+    }
 }

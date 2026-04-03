@@ -119,4 +119,235 @@ internal sealed partial class FactorioService
         long.TryParse(finalTickStr, CultureInfo.InvariantCulture, out var finalTick);
         return string.Create(CultureInfo.InvariantCulture, $$$"""{"status":"timeout","start_tick":{{{startTick}}},"current_tick":{{{finalTick}}},"target_tick":{{{targetTick}}}}""");
     }
+
+    /// <summary>
+    /// Poll the player's inventory until it contains at least <paramref name="targetCount"/>
+    /// of the specified item, or the timeout expires.
+    /// </summary>
+    public async Task<string> WaitForItemCountAsync(
+        string itemName,
+        int targetCount,
+        TimeSpan pollInterval,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemName);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(targetCount);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pollInterval, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local count = game.connected_players[1].get_item_count("{{itemName}}")
+            rcon.print('{"item":"{{itemName}}","count":'..count..'}')
+            """);
+
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await rcon.ExecuteLuaAsync(lua, cancellationToken);
+            if (TryParseJsonInt(result, "count", out var count) && count >= targetCount)
+                return string.Create(CultureInfo.InvariantCulture,
+                    $$"""{"status":"satisfied","item":"{{itemName}}","count":{{count}},"target":{{targetCount}}}""");
+            await Task.Delay(pollInterval, cancellationToken);
+        }
+
+        var final = await rcon.ExecuteLuaAsync(lua, cancellationToken);
+        TryParseJsonInt(final, "count", out var finalCount);
+        return string.Create(CultureInfo.InvariantCulture,
+            $$"""{"status":"timeout","item":"{{itemName}}","count":{{finalCount}},"target":{{targetCount}}}""");
+    }
+
+    /// <summary>
+    /// Poll an entity's status at the specified position until it matches
+    /// <paramref name="targetStatus"/>, or the timeout expires.
+    /// Status names follow <c>defines.entity_status</c> (e.g. "working", "no_fuel",
+    /// "item_ingredient_shortage", "no_power").
+    /// </summary>
+    public async Task<string> WaitForEntityStatusAsync(
+        double x,
+        double y,
+        string targetStatus,
+        TimeSpan pollInterval,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetStatus);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pollInterval, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local entities = game.connected_players[1].surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
+            table.sort(entities, function(a, b)
+                local a_res = a.type == "resource" and 1 or 0
+                local b_res = b.type == "resource" and 1 or 0
+                return a_res < b_res
+            end)
+            local e = nil
+            for _, ent in pairs(entities) do
+                if ent.type ~= "resource" then e = ent break end
+            end
+            if not e then
+                rcon.print('{"error":"no_entity","x":{{x}},"y":{{y}}}')
+                return
+            end
+            local status_name = "unknown"
+            if e.status then
+                local status_names = {}
+                for k, v in pairs(defines.entity_status) do status_names[v] = k end
+                status_name = status_names[e.status] or "unknown"
+            end
+            rcon.print('{"entity":"'..e.name..'","status":"'..status_name..'"}')
+            """);
+
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await rcon.ExecuteLuaAsync(lua, cancellationToken);
+
+            if (result.Contains("\"error\":\"no_entity\""))
+                return string.Create(CultureInfo.InvariantCulture,
+                    $$"""{"status":"error","error":"no_entity","x":{{x}},"y":{{y}}}""");
+
+            if (TryParseJsonString(result, "status", out var currentStatus)
+                && string.Equals(currentStatus, targetStatus, StringComparison.OrdinalIgnoreCase))
+            {
+                TryParseJsonString(result, "entity", out var entityName);
+                return string.Create(CultureInfo.InvariantCulture,
+                    $$"""{"status":"satisfied","entity":"{{entityName}}","entity_status":"{{currentStatus}}","target_status":"{{targetStatus}}","x":{{x}},"y":{{y}}}""");
+            }
+
+            await Task.Delay(pollInterval, cancellationToken);
+        }
+
+        // Timeout — report final state
+        var final = await rcon.ExecuteLuaAsync(lua, cancellationToken);
+        TryParseJsonString(final, "entity", out var finalEntity);
+        TryParseJsonString(final, "status", out var finalStatus);
+        return string.Create(CultureInfo.InvariantCulture,
+            $$"""{"status":"timeout","entity":"{{finalEntity}}","entity_status":"{{finalStatus}}","target_status":"{{targetStatus}}","x":{{x}},"y":{{y}}}""");
+    }
+
+    /// <summary>
+    /// Poll an entity's inventory at the specified position until it contains at least
+    /// <paramref name="targetCount"/> of the specified item, or the timeout expires.
+    /// </summary>
+    public async Task<string> WaitForEntityInventoryAsync(
+        double x,
+        double y,
+        string itemName,
+        int targetCount,
+        string inventoryType,
+        TimeSpan pollInterval,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemName);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(targetCount);
+        ArgumentException.ThrowIfNullOrWhiteSpace(inventoryType);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pollInterval, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local entities = game.connected_players[1].surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
+            table.sort(entities, function(a, b)
+                local a_res = a.type == "resource" and 1 or 0
+                local b_res = b.type == "resource" and 1 or 0
+                return a_res < b_res
+            end)
+            local e = nil
+            for _, ent in pairs(entities) do
+                if ent.type ~= "resource" then e = ent break end
+            end
+            if not e then
+                rcon.print('{"error":"no_entity","x":{{x}},"y":{{y}}}')
+                return
+            end
+            local inv_map = {
+                fuel = defines.inventory.fuel,
+                furnace_source = defines.inventory.furnace_source,
+                furnace_result = defines.inventory.furnace_result,
+                chest = defines.inventory.chest,
+                assembling_machine_input = defines.inventory.assembling_machine_input,
+                assembling_machine_output = defines.inventory.assembling_machine_output
+            }
+            local inv_type = inv_map["{{inventoryType}}"]
+            if not inv_type then
+                rcon.print('{"error":"invalid_inventory_type","inventory_type":"{{inventoryType}}"}')
+                return
+            end
+            local inv = e.get_inventory(inv_type)
+            if not inv then
+                rcon.print('{"error":"no_inventory","entity":"'..e.name..'","inventory_type":"{{inventoryType}}"}')
+                return
+            end
+            local count = inv.get_item_count("{{itemName}}")
+            rcon.print('{"entity":"'..e.name..'","item":"{{itemName}}","count":'..count..',"inventory_type":"{{inventoryType}}"}')
+            """);
+
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await rcon.ExecuteLuaAsync(lua, cancellationToken);
+
+            if (result.Contains("\"error\":"))
+            {
+                // Persistent errors (no entity, invalid inventory) — fail immediately
+                if (result.Contains("no_entity"))
+                    return string.Create(CultureInfo.InvariantCulture,
+                        $$"""{"status":"error","error":"no_entity","x":{{x}},"y":{{y}}}""");
+                if (result.Contains("invalid_inventory_type"))
+                    return string.Create(CultureInfo.InvariantCulture,
+                        $$"""{"status":"error","error":"invalid_inventory_type","inventory_type":"{{inventoryType}}"}""");
+                if (result.Contains("no_inventory"))
+                    return string.Create(CultureInfo.InvariantCulture,
+                        $$"""{"status":"error","error":"no_inventory","inventory_type":"{{inventoryType}}","x":{{x}},"y":{{y}}}""");
+            }
+
+            if (TryParseJsonInt(result, "count", out var count) && count >= targetCount)
+            {
+                TryParseJsonString(result, "entity", out var entityName);
+                return string.Create(CultureInfo.InvariantCulture,
+                    $$"""{"status":"satisfied","entity":"{{entityName}}","item":"{{itemName}}","count":{{count}},"target":{{targetCount}},"inventory_type":"{{inventoryType}}","x":{{x}},"y":{{y}}}""");
+            }
+
+            await Task.Delay(pollInterval, cancellationToken);
+        }
+
+        // Timeout — report final state
+        var final = await rcon.ExecuteLuaAsync(lua, cancellationToken);
+        TryParseJsonString(final, "entity", out var finalEntity);
+        TryParseJsonInt(final, "count", out var finalCount);
+        return string.Create(CultureInfo.InvariantCulture,
+            $$"""{"status":"timeout","entity":"{{finalEntity}}","item":"{{itemName}}","count":{{finalCount}},"target":{{targetCount}},"inventory_type":"{{inventoryType}}","x":{{x}},"y":{{y}}}""");
+    }
+
+    // ── JSON helpers for simple value extraction ────────────────────
+
+    private static bool TryParseJsonInt(string json, string key, out int value)
+    {
+        value = 0;
+        var marker = $"\"{key}\":";
+        var idx = json.IndexOf(marker, StringComparison.Ordinal);
+        if (idx < 0) return false;
+        var start = idx + marker.Length;
+        var end = json.IndexOfAny([',', '}'], start);
+        if (end < 0) return false;
+        return int.TryParse(json.AsSpan(start, end - start), CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool TryParseJsonString(string json, string key, out string? value)
+    {
+        value = null;
+        var marker = $"\"{key}\":\"";
+        var idx = json.IndexOf(marker, StringComparison.Ordinal);
+        if (idx < 0) return false;
+        var start = idx + marker.Length;
+        var end = json.IndexOf('"', start);
+        if (end < 0) return false;
+        value = json[start..end];
+        return true;
+    }
 }

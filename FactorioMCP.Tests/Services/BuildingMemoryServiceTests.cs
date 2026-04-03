@@ -509,4 +509,118 @@ public class BuildingMemoryServiceTests
         // Should not throw
         await service.UpdateBuildingDirectionAsync(99, 99, "east");
     }
+
+    // ── FindClosestBuilding ─────────────────────────────────────────
+
+    [Fact]
+    public async Task FindClosestBuildingAsync_FindsByLabelContains()
+    {
+        var service = CreateService();
+        await service.TrackBuildingAsync("stone-furnace", 10, 0);
+        await service.UpdateBuildingLabelAsync(10, 0, "main iron smelter");
+
+        var result = await service.FindClosestBuildingAsync("iron smelter", 0, 0);
+
+        Assert.NotNull(result);
+        Assert.Equal("stone-furnace", result.EntityName);
+        Assert.Equal(10, result.X);
+    }
+
+    [Fact]
+    public async Task FindClosestBuildingAsync_FindsByEntityName()
+    {
+        var service = CreateService();
+        await service.TrackBuildingAsync("wooden-chest", 5, 5);
+
+        var result = await service.FindClosestBuildingAsync("wooden-chest", 0, 0);
+
+        Assert.NotNull(result);
+        Assert.Equal("wooden-chest", result.EntityName);
+    }
+
+    [Fact]
+    public async Task FindClosestBuildingAsync_LabelTakesPriorityOverEntityName()
+    {
+        var service = CreateService();
+        // Building A: has matching label, farther away
+        await service.TrackBuildingAsync("stone-furnace", 20, 0);
+        await service.UpdateBuildingLabelAsync(20, 0, "iron output");
+        // Building B: entity name "iron-chest", closer
+        await service.TrackBuildingAsync("iron-chest", 5, 0);
+
+        // Search for "iron" — should match label "iron output" first, not entity name "iron-chest"
+        var result = await service.FindClosestBuildingAsync("iron output", 0, 0);
+
+        Assert.NotNull(result);
+        Assert.Equal("stone-furnace", result.EntityName);
+        Assert.Equal(20, result.X);
+    }
+
+    [Fact]
+    public async Task FindClosestBuildingAsync_ReturnsClosestWhenMultipleMatch()
+    {
+        var service = CreateService();
+        await service.TrackBuildingAsync("stone-furnace", 30, 0);
+        await service.TrackBuildingAsync("stone-furnace", 10, 0);
+        await service.TrackBuildingAsync("stone-furnace", 50, 0);
+
+        var result = await service.FindClosestBuildingAsync("stone-furnace", 0, 0);
+
+        Assert.NotNull(result);
+        Assert.Equal(10, result.X);
+    }
+
+    [Fact]
+    public async Task FindClosestBuildingAsync_ReturnsNullWhenNotFound()
+    {
+        var service = CreateService();
+        await service.TrackBuildingAsync("transport-belt", 5, 0);
+
+        var result = await service.FindClosestBuildingAsync("stone-furnace", 0, 0);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task FindClosestBuildingAsync_CaseInsensitiveLabel()
+    {
+        var service = CreateService();
+        await service.TrackBuildingAsync("stone-furnace", 5, 0);
+        await service.UpdateBuildingLabelAsync(5, 0, "Main Smelter");
+
+        var result = await service.FindClosestBuildingAsync("main smelter", 0, 0);
+
+        Assert.NotNull(result);
+        Assert.Equal("Main Smelter", result.Label);
+    }
+
+    [Fact]
+    public async Task FindClosestBuildingAsync_CaseInsensitiveEntityName()
+    {
+        var service = CreateService();
+        await service.TrackBuildingAsync("Stone-Furnace", 5, 0);
+
+        var result = await service.FindClosestBuildingAsync("stone-furnace", 0, 0);
+
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task FindClosestBuildingAsync_ThrowsOnNullSearchTerm()
+    {
+        var service = CreateService();
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(
+            () => service.FindClosestBuildingAsync(null!, 0, 0));
+    }
+
+    [Fact]
+    public async Task FindClosestBuildingAsync_ReturnsNullWhenEmpty()
+    {
+        var service = CreateService();
+
+        var result = await service.FindClosestBuildingAsync("stone-furnace", 0, 0);
+
+        Assert.Null(result);
+    }
 }

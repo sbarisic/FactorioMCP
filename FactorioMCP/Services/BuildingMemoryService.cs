@@ -306,6 +306,45 @@ internal sealed class BuildingMemoryService
     }
 
     /// <summary>
+    /// Finds the closest tracked building matching a search term.
+    /// Searches by label first (case-insensitive contains), then by entity name (case-insensitive equals).
+    /// Returns the closest match or null if no building matches.
+    /// </summary>
+    internal async Task<TrackedBuilding?> FindClosestBuildingAsync(
+        string searchTerm,
+        double playerX,
+        double playerY,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(searchTerm);
+
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            var buildings = await EnsureLoadedAsync(cancellationToken);
+
+            // Search by label first (case-insensitive contains)
+            var byLabel = buildings
+                .Where(b => b.Label is not null && b.Label.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(b => DistanceTo(b, playerX, playerY))
+                .FirstOrDefault();
+
+            if (byLabel is not null)
+                return byLabel;
+
+            // Fall back to entity name (case-insensitive equals)
+            return buildings
+                .Where(b => string.Equals(b.EntityName, searchTerm, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(b => DistanceTo(b, playerX, playerY))
+                .FirstOrDefault();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>
     /// Returns the closest building of the specified type to the given position.
     /// </summary>
     public async Task<string> GetClosestBuildingOfTypeAsync(

@@ -286,6 +286,10 @@ FactorioMCP/
 FactorioMCP.Tests/                      # Unit tests (xUnit)
 ```
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for workflow guidelines, CPX complexity scale, and coding conventions.
+
 ## License
 
 See repository for license details.
