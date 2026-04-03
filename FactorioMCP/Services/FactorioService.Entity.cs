@@ -212,7 +212,7 @@ internal sealed partial class FactorioService
             if inserted > 0 then
                 player.remove_item{name="{{itemName}}", count=inserted}
             end
-            rcon.print('{"success":true,"entity":"'..e.name..'","item":"{{itemName}}","inserted":'..inserted..',"requested":'..{{count}}..'}')  
+            rcon.print('{"success":true,"entity":"'..e.name..'","item":"{{itemName}}","inserted":'..inserted..',"requested":'..({{count}})..'}')  
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -286,7 +286,7 @@ internal sealed partial class FactorioService
                 end
             end
             local inv_full = inserted < removed
-            rcon.print('{"success":true,"entity":"'..e.name..'","item":"{{itemName}}","removed":'..inserted..',"requested":'..{{count}}..',"inventory_full":'..tostring(inv_full)..'}')  
+            rcon.print('{"success":true,"entity":"'..e.name..'","item":"{{itemName}}","removed":'..inserted..',"requested":'..({{count}})..',"inventory_full":'..tostring(inv_full)..'}')  
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -335,8 +335,8 @@ internal sealed partial class FactorioService
             -- Health
             if e.health then
                 result = result..',"health":'..e.health
-                if e.prototype and e.prototype.max_health then
-                    result = result..',"max_health":'..e.prototype.max_health
+                if e.max_health then
+                    result = result..',"max_health":'..e.max_health
                 end
             end
             -- Recipe (assembling machines)
@@ -367,7 +367,7 @@ internal sealed partial class FactorioService
                 result = result..',"burner":{"remaining_burning_fuel":'..string.format("%.1f", e.burner.remaining_burning_fuel)..',"heat":'..string.format("%.1f", e.burner.heat)..',"heat_capacity":'..string.format("%.1f", e.burner.heat_capacity)..'}'
             end
             -- Mining target (for mining drills)
-            if e.mining_target then
+            if e.type == "mining-drill" and e.mining_target then
                 result = result..',"mining_target":"'..e.mining_target.name..'"'
             end
             -- Direction (for all directional entities)

@@ -301,7 +301,7 @@ internal sealed partial class FactorioService
             local result = '{"success":true,"entity":"'..best.name..'","type":"'..best.type..'","x":'..best.position.x..',"y":'..best.position.y..',"distance":'..string.format("%.1f", best_dist)
             local dn = dir_names[best.direction]
             if dn then result = result..',"direction":"'..dn..'"' end
-            if best.amount then result = result..',"amount":'..best.amount end
+            if best.type == "resource" then result = result..',"amount":'..best.amount end
             result = result..',"total_found":'..#entities..'}'
             rcon.print(result)
             """);
@@ -528,7 +528,7 @@ internal sealed partial class FactorioService
                         local entry = '{"name":"'..e.name..'","type":"'..e.type..'","x":'..string.format("%.1f", e.position.x)..',"y":'..string.format("%.1f", e.position.y)..',"distance":'..string.format("%.1f", dist)
                         local dn = dir_names[e.direction]
                         if dn then entry = entry..',"direction":"'..dn..'"' end
-                        if e.amount then entry = entry..',"amount":'..e.amount end
+                        if e.type == "resource" then entry = entry..',"amount":'..e.amount end
                         entry = entry..'}'
                         results[#results+1] = {dist=dist, json=entry}
                     end

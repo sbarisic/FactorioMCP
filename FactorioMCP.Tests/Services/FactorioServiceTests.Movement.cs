@@ -57,13 +57,22 @@ public partial class FactorioServiceTests
     }
 
     [Fact]
-    public async Task WalkAsync_IncludesStuckDetectionLogic()
+    public async Task WalkAsync_SetsWalkingStateWithDirection()
     {
         await _service.WalkAsync("south");
 
         Assert.NotNull(_rcon.LastCommand);
-        Assert.Contains("stuck_ticks", _rcon.LastCommand);
-        Assert.Contains("detour_dir", _rcon.LastCommand);
+        Assert.Contains("walking_state", _rcon.LastCommand);
+        Assert.Contains("defines.direction.south", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task WalkAsync_InstallsOnTickHandler()
+    {
+        await _service.WalkAsync("north");
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.Contains("script.on_event(defines.events.on_tick", _rcon.LastCommand);
         Assert.Contains("storage.walk_state", _rcon.LastCommand);
     }
 
@@ -74,6 +83,15 @@ public partial class FactorioServiceTests
 
         Assert.NotNull(_rcon.LastCommand);
         Assert.Contains("storage.walk_state = nil", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task StopWalkingAsync_RemovesOnTickHandler()
+    {
+        await _service.StopWalkingAsync();
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.Contains("script.on_event(defines.events.on_tick, nil)", _rcon.LastCommand);
     }
 
     // ── StopWalking ──────────────────────────────────────────────────

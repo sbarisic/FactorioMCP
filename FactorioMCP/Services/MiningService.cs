@@ -74,7 +74,7 @@ internal sealed class MiningService(RconClient rcon)
                 rcon.print('{"is_mining":'..tostring(is_mining)..
                     ',"depleted":true'..
                     ',"remaining":0'..
-                    ',"mined":'..{{initialAmount}}..'}')
+                    ',"mined":'..({{initialAmount}})..'}')
                 return
             end
             local e = entities[1]

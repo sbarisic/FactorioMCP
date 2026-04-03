@@ -57,6 +57,28 @@ public class MovementToolsTests
         Assert.Equal("west", direction);
     }
 
+    // ── GetPerpendicularDirection ─────────────────────────────────────
+
+    [Theory]
+    [InlineData("north", 1, "east")]
+    [InlineData("north", 2, "west")]
+    [InlineData("south", 1, "west")]
+    [InlineData("south", 2, "east")]
+    [InlineData("east", 1, "south")]
+    [InlineData("east", 2, "north")]
+    [InlineData("west", 1, "north")]
+    [InlineData("west", 2, "south")]
+    [InlineData("northeast", 1, "southeast")]
+    [InlineData("northeast", 2, "northwest")]
+    [InlineData("southeast", 1, "southwest")]
+    [InlineData("southeast", 2, "northeast")]
+    public void GetPerpendicularDirection_ReturnsCorrectPerpendicular(
+        string direction, int side, string expected)
+    {
+        var result = MovementTools.GetPerpendicularDirection(direction, side);
+        Assert.Equal(expected, result);
+    }
+
     // ── WalkToPosition — Already at target ───────────────────────────
 
     [Fact]

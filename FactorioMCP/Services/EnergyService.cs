@@ -26,7 +26,7 @@ internal sealed class EnergyService(RconClient rcon)
             local pos = player.position
             local poles = surface.find_entities_filtered{type="electric-pole", position=pos, radius={{radius}}}
             if #poles == 0 then
-                rcon.print('{"status":"no_poles_found","player_x":'..string.format("%.1f", pos.x)..',"player_y":'..string.format("%.1f", pos.y)..',"radius":'..{{radius}}..'}')
+                rcon.print('{"status":"no_poles_found","player_x":'..string.format("%.1f", pos.x)..',"player_y":'..string.format("%.1f", pos.y)..',"radius":'..string.format("%.1f", {{radius}})..'}')
                 return
             end
             table.sort(poles, function(a, b)

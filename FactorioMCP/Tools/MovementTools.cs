@@ -17,7 +17,7 @@ internal sealed class MovementTools(FactorioService factorio, GameCommandQueue q
         "Walk toward a target position until arrival, getting stuck, or timeout. " +
         "Automatically calculates the best walking direction from the player's current position. " +
         "Combines walking, direction calculation, position polling, and stuck detection into a single call. " +
-        "The walking handler includes automatic obstacle avoidance. " +
+        "Includes obstacle avoidance: when stuck, tries perpendicular directions to navigate around. " +
         "Re-calculates direction periodically to correct course as the player moves.")]
     public Task<string> WalkToPosition(
         [Description("Target X coordinate to walk toward")]
@@ -51,8 +51,12 @@ internal sealed class MovementTools(FactorioService factorio, GameCommandQueue q
 
             double prevX = px, prevY = py;
             int stuckPolls = 0;
-            const int maxStuckPolls = 6; // 6 polls with no movement = stuck
-            const double minMovement = 0.15; // minimum distance per poll to count as moving
+            const int stuckThreshold = 4;     // polls with no movement before trying detour
+            const int maxStuckPolls = 12;     // total stuck polls before giving up
+            const double minMovement = 0.15;  // minimum distance per poll to count as moving
+            int detourSide = 0;               // 0 = not detouring, 1 = first side, 2 = second side
+            int detourPolls = 0;
+            const int detourLength = 6;       // polls to walk in detour direction before retrying
 
             try
             {
@@ -72,28 +76,72 @@ internal sealed class MovementTools(FactorioService factorio, GameCommandQueue q
                         return FormatResult("arrived", px, py, targetX, targetY, dist, tolerance);
                     }
 
-                    // Check if stuck (not moving between polls)
                     var pollMovement = Distance(px, py, prevX, prevY);
-                    if (pollMovement < minMovement)
+                    var isMoving = pollMovement >= minMovement;
+
+                    if (detourSide > 0)
                     {
-                        stuckPolls++;
-                        if (stuckPolls >= maxStuckPolls)
+                        // Currently detouring around an obstacle
+                        detourPolls++;
+                        if (detourPolls >= detourLength)
                         {
-                            await factorio.StopWalkingAsync(ct);
-                            return FormatResult("stuck", px, py, targetX, targetY, dist, tolerance);
+                            // Detoured enough, try heading toward target again
+                            detourSide = 0;
+                            detourPolls = 0;
+                            direction = CalculateDirection(px, py, targetX, targetY);
+                            await factorio.WalkAsync(direction, ct);
+                        }
+                        else if (!isMoving)
+                        {
+                            // Stuck during detour — try the other perpendicular side
+                            stuckPolls++;
+                            if (stuckPolls >= maxStuckPolls)
+                            {
+                                await factorio.StopWalkingAsync(ct);
+                                return FormatResult("stuck", px, py, targetX, targetY, dist, tolerance);
+                            }
+                            detourSide = detourSide == 1 ? 2 : 1;
+                            detourPolls = 0;
+                            var detourDir = GetPerpendicularDirection(
+                                CalculateDirection(px, py, targetX, targetY), detourSide);
+                            direction = detourDir;
+                            await factorio.WalkAsync(direction, ct);
                         }
                     }
                     else
                     {
-                        stuckPolls = 0;
-                    }
+                        // Walking toward target
+                        if (isMoving)
+                        {
+                            stuckPolls = 0;
 
-                    // Re-calculate direction to correct course
-                    var newDirection = CalculateDirection(px, py, targetX, targetY);
-                    if (newDirection != direction)
-                    {
-                        direction = newDirection;
-                        await factorio.WalkAsync(direction, ct);
+                            // Re-calculate direction to correct course
+                            var newDirection = CalculateDirection(px, py, targetX, targetY);
+                            if (newDirection != direction)
+                            {
+                                direction = newDirection;
+                                await factorio.WalkAsync(direction, ct);
+                            }
+                        }
+                        else
+                        {
+                            stuckPolls++;
+                            if (stuckPolls >= maxStuckPolls)
+                            {
+                                await factorio.StopWalkingAsync(ct);
+                                return FormatResult("stuck", px, py, targetX, targetY, dist, tolerance);
+                            }
+
+                            if (stuckPolls >= stuckThreshold)
+                            {
+                                // Start detouring: try perpendicular direction
+                                detourSide = 1;
+                                detourPolls = 0;
+                                var detourDir = GetPerpendicularDirection(direction, detourSide);
+                                direction = detourDir;
+                                await factorio.WalkAsync(direction, ct);
+                            }
+                        }
                     }
 
                     prevX = px;
@@ -159,6 +207,34 @@ internal sealed class MovementTools(FactorioService factorio, GameCommandQueue q
             >= 202.5 and < 247.5 => "northwest",
             >= 247.5 and < 292.5 => "north",
             _ => "northeast"
+        };
+    }
+
+    /// <summary>
+    /// Get a perpendicular direction for obstacle avoidance.
+    /// Side 1 = clockwise perpendicular, Side 2 = counter-clockwise perpendicular.
+    /// </summary>
+    internal static string GetPerpendicularDirection(string direction, int side)
+    {
+        return (direction, side) switch
+        {
+            ("north", 1) => "east",
+            ("north", _) => "west",
+            ("south", 1) => "west",
+            ("south", _) => "east",
+            ("east", 1) => "south",
+            ("east", _) => "north",
+            ("west", 1) => "north",
+            ("west", _) => "south",
+            ("northeast", 1) => "southeast",
+            ("northeast", _) => "northwest",
+            ("northwest", 1) => "northeast",
+            ("northwest", _) => "southwest",
+            ("southeast", 1) => "southwest",
+            ("southeast", _) => "northeast",
+            ("southwest", 1) => "northwest",
+            ("southwest", _) => "southeast",
+            _ => "east"
         };
     }
 

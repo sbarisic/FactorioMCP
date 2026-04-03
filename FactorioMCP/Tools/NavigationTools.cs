@@ -138,8 +138,12 @@ internal sealed class NavigationTools(FactorioService factorio, BuildingMemorySe
 
         double prevX = px, prevY = py;
         int stuckPolls = 0;
-        const int maxStuckPolls = 6;
+        const int stuckThreshold = 4;
+        const int maxStuckPolls = 12;
         const double minMovement = 0.15;
+        int detourSide = 0;
+        int detourPolls = 0;
+        const int detourLength = 6;
 
         try
         {
@@ -159,25 +163,65 @@ internal sealed class NavigationTools(FactorioService factorio, BuildingMemorySe
                 }
 
                 var pollMovement = Distance(px, py, prevX, prevY);
-                if (pollMovement < minMovement)
+                var isMoving = pollMovement >= minMovement;
+
+                if (detourSide > 0)
                 {
-                    stuckPolls++;
-                    if (stuckPolls >= maxStuckPolls)
+                    detourPolls++;
+                    if (detourPolls >= detourLength)
                     {
-                        await factorio.StopWalkingAsync(ct);
-                        return new WalkResult("stuck", px, py, dist);
+                        detourSide = 0;
+                        detourPolls = 0;
+                        direction = MovementTools.CalculateDirection(px, py, targetX, targetY);
+                        await factorio.WalkAsync(direction, ct);
+                    }
+                    else if (!isMoving)
+                    {
+                        stuckPolls++;
+                        if (stuckPolls >= maxStuckPolls)
+                        {
+                            await factorio.StopWalkingAsync(ct);
+                            return new WalkResult("stuck", px, py, dist);
+                        }
+                        detourSide = detourSide == 1 ? 2 : 1;
+                        detourPolls = 0;
+                        var detourDir = MovementTools.GetPerpendicularDirection(
+                            MovementTools.CalculateDirection(px, py, targetX, targetY), detourSide);
+                        direction = detourDir;
+                        await factorio.WalkAsync(direction, ct);
                     }
                 }
                 else
                 {
-                    stuckPolls = 0;
-                }
+                    if (isMoving)
+                    {
+                        stuckPolls = 0;
 
-                var newDirection = MovementTools.CalculateDirection(px, py, targetX, targetY);
-                if (newDirection != direction)
-                {
-                    direction = newDirection;
-                    await factorio.WalkAsync(direction, ct);
+                        var newDirection = MovementTools.CalculateDirection(px, py, targetX, targetY);
+                        if (newDirection != direction)
+                        {
+                            direction = newDirection;
+                            await factorio.WalkAsync(direction, ct);
+                        }
+                    }
+                    else
+                    {
+                        stuckPolls++;
+                        if (stuckPolls >= maxStuckPolls)
+                        {
+                            await factorio.StopWalkingAsync(ct);
+                            return new WalkResult("stuck", px, py, dist);
+                        }
+
+                        if (stuckPolls >= stuckThreshold)
+                        {
+                            detourSide = 1;
+                            detourPolls = 0;
+                            var detourDir = MovementTools.GetPerpendicularDirection(direction, detourSide);
+                            direction = detourDir;
+                            await factorio.WalkAsync(direction, ct);
+                        }
+                    }
                 }
 
                 prevX = px;
