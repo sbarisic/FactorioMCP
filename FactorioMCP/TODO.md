@@ -112,7 +112,7 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-*No high priority items*
+- [ ] **Realistic Mining** — Reimplement mine_* functions which currently act as instant cheats. Use `player.mining_state = {mining = true, position = {x, y}}` to set the player into the mining state and let the game engine handle progress/timing based on mining speed and entity `mining_time`. Poll or listen for completion via `on_player_mined_entity` / `on_player_mined_tile` / `on_player_mined_item` events, then reset with `mining_state = {mining = false}`. Handle edge cases: continuous mining (auto-mines next entity at position), mining interruption (player moves away or dies), inventory full (mining stops but state remains true), and entity destruction during mining (`on_entity_died` to reset state). Aligns with the core realistic AI constraint — no instant/cheat mining. **(CPX 4)**
 
 ### Medium Priority
 
@@ -136,7 +136,7 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-*No medium priority items*
+- [ ] **Condense PROMPT.md** — Rewrite the AI prompt file to be 300 lines max while preserving all essential instructions and context. **(CPX 2)**
 
 ### Low Priority
 
@@ -174,7 +174,24 @@ RCON connection settings are read from environment variables:
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
-*No uncategorized items*
+- `rotate_entity(x, y)` — Rotate a building at given coordinates. Essential for correct belt and assembler orientation.
+- `pickup_items(radius)` — Simulate holding the 'F' key to collect items dropped on the ground within a radius.
+- `take_screenshot()` — Return a base64 screenshot image for vision models to identify bottlenecks or plan layouts. Overlay entity bounds, directional indicators (inserter drop/pickup positions as absolute coordinates), and metadata as a "Map Legend" in the text prompt to give the image depth/context.
+- `blueprint_area(x1, y1, x2, y2)` — Capture a region as a blueprint string so the LLM can save and reuse its own designs.
+- **Smart Inserter Placement** — `place_inserter(target_x, target_y, side, direction)`: Accept a target entity and a side (top/bottom/left/right) plus direction (inbound/outbound). C# backend calculates the exact tile offset based on entity size (3x3, 5x5, etc.) so the LLM doesn't need to do geometry. Also `insert_between(source_pos, destination_pos)` to find the 1-tile gap between two entities and place an inserter with correct orientation automatically.
+- **Belt Path Tool** — `connect_with_belts(start_pos, end_pos)`: Use Factorio Lua pathfinding to draw a belt line between two points instead of requiring the LLM to place individual belt segments.
+- `get_available_slots(x, y)` — Return a list of adjacent tiles around an entity that aren't blocked by pipes or buildings (collision masking).
+- **Ghost Placement Validation** — Encourage the LLM to place ghost entities first, then validate placement in C# (check prototype, orientation, connectivity). Return corrective errors like "Inserter at {10,11} is pointing at a wall, not the Assembler" to create a feedback loop before committing real entities.
+- **Target Selection Helpers** — `FindNearest(type)` returns position + distance of closest entity/resource. `FindBestResourcePatch(resource)` returns closest, largest, or best-heuristic patch. Eliminates token-expensive scan→parse→compare→decide chains the LLM currently performs.
+- **Smart Navigation** — `MoveToEntity(name|type)`, `MoveToResource(type)`, `MoveToBuilding(label|type)`. Internally scan for best target and walk there. Wraps `WalkToPosition` with intelligence so the LLM doesn't need to scan+pick+walk manually.
+- **High-Level Task Primitives** — Compound tools that collapse 10–20 atomic calls into 1. `GatherResource(resource, count)`: find patch → walk → mine → handle timeout. `RefuelEntity(x, y, fuel, min_amount)`: check fuel level → walk → insert fuel. `Smelt(resource, count)`: find furnace → insert ore + fuel → wait → collect output.
+- **Semantic Area Perception** — `SummarizeArea`: returns structured overview of resources nearby, machines, free space, and threats. `WhatAmILookingAt(direction)`: raycast-style directional query describing what's in front of the player. `FindBuildableArea(width, height)`: locate a flat empty region suitable for building.
+- **Factory Analysis Tools** — `GetProductionStatus`: what's being produced, bottlenecks, idle machines. `FindUnpoweredEntities`: list entities without power. `FindIdleMachines`: list machines not working. `FindMissingInputs(x, y)`: returns which input items an assembler/furnace is missing.
+- **Craft & Factory Planning** — `PlanCraft(item, count)`: returns full recipe tree with required intermediates and raw materials. `PlanFactory(goal)`: given a high-level goal like "automate iron plates", return rough ordered steps. Reduces LLM hallucinated plans.
+- **Reactive Waiting** — `WaitForCondition(condition)` e.g. "inventory.iron-plate >= 50". `WaitForEntityState(x, y, status)` e.g. wait for entity to become "idle". Lets the LLM act reactively instead of spamming polling checks.
+- **Inventory Intelligence** — `EnsureItem(item, count)`: auto-crafts or gathers if the player doesn't have enough. `GetInventorySummary`: returns condensed key-value inventory (fewer tokens than full inventory dump).
+- **Smart Entity Placement** — `PlaceEntitySmart(entity, near)` e.g. place a stone-furnace near iron-ore. Backend picks best available position automatically.
+- **Utility Tools** — `GetReachableEntities(type, max_distance)`: filter entities by reach distance. `GetClosestBuildingOfType(type)`: find nearest placed building. `CountItemInWorld(item)`: count item across all containers, not just player inventory. `EstimateTravelTime(x, y)`: estimate walk time to a position.
 
 ---
 
