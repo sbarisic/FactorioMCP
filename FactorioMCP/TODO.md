@@ -90,10 +90,7 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **Ghost Placement Validation** — LLM places ghost entities first, C# validates placement (prototype, orientation, connectivity). Returns corrective errors like "Inserter at {10,11} is pointing at a wall, not the Assembler" to create a feedback loop before committing real entities. **(CPX 3)**
-- [ ] **Utility Tools** — `GetReachableEntities(type, max_distance)`: filter entities by reach distance. `CountItemInWorld(item)`: count item across all containers, not just player inventory. `EstimateTravelTime(x, y)`: estimate walk time to a position. **(CPX 2)**
-- [ ] **Inventory Intelligence** — `EnsureItem(item, count)`: auto-crafts or gathers if the player doesn't have enough. `GetInventorySummary`: returns condensed key-value inventory (fewer tokens than full inventory dump). **(CPX 2)**
-- [ ] **Collision Slot Query** — `get_available_slots(x, y)`: return a list of adjacent tiles around an entity that aren't blocked by pipes or buildings (collision masking). **(CPX 2)**
+*No high priority items*
 
 
 ### Medium Priority
