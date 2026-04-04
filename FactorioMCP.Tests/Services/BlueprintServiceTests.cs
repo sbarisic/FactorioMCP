@@ -238,7 +238,7 @@ public class BlueprintServiceTests
     {
         await _service.GetGhostEntitiesAsync(centerX: 100, centerY: 200);
 
-        Assert.Contains("{100,200}", _rcon.LastCommand!);
+        Assert.Contains("{x=100,y=200}", _rcon.LastCommand!);
         Assert.DoesNotContain("player.position", _rcon.LastCommand!);
     }
 

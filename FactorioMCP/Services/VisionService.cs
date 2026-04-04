@@ -82,16 +82,16 @@ internal sealed class VisionService(RconClient rcon)
         // is (pixels / (32 * zoom)). We use half the larger dimension as search radius
         // and add a small margin.
         var posExpr = centerX.HasValue && centerY.HasValue
-            ? string.Create(CultureInfo.InvariantCulture, $"{{{centerX.Value},{centerY.Value}}}")
+            ? string.Create(CultureInfo.InvariantCulture, $"{{x={centerX.Value},y={centerY.Value}}}")
             : "player.position";
 
         return string.Create(CultureInfo.InvariantCulture, $$"""
+            {{FactorioService.LuaJsonEscape}}
             local player = game.connected_players[1]
             local surface = player.surface
             local center = {{posExpr}}
-            if type(center) ~= "table" then center = {x=center.x, y=center.y} end
-            local cx = center.x or center[1]
-            local cy = center.y or center[2]
+            local cx = center.x
+            local cy = center.y
 
             -- Calculate visible area radius from resolution and zoom
             local zoom = {{zoom}}
@@ -175,8 +175,8 @@ internal sealed class VisionService(RconClient rcon)
 
                     -- Build legend entry
                     local entry = '{"id":'..idx
-                        ..',"name":"'..e.name..'"'
-                        ..',"type":"'..e.type..'"'
+                        ..',"name":"'..esc(e.name)..'"'
+                        ..',"type":"'..esc(e.type)..'"'
                         ..',"x":'..string.format("%.1f", e.position.x)
                         ..',"y":'..string.format("%.1f", e.position.y)
 
@@ -209,7 +209,7 @@ internal sealed class VisionService(RconClient rcon)
                     if e.type == "assembling-machine" then
                         local recipe = e.get_recipe()
                         if recipe then
-                            entry = entry..',"recipe":"'..recipe.name..'"'
+                            entry = entry..',"recipe":"'..esc(recipe.name)..'"'
                         end
                     end
 

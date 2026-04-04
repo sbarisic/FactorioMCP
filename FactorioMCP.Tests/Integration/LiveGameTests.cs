@@ -217,51 +217,56 @@ public sealed class LiveGameTests : IAsyncLifetime
     [Fact]
     public async Task WalkAndStop_MovesPlayer()
     {
-        // Get starting position
-        var startResult = await _service.GetPlayerPositionAsync();
-        var startPos = Parse(startResult);
-        var startX = startPos.GetProperty("x").GetDouble();
-        var startY = startPos.GetProperty("y").GetDouble();
-        _output.WriteLine($"Start position: ({startX}, {startY})");
-
-        // Try multiple directions — the player may be blocked in one direction
-        // by nearby entities. The pathfinding on_tick handler will try to detour
-        // around obstacles, but if completely boxed in no direction will work.
-        string[] directions = ["south", "east", "north", "west"];
-        bool moved = false;
+        const double walkDistance = 10.0;
+        const double tolerance = 2.0;
+        const double timeoutSeconds = 10.0;
+        // Minimum distance the player must have moved to count as success.
+        // walkDistance is 10 tiles, tolerance is 2, so we expect at least ~7 tiles.
+        const double minExpectedMovement = 5.0;
 
         // Direction offsets: how far to walk in each direction
-        var dirOffsets = new Dictionary<string, (double dx, double dy)>
+        var dirOffsets = new (string name, double dx, double dy)[]
         {
-            ["south"] = (0, 10), ["east"] = (10, 0),
-            ["north"] = (0, -10), ["west"] = (-10, 0)
+            ("south", 0, walkDistance),
+            ("east", walkDistance, 0),
+            ("north", 0, -walkDistance),
+            ("west", -walkDistance, 0)
         };
 
-        foreach (var dir in directions)
+        foreach (var (dir, dx, dy) in dirOffsets)
         {
-            // Walk 10 tiles in the given direction using A* pathfinder
-            var (dx, dy) = dirOffsets[dir];
-            var walkResult = await _pathfinding.WalkToAsync(startX + dx, startY + dy, 2.0, 3.0);
+            // Record position BEFORE this walk
+            var beforeResult = await _service.GetPlayerPositionAsync();
+            var beforePos = Parse(beforeResult);
+            var beforeX = beforePos.GetProperty("x").GetDouble();
+            var beforeY = beforePos.GetProperty("y").GetDouble();
+            _output.WriteLine($"[{dir}] Before: ({beforeX:F2}, {beforeY:F2})");
+
+            // Walk 10 tiles in the given direction
+            var targetX = beforeX + dx;
+            var targetY = beforeY + dy;
+            var walkResult = await _pathfinding.WalkToAsync(targetX, targetY, tolerance, timeoutSeconds);
+            var walkJson = Parse(walkResult);
+            var status = walkJson.GetProperty("status").GetString();
             LogResult($"WalkTo({dir})", walkResult);
 
-            var endResult = await _service.GetPlayerPositionAsync();
-            var endPos = Parse(endResult);
-            var endX = endPos.GetProperty("x").GetDouble();
-            var endY = endPos.GetProperty("y").GetDouble();
+            // Record position AFTER this walk
+            var afterResult = await _service.GetPlayerPositionAsync();
+            var afterPos = Parse(afterResult);
+            var afterX = afterPos.GetProperty("x").GetDouble();
+            var afterY = afterPos.GetProperty("y").GetDouble();
 
-            var distMoved = Math.Sqrt((endX - startX) * (endX - startX) + (endY - startY) * (endY - startY));
-            _output.WriteLine($"After walking {dir}: ({endX}, {endY}), moved {distMoved:F2} tiles");
+            var distMoved = Math.Sqrt(
+                (afterX - beforeX) * (afterX - beforeX) +
+                (afterY - beforeY) * (afterY - beforeY));
+            _output.WriteLine($"[{dir}] After:  ({afterX:F2}, {afterY:F2}), moved {distMoved:F2} tiles, status={status}");
 
-            if (distMoved > 0.5)
-            {
-                moved = true;
-                _output.WriteLine($"  → Successfully moved {distMoved:F2} tiles via {dir} ✓");
-                break;
-            }
+            Assert.True(distMoved >= minExpectedMovement,
+                $"Walking {dir}: expected to move at least {minExpectedMovement} tiles " +
+                $"but only moved {distMoved:F2}. Status={status}, " +
+                $"before=({beforeX:F2},{beforeY:F2}), after=({afterX:F2},{afterY:F2})");
+            _output.WriteLine($"[{dir}] ✓ moved {distMoved:F2} tiles");
         }
-
-        Assert.True(moved, "Player should have moved in at least one direction. " +
-            "Player may be completely boxed in by entities — try clearing the area around the player.");
     }
 
     // ── 9. Mine Resource ────────────────────────────────────────────

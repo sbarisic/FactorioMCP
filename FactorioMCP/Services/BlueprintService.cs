@@ -104,7 +104,7 @@ internal sealed class BlueprintService(RconClient rcon)
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(radius, 0);
 
         var posExpr = centerX.HasValue && centerY.HasValue
-            ? string.Create(CultureInfo.InvariantCulture, $"{{{centerX.Value},{centerY.Value}}}")
+            ? string.Create(CultureInfo.InvariantCulture, $"{{x={centerX.Value},y={centerY.Value}}}")
             : "player.position";
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
@@ -116,7 +116,7 @@ internal sealed class BlueprintService(RconClient rcon)
             for _, g in ipairs(ghosts) do
                 parts[#parts+1] = '{"ghost_name":"'..g.ghost_name..'","x":'..string.format("%.1f", g.position.x)..',"y":'..string.format("%.1f", g.position.y)..',"direction":"'..(g.direction or 0)..'"}'
             end
-            rcon.print('{"ghosts":['..table.concat(parts, ",")..'],"count":'..#ghosts..',"center_x":'..string.format("%.1f", center.x or center[1])..',"center_y":'..string.format("%.1f", center.y or center[2])..',"radius":'..({{radius}})..'}')
+            rcon.print('{"ghosts":['..table.concat(parts, ",")..'],"count":'..#ghosts..',"center_x":'..string.format("%.1f", center.x)..',"center_y":'..string.format("%.1f", center.y)..',"radius":'..({{radius}})..'}')
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);

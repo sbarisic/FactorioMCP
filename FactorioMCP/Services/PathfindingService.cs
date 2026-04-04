@@ -26,6 +26,7 @@ internal sealed class PathfindingService(RconClient rcon)
     internal TimeSpan PollInterval { get; set; } = TimeSpan.FromMilliseconds(150);
 
     private bool _pathHandlerInstalled;
+    private int? _lastDirection;
 
     // ── Public API ──────────────────────────────────────────────────
 
@@ -73,9 +74,12 @@ internal sealed class PathfindingService(RconClient rcon)
                 return FormatResult("no_path", px, py, targetX, targetY, dist, tolerance);
             if (status == "busy")
             {
-                // Pathfinder overloaded, wait and retry
+                // Pathfinder overloaded — old request already cleaned up by
+                // GetPathResultAsync (non-ok entries are nil'd), just retry
                 await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
                 requestId = await RequestPathAsync(targetX, targetY, tolerance, cancellationToken);
+                if (requestId < 0)
+                    return FormatResult("no_character", px, py, targetX, targetY, dist, tolerance);
             }
         }
 
@@ -145,12 +149,17 @@ internal sealed class PathfindingService(RconClient rcon)
                 }
 
                 // Stuck detection: no progress toward goal
-                if (dist < bestDistToGoal - 0.1)
+                if (dist < bestDistToGoal)
                 {
                     bestDistToGoal = dist;
                     stuckCount = 0;
                 }
-                else if (++stuckCount > maxStuckCount)
+                else
+                {
+                    stuckCount++;
+                }
+
+                if (stuckCount > maxStuckCount)
                 {
                     await StopWalkingAsync(cancellationToken);
                     return FormatResult("stuck", px, py, targetX, targetY, dist, tolerance);
@@ -160,9 +169,10 @@ internal sealed class PathfindingService(RconClient rcon)
                 var targetWpIndex = GetLookAheadIndex(waypoints, waypointIndex, px, py);
                 var (wpx, wpy) = waypoints[targetWpIndex];
 
-                // Set walking direction
+                // Set walking direction (skip if unchanged to avoid RCON spam)
                 var direction = CalculateDirection(px, py, wpx, wpy);
-                await SetWalkingDirectionAsync(direction, cancellationToken);
+                if (_lastDirection != direction)
+                    await SetWalkingDirectionAsync(direction, cancellationToken);
 
                 await Task.Delay(PollInterval, cancellationToken);
             }
@@ -292,11 +302,11 @@ internal sealed class PathfindingService(RconClient rcon)
             storage.nav_results = storage.nav_results or {}
             script.on_event(defines.events.on_script_path_request_finished, function(event)
                 if event.path and #event.path > 0 then
-                    storage.nav_results[event.id] = {status = "ok", path = event.path}
+                    storage.nav_results[event.id] = {status = "ok", path = event.path, tick = game.tick}
                 elseif event.try_again_later then
-                    storage.nav_results[event.id] = {status = "busy"}
+                    storage.nav_results[event.id] = {status = "busy", tick = game.tick}
                 else
-                    storage.nav_results[event.id] = {status = "no_path"}
+                    storage.nav_results[event.id] = {status = "no_path", tick = game.tick}
                 end
             end)
             rcon.print('ok')
@@ -342,6 +352,14 @@ internal sealed class PathfindingService(RconClient rcon)
         int requestId, CancellationToken cancellationToken)
     {
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            if storage.nav_results then
+                local now = game.tick
+                for id, r in pairs(storage.nav_results) do
+                    if now - (r.tick or 0) > 600 then
+                        storage.nav_results[id] = nil
+                    end
+                end
+            end
             local r = storage.nav_results and storage.nav_results[{{requestId}}]
             if not r then
                 rcon.print('{"status":"waiting"}')
@@ -382,17 +400,19 @@ internal sealed class PathfindingService(RconClient rcon)
         return ParsePosition(json);
     }
 
-    private Task StopWalkingAsync(CancellationToken cancellationToken)
+    private async Task StopWalkingAsync(CancellationToken cancellationToken)
     {
-        return rcon.ExecuteLuaAsync("""
+        _lastDirection = null;
+        await rcon.ExecuteLuaAsync("""
             game.connected_players[1].walking_state = {walking = false, direction = defines.direction.north}
             rcon.print('ok')
             """, cancellationToken);
     }
 
-    private Task SetWalkingDirectionAsync(int direction, CancellationToken cancellationToken)
+    private async Task SetWalkingDirectionAsync(int direction, CancellationToken cancellationToken)
     {
-        return rcon.ExecuteLuaAsync(string.Create(CultureInfo.InvariantCulture, $$"""
+        _lastDirection = direction;
+        await rcon.ExecuteLuaAsync(string.Create(CultureInfo.InvariantCulture, $$"""
             game.connected_players[1].walking_state = {walking = true, direction = {{direction}}}
             rcon.print('ok')
             """), cancellationToken);
@@ -400,27 +420,37 @@ internal sealed class PathfindingService(RconClient rcon)
 
     /// <summary>
     /// Draw debug path visualization on the game map.
+    /// Draws lines from the player's current position through all waypoints,
+    /// plus a circle at the final waypoint showing the arrival tolerance.
     /// </summary>
     private Task DrawPathAsync(List<(double x, double y)> waypoints, double tolerance, CancellationToken cancellationToken)
     {
-        if (waypoints.Count < 2)
+        if (waypoints.Count == 0)
             return Task.CompletedTask;
 
         var lua = new StringBuilder();
-        lua.Append("local s = game.connected_players[1].surface\n");
+        lua.Append("local p = game.connected_players[1]\n");
+        lua.Append("local s = p.surface\n");
 
+        // Draw first segment from the player's actual position to the first waypoint
+        var (wx0, wy0) = waypoints[0];
+        lua.AppendFormat(CultureInfo.InvariantCulture,
+            "rendering.draw_line{{color={{0,1,0.3,0.7}},width=2,from=p.position,to={{{0},{1}}},surface=s,time_to_live=1800,draw_on_ground=true}}\n",
+            wx0, wy0);
+
+        // Draw remaining segments between waypoints
         for (int i = 0; i < waypoints.Count - 1; i++)
         {
             var (x1, y1) = waypoints[i];
             var (x2, y2) = waypoints[i + 1];
             lua.AppendFormat(CultureInfo.InvariantCulture,
-                "rendering.draw_line{{color={{r=0,g=1,b=0.3,a=0.7}},width=2,from={{x={0},y={1}}},to={{x={2},y={3}}},surface=s,time_to_live=1800,draw_on_ground=true}}\n",
+                "rendering.draw_line{{color={{0,1,0.3,0.7}},width=2,from={{{0},{1}}},to={{{2},{3}}},surface=s,time_to_live=1800,draw_on_ground=true}}\n",
                 x1, y1, x2, y2);
         }
 
         var (lastX, lastY) = waypoints[^1];
         lua.AppendFormat(CultureInfo.InvariantCulture,
-            "rendering.draw_circle{{color={{r=0,g=1,b=0,a=0.5}},radius={0},filled=false,width=2,target={{x={1},y={2}}},surface=s,time_to_live=1800,draw_on_ground=true}}\n",
+            "rendering.draw_circle{{color={{0,1,0,0.5}},radius={0},filled=false,width=2,target={{{1},{2}}},surface=s,time_to_live=1800,draw_on_ground=true}}\n",
             tolerance, lastX, lastY);
         lua.Append("rcon.print('ok')");
 

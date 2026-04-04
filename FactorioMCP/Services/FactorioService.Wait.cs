@@ -21,7 +21,7 @@ internal sealed partial class FactorioService
         {
             cancellationToken.ThrowIfCancellationRequested();
             var result = await GetCraftingQueueAsync(cancellationToken);
-            if (result.Contains("\"queue\":[]"))
+            if (TryParseJsonArray(result, "queue", out var queue) && queue == "[]")
                 return """{"status":"complete","queue":[]}""";
             await Task.Delay(pollInterval, cancellationToken);
         }
@@ -58,12 +58,8 @@ internal sealed partial class FactorioService
                 rcon.print('{"x":'..p.x..',"y":'..p.y..',"distance":'..string.format("%.2f", dist)..'}')
                 """);
             var result = await rcon.ExecuteLuaAsync(lua, cancellationToken);
-            if (result.Contains("\"distance\":"))
-            {
-                var distStr = result.Split("\"distance\":")[1].Split([',', '}'])[0];
-                if (double.TryParse(distStr, CultureInfo.InvariantCulture, out var dist) && dist <= tolerance)
-                    return $$"""{"status":"arrived","tolerance":{{string.Format(CultureInfo.InvariantCulture, "{0}", tolerance)}},"position":{{result}}}""";
-            }
+            if (TryParseJsonDouble(result, "distance", out var dist) && dist <= tolerance)
+                return $$"""{"status":"arrived","tolerance":{{string.Format(CultureInfo.InvariantCulture, "{0}", tolerance)}},"position":{{result}}}""";
             await Task.Delay(pollInterval, cancellationToken);
         }
 
@@ -96,8 +92,7 @@ internal sealed partial class FactorioService
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
 
         var startResult = await GetGameTickAsync(cancellationToken);
-        var startTickStr = startResult.Split("\"tick\":")[1].Split('}')[0];
-        if (!long.TryParse(startTickStr, CultureInfo.InvariantCulture, out var startTick))
+        if (!TryParseJsonLong(startResult, "tick", out var startTick))
             return """{"status":"error","error":"failed_to_read_tick"}""";
 
         var targetTick = startTick + ticks;
@@ -109,14 +104,12 @@ internal sealed partial class FactorioService
             await Task.Delay(pollInterval, cancellationToken);
 
             var tickResult = await GetGameTickAsync(cancellationToken);
-            var currentTickStr = tickResult.Split("\"tick\":")[1].Split('}')[0];
-            if (long.TryParse(currentTickStr, CultureInfo.InvariantCulture, out var currentTick) && currentTick >= targetTick)
+            if (TryParseJsonLong(tickResult, "tick", out var currentTick) && currentTick >= targetTick)
                 return string.Create(CultureInfo.InvariantCulture, $$$"""{"status":"complete","start_tick":{{{startTick}}},"end_tick":{{{currentTick}}},"elapsed":{{{currentTick - startTick}}}}""");
         }
 
         var finalResult = await GetGameTickAsync(cancellationToken);
-        var finalTickStr = finalResult.Split("\"tick\":")[1].Split('}')[0];
-        long.TryParse(finalTickStr, CultureInfo.InvariantCulture, out var finalTick);
+        TryParseJsonLong(finalResult, "tick", out var finalTick);
         return string.Create(CultureInfo.InvariantCulture, $$$"""{"status":"timeout","start_tick":{{{startTick}}},"current_tick":{{{finalTick}}},"target_tick":{{{targetTick}}}}""");
     }
 
@@ -177,12 +170,10 @@ internal sealed partial class FactorioService
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            {{LuaEntitySort}}
             local entities = game.connected_players[1].surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
-            table.sort(entities, function(a, b)
-                local a_res = a.type == "resource" and 1 or 0
-                local b_res = b.type == "resource" and 1 or 0
-                return a_res < b_res
-            end)
+            sort_entities(entities)
             local e = nil
             for _, ent in pairs(entities) do
                 if ent.type ~= "resource" then e = ent break end
@@ -197,7 +188,7 @@ internal sealed partial class FactorioService
                 for k, v in pairs(defines.entity_status) do status_names[v] = k end
                 status_name = status_names[e.status] or "unknown"
             end
-            rcon.print('{"entity":"'..e.name..'","status":"'..status_name..'"}')
+            rcon.print('{"entity":"'..esc(e.name)..'","status":"'..status_name..'"}')
             """);
 
         var deadline = DateTime.UtcNow + timeout;
@@ -250,12 +241,10 @@ internal sealed partial class FactorioService
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            {{LuaEntitySort}}
             local entities = game.connected_players[1].surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
-            table.sort(entities, function(a, b)
-                local a_res = a.type == "resource" and 1 or 0
-                local b_res = b.type == "resource" and 1 or 0
-                return a_res < b_res
-            end)
+            sort_entities(entities)
             local e = nil
             for _, ent in pairs(entities) do
                 if ent.type ~= "resource" then e = ent break end
@@ -279,11 +268,11 @@ internal sealed partial class FactorioService
             end
             local inv = e.get_inventory(inv_type)
             if not inv then
-                rcon.print('{"error":"no_inventory","entity":"'..e.name..'","inventory_type":"{{inventoryType}}"}')
+                rcon.print('{"error":"no_inventory","entity":"'..esc(e.name)..'","inventory_type":"{{inventoryType}}"}')
                 return
             end
             local count = inv.get_item_count("{{itemName}}")
-            rcon.print('{"entity":"'..e.name..'","item":"{{itemName}}","count":'..count..',"inventory_type":"{{inventoryType}}"}')
+            rcon.print('{"entity":"'..esc(e.name)..'","item":"{{itemName}}","count":'..count..',"inventory_type":"{{inventoryType}}"}')
             """);
 
         var deadline = DateTime.UtcNow + timeout;
@@ -335,7 +324,31 @@ internal sealed partial class FactorioService
         var start = idx + marker.Length;
         var end = json.IndexOfAny([',', '}'], start);
         if (end < 0) return false;
-        return int.TryParse(json.AsSpan(start, end - start), CultureInfo.InvariantCulture, out value);
+        return int.TryParse(json.AsSpan(start, end - start).Trim(), CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool TryParseJsonLong(string json, string key, out long value)
+    {
+        value = 0;
+        var marker = $"\"{key}\":";
+        var idx = json.IndexOf(marker, StringComparison.Ordinal);
+        if (idx < 0) return false;
+        var start = idx + marker.Length;
+        var end = json.IndexOfAny([',', '}'], start);
+        if (end < 0) return false;
+        return long.TryParse(json.AsSpan(start, end - start).Trim(), CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool TryParseJsonDouble(string json, string key, out double value)
+    {
+        value = 0;
+        var marker = $"\"{key}\":";
+        var idx = json.IndexOf(marker, StringComparison.Ordinal);
+        if (idx < 0) return false;
+        var start = idx + marker.Length;
+        var end = json.IndexOfAny([',', '}'], start);
+        if (end < 0) return false;
+        return double.TryParse(json.AsSpan(start, end - start).Trim(), CultureInfo.InvariantCulture, out value);
     }
 
     private static bool TryParseJsonString(string json, string key, out string? value)
@@ -345,9 +358,46 @@ internal sealed partial class FactorioService
         var idx = json.IndexOf(marker, StringComparison.Ordinal);
         if (idx < 0) return false;
         var start = idx + marker.Length;
-        var end = json.IndexOf('"', start);
-        if (end < 0) return false;
-        value = json[start..end];
+        // Find closing quote, skipping escaped quotes
+        var pos = start;
+        while (pos < json.Length)
+        {
+            var ch = json[pos];
+            if (ch == '"')
+                break;
+            if (ch == '\\' && pos + 1 < json.Length)
+            {
+                pos += 2; // skip escaped character
+                continue;
+            }
+            pos++;
+        }
+        if (pos >= json.Length) return false;
+        value = json[start..pos].Replace("\\\"", "\"").Replace("\\\\", "\\");
+        return true;
+    }
+
+    private static bool TryParseJsonArray(string json, string key, out string value)
+    {
+        value = "";
+        var marker = $"\"{key}\":";
+        var idx = json.IndexOf(marker, StringComparison.Ordinal);
+        if (idx < 0) return false;
+        var start = idx + marker.Length;
+        // Skip whitespace
+        while (start < json.Length && json[start] == ' ') start++;
+        if (start >= json.Length || json[start] != '[') return false;
+        // Find matching closing bracket
+        var depth = 0;
+        var pos = start;
+        while (pos < json.Length)
+        {
+            if (json[pos] == '[') depth++;
+            else if (json[pos] == ']') { depth--; if (depth == 0) break; }
+            pos++;
+        }
+        if (depth != 0) return false;
+        value = json[start..(pos + 1)];
         return true;
     }
 }

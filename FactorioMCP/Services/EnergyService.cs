@@ -81,7 +81,7 @@ internal sealed class EnergyService(RconClient rcon)
             end
             rcon.print('{"status":"ok"'..
                 ',"network_id":'..(net_id or 0)..
-                ',"pole":"'..pole.name..'"'..
+                ',"pole":"'..esc(pole.name)..'"'..
                 ',"pole_x":'..string.format("%.1f", pole.position.x)..
                 ',"pole_y":'..string.format("%.1f", pole.position.y)..
                 ',"total_production_watts":'..string.format("%.1f", total_prod * 60)..
@@ -107,21 +107,19 @@ internal sealed class EnergyService(RconClient rcon)
     public Task<string> InspectEntityPowerAsync(double x, double y, CancellationToken cancellationToken = default)
     {
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{FactorioService.LuaJsonEscape}}
+            {{FactorioService.LuaEntitySort}}
             local surface = game.connected_players[1].surface
             local entities = surface.find_entities_filtered{position={{{x}}, {{y}}}, radius=0.5, limit=5}
-            table.sort(entities, function(a, b)
-                if a.type == "resource" and b.type ~= "resource" then return false end
-                if a.type ~= "resource" and b.type == "resource" then return true end
-                return false
-            end)
+            sort_entities(entities)
             local e = entities[1]
             if not e then
                 rcon.print('{"status":"error","error":"no_entity","x":'..string.format("%.1f", {{x}})..',"y":'..string.format("%.1f", {{y}})..'}')
                 return
             end
             local result = '{"status":"ok"'..
-                ',"name":"'..e.name..'"'..
-                ',"type":"'..e.type..'"'..
+                ',"name":"'..esc(e.name)..'"'..
+                ',"type":"'..esc(e.type)..'"'..
                 ',"x":'..string.format("%.1f", e.position.x)..
                 ',"y":'..string.format("%.1f", e.position.y)
             local connected = e.is_connected_to_electric_network()

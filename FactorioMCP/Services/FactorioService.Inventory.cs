@@ -10,7 +10,8 @@ internal sealed partial class FactorioService
     /// </summary>
     public Task<string> GetInventoryAsync(CancellationToken cancellationToken = default)
     {
-        return rcon.ExecuteLuaAsync("""
+        return rcon.ExecuteLuaAsync($$"""
+            {{LuaJsonEscape}}
             local player = game.connected_players[1]
             local inv = player.get_main_inventory()
             local items = {}
@@ -22,9 +23,9 @@ internal sealed partial class FactorioService
             end
             local parts = {}
             for name, count in pairs(items) do
-                parts[#parts+1] = '{"name":"'..name..'","count":'..count..'}'
+                parts[#parts+1] = '{"name":"'..esc(name)..'","count":'..count..'}'
             end
-            rcon.print('{"items":['..table.concat(parts, ",")..'],"total_slots":'..#inv..',"free_slots":'..inv.count_empty_stacks()..'}')  
+            rcon.print('{"items":['..table.concat(parts, ",")..'],"total_slots":'..#inv..',"free_slots":'..inv.count_empty_stacks()..'}')
             """, cancellationToken);
     }
 
@@ -55,12 +56,13 @@ internal sealed partial class FactorioService
     /// </summary>
     public Task<string> GetCraftingQueueAsync(CancellationToken cancellationToken = default)
     {
-        return rcon.ExecuteLuaAsync("""
+        return rcon.ExecuteLuaAsync($$"""
+            {{LuaJsonEscape}}
             local queue = game.connected_players[1].crafting_queue
             if queue then
                 local parts = {}
                 for _, item in pairs(queue) do
-                    parts[#parts+1] = '{"recipe":"'..item.recipe..'","count":'..item.count..'}'
+                    parts[#parts+1] = '{"recipe":"'..esc(item.recipe)..'","count":'..item.count..'}'
                 end
                 rcon.print('{"queue":['..table.concat(parts, ",")..']}')
             else

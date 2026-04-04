@@ -9,11 +9,12 @@ internal sealed partial class FactorioService
     /// </summary>
     public Task<string> GetResearchStatusAsync(CancellationToken cancellationToken = default)
     {
-        return rcon.ExecuteLuaAsync("""
+        return rcon.ExecuteLuaAsync($$"""
+            {{LuaJsonEscape}}
             local force = game.connected_players[1].force
             local tech = force.current_research
             if tech then
-                rcon.print('{"researching":true,"technology":"'..tech.name..'","progress":'..string.format("%.3f", force.research_progress)..'}')
+                rcon.print('{"researching":true,"technology":"'..esc(tech.name)..'","progress":'..string.format("%.3f", force.research_progress)..'}')
             else
                 rcon.print('{"researching":false}')
             end
@@ -27,7 +28,8 @@ internal sealed partial class FactorioService
     /// </summary>
     public Task<string> GetAvailableTechnologiesAsync(CancellationToken cancellationToken = default)
     {
-        return rcon.ExecuteLuaAsync("""
+        return rcon.ExecuteLuaAsync($$"""
+            {{LuaJsonEscape}}
             local force = game.connected_players[1].force
             local parts = {}
             for name, tech in pairs(force.technologies) do
@@ -42,9 +44,9 @@ internal sealed partial class FactorioService
                     if prereqs_met then
                         local ings = {}
                         for _, ing in pairs(tech.research_unit_ingredients) do
-                            ings[#ings+1] = '{"name":"'..ing.name..'","count":'..ing.amount..'}'
+                            ings[#ings+1] = '{"name":"'..esc(ing.name)..'","count":'..ing.amount..'}'
                         end
-                        parts[#parts+1] = '{"name":"'..name..'","cost":'..tech.research_unit_count..',"ingredients":['..table.concat(ings, ",")..']}'    
+                        parts[#parts+1] = '{"name":"'..esc(name)..'","cost":'..tech.research_unit_count..',"ingredients":['..table.concat(ings, ",")..']}'
                     end
                 end
             end
@@ -62,6 +64,7 @@ internal sealed partial class FactorioService
         ArgumentException.ThrowIfNullOrWhiteSpace(technology);
 
         var lua = $$"""
+            {{LuaJsonEscape}}
             local force = game.connected_players[1].force
             local tech = force.technologies["{{technology}}"]
             if not tech then
@@ -76,11 +79,11 @@ internal sealed partial class FactorioService
             if ok then
                 local ings = {}
                 for _, ing in pairs(tech.research_unit_ingredients) do
-                    ings[#ings+1] = '{"name":"'..ing.name..'","count":'..ing.amount..'}'
+                    ings[#ings+1] = '{"name":"'..esc(ing.name)..'","count":'..ing.amount..'}'
                 end
-                rcon.print('{"success":true,"technology":"'..tech.name..'","cost":'..tech.research_unit_count..',"ingredients":['..table.concat(ings, ",")..']}')
+                rcon.print('{"success":true,"technology":"'..esc(tech.name)..'","cost":'..tech.research_unit_count..',"ingredients":['..table.concat(ings, ",")..']}')
             else
-                rcon.print('{"success":false,"error":"research_failed","technology":"{{technology}}","detail":"'..tostring(err)..'"}')
+                rcon.print('{"success":false,"error":"research_failed","technology":"{{technology}}","detail":"'..esc(tostring(err))..'"}')
             end
             """;
 
@@ -97,6 +100,7 @@ internal sealed partial class FactorioService
         ArgumentException.ThrowIfNullOrWhiteSpace(recipe);
 
         var lua = $$"""
+            {{LuaJsonEscape}}
             local recipe = game.connected_players[1].force.recipes["{{recipe}}"]
             if not recipe then
                 rcon.print('{"success":false,"error":"unknown_recipe","recipe":"{{recipe}}"}')
@@ -104,15 +108,15 @@ internal sealed partial class FactorioService
             end
             local ings = {}
             for _, i in pairs(recipe.ingredients) do
-                ings[#ings+1] = '{"type":"'..i.type..'","name":"'..i.name..'","amount":'..i.amount..'}'
+                ings[#ings+1] = '{"type":"'..esc(i.type)..'","name":"'..esc(i.name)..'","amount":'..i.amount..'}'
             end
             local prods = {}
             for _, p in pairs(recipe.products) do
                 local amt = p.amount or ((p.amount_min + p.amount_max) / 2)
                 local prob = p.probability or 1
-                prods[#prods+1] = '{"type":"'..p.type..'","name":"'..p.name..'","amount":'..amt..',"probability":'..prob..'}'
+                prods[#prods+1] = '{"type":"'..esc(p.type)..'","name":"'..esc(p.name)..'","amount":'..amt..',"probability":'..prob..'}'
             end
-            rcon.print('{"success":true,"name":"'..recipe.name..'","enabled":'..tostring(recipe.enabled)..',"energy":'..recipe.energy..',"category":"'..recipe.category..'","ingredients":['..table.concat(ings, ",")..'],"products":['..table.concat(prods, ",")..']}')
+            rcon.print('{"success":true,"name":"'..esc(recipe.name)..'","enabled":'..tostring(recipe.enabled)..',"energy":'..recipe.energy..',"category":"'..esc(recipe.category)..'","ingredients":['..table.concat(ings, ",")..'],"products":['..table.concat(prods, ",")..']}')
             """;
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -124,12 +128,13 @@ internal sealed partial class FactorioService
     /// </summary>
     public Task<string> GetAvailableRecipesAsync(CancellationToken cancellationToken = default)
     {
-        return rcon.ExecuteLuaAsync("""
+        return rcon.ExecuteLuaAsync($$"""
+            {{LuaJsonEscape}}
             local force = game.connected_players[1].force
             local parts = {}
             for name, recipe in pairs(force.recipes) do
                 if recipe.enabled then
-                    parts[#parts+1] = '{"name":"'..name..'","category":"'..recipe.category..'","energy":'..recipe.energy..'}'
+                    parts[#parts+1] = '{"name":"'..esc(name)..'","category":"'..esc(recipe.category)..'","energy":'..recipe.energy..'}'
                 end
             end
             rcon.print('{"recipes":['..table.concat(parts, ",")..'],"count":'..#parts..'}')
@@ -145,6 +150,7 @@ internal sealed partial class FactorioService
         ArgumentException.ThrowIfNullOrWhiteSpace(technology);
 
         var lua = $$"""
+            {{LuaJsonEscape}}
             local tech = game.connected_players[1].force.technologies["{{technology}}"]
             if not tech then
                 rcon.print('{"success":false,"error":"unknown_technology","technology":"{{technology}}"}')
@@ -152,21 +158,21 @@ internal sealed partial class FactorioService
             end
             local prereqs = {}
             for name, _ in pairs(tech.prerequisites) do
-                prereqs[#prereqs+1] = '"'..name..'"'
+                prereqs[#prereqs+1] = '"'..esc(name)..'"'
             end
             local effects = {}
             for _, e in pairs(tech.prototype.effects) do
                 if e.type == "unlock-recipe" then
-                    effects[#effects+1] = '{"type":"unlock-recipe","recipe":"'..e.recipe..'"}'
+                    effects[#effects+1] = '{"type":"unlock-recipe","recipe":"'..esc(e.recipe)..'"}'
                 else
-                    effects[#effects+1] = '{"type":"'..e.type..'"}'
+                    effects[#effects+1] = '{"type":"'..esc(e.type)..'"}'
                 end
             end
             local ings = {}
             for _, ing in pairs(tech.research_unit_ingredients) do
-                ings[#ings+1] = '{"name":"'..ing.name..'","count":'..ing.amount..'}'
+                ings[#ings+1] = '{"name":"'..esc(ing.name)..'","count":'..ing.amount..'}'
             end
-            rcon.print('{"success":true,"name":"'..tech.name..'","researched":'..tostring(tech.researched)..',"enabled":'..tostring(tech.enabled)..',"cost":'..tech.research_unit_count..',"prerequisites":['..table.concat(prereqs, ",")..'],"effects":['..table.concat(effects, ",")..'],"ingredients":['..table.concat(ings, ",")..']}')
+            rcon.print('{"success":true,"name":"'..esc(tech.name)..'","researched":'..tostring(tech.researched)..',"enabled":'..tostring(tech.enabled)..',"cost":'..tech.research_unit_count..',"prerequisites":['..table.concat(prereqs, ",")..'],"effects":['..table.concat(effects, ",")..'],"ingredients":['..table.concat(ings, ",")..']}')
             """;
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -185,6 +191,7 @@ internal sealed partial class FactorioService
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(count);
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
             local player = game.connected_players[1]
             local recipe = player.force.recipes["{{recipe}}"]
             if not recipe then
@@ -206,9 +213,9 @@ internal sealed partial class FactorioService
                     available = player.get_item_count(i.name)
                 end
                 local missing = math.max(0, needed - available)
-                ings[#ings+1] = '{"name":"'..i.name..'","type":"'..i.type..'","needed":'..needed..',"available":'..available..',"missing":'..missing..'}'
+                ings[#ings+1] = '{"name":"'..esc(i.name)..'","type":"'..esc(i.type)..'","needed":'..needed..',"available":'..available..',"missing":'..missing..'}'
             end
-            rcon.print('{"success":true,"recipe":"'..recipe.name..'","count":'..count..',"can_craft":'..tostring(can_craft)..',"craftable_count":'..craftable..',"ingredients":['..table.concat(ings, ",")..']}')
+            rcon.print('{"success":true,"recipe":"'..esc(recipe.name)..'","count":'..count..',"can_craft":'..tostring(can_craft)..',"craftable_count":'..craftable..',"ingredients":['..table.concat(ings, ",")..']}')
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);

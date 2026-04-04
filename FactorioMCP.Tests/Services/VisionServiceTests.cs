@@ -38,7 +38,7 @@ public class VisionServiceTests
     {
         await _service.TakeScreenshotAsync(centerX: 10.5, centerY: -20.3);
 
-        Assert.Contains("{10.5,-20.3}", _rcon.LastCommand!);
+        Assert.Contains("{x=10.5,y=-20.3}", _rcon.LastCommand!);
         Assert.DoesNotContain("player.position", _rcon.LastCommand!);
     }
 
@@ -280,7 +280,7 @@ public class VisionServiceTests
     {
         var lua = VisionService.BuildScreenshotLua(5.5, -3.2, 1.0, 1920, 1080);
 
-        Assert.Contains("{5.5,-3.2}", lua);
+        Assert.Contains("{x=5.5,y=-3.2}", lua);
         Assert.DoesNotContain("player.position", lua);
     }
 

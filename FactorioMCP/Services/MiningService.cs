@@ -94,6 +94,7 @@ internal sealed class MiningService(RconClient rcon)
     public Task<string> GetMiningStatusAsync(double x, double y, int initialAmount, CancellationToken cancellationToken = default)
     {
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{FactorioService.LuaJsonEscape}}
             local player = game.connected_players[1]
             local is_mining = player.mining_state.mining
             local tx = {{x}}
@@ -114,7 +115,7 @@ internal sealed class MiningService(RconClient rcon)
                 ',"depleted":false'..
                 ',"remaining":'..remaining..
                 ',"mined":'..mined..
-                ',"entity":"'..e.name..'"}')
+                ',"entity":"'..esc(e.name)..'"}')
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);

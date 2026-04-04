@@ -13,10 +13,11 @@ internal sealed partial class FactorioService
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
 
         var posExpr = centerX.HasValue && centerY.HasValue
-            ? string.Create(CultureInfo.InvariantCulture, $"{{{centerX.Value},{centerY.Value}}}")
+            ? string.Create(CultureInfo.InvariantCulture, $"{{x={centerX.Value},y={centerY.Value}}}")
             : "player.position";
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
             local player = game.connected_players[1]
             local center = {{posExpr}}
             local entities = player.surface.find_entities_filtered{
@@ -26,7 +27,7 @@ internal sealed partial class FactorioService
             for k, v in pairs(defines.direction) do dir_names[v] = k end
             local parts = {}
             for _, e in pairs(entities) do
-                local entry = '{"name":"'..e.name..'","x":'..e.position.x..',"y":'..e.position.y
+                local entry = '{"name":"'..esc(e.name)..'","x":'..e.position.x..',"y":'..e.position.y
                 local dn = dir_names[e.direction]
                 if dn then
                     entry = entry..',"direction":"'..dn..'"'
@@ -70,10 +71,11 @@ internal sealed partial class FactorioService
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
 
         var posExpr = centerX.HasValue && centerY.HasValue
-            ? string.Create(CultureInfo.InvariantCulture, $"{{{centerX.Value},{centerY.Value}}}")
+            ? string.Create(CultureInfo.InvariantCulture, $"{{x={centerX.Value},y={centerY.Value}}}")
             : "player.position";
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
             local player = game.connected_players[1]
             local center = {{posExpr}}
             local resources = player.surface.find_entities_filtered{
@@ -95,7 +97,7 @@ internal sealed partial class FactorioService
             end
             local parts = {}
             for _, s in pairs(summary) do
-                parts[#parts+1] = '{"name":"'..s.name..'","patches":'..s.count..',"total_amount":'..s.total_amount..',"center_x":'..string.format("%.1f",(s.min_x+s.max_x)/2)..',"center_y":'..string.format("%.1f",(s.min_y+s.max_y)/2)..'}'
+                parts[#parts+1] = '{"name":"'..esc(s.name)..'","patches":'..s.count..',"total_amount":'..s.total_amount..',"center_x":'..string.format("%.1f",(s.min_x+s.max_x)/2)..',"center_y":'..string.format("%.1f",(s.min_y+s.max_y)/2)..'}'
             end
             rcon.print('{"scan_radius":{{radius}},"resources":['..table.concat(parts, ",")..']}')
             """);
@@ -117,6 +119,7 @@ internal sealed partial class FactorioService
             : "player.position";
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
             local player = game.connected_players[1]
             local pos = {{posExpr}}
             local r = {{radius}}
@@ -133,7 +136,7 @@ internal sealed partial class FactorioService
             end
             local parts = {}
             for name, count in pairs(summary) do
-                parts[#parts+1] = '{"name":"'..name..'","count":'..count..'}'
+                parts[#parts+1] = '{"name":"'..esc(name)..'","count":'..count..'}'
             end
             rcon.print('{"scan_radius":{{radius}},"tiles":['..table.concat(parts, ",")..']}')
             """);
@@ -154,6 +157,7 @@ internal sealed partial class FactorioService
         CancellationToken cancellationToken = default)
     {
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
             local player = game.connected_players[1]
             local surface = player.surface
             local pos = player.position
@@ -172,7 +176,7 @@ internal sealed partial class FactorioService
             end
             local inv_parts = {}
             for name, count in pairs(items) do
-                inv_parts[#inv_parts+1] = '{"name":"'..name..'","count":'..count..'}'
+                inv_parts[#inv_parts+1] = '{"name":"'..esc(name)..'","count":'..count..'}'
             end
             local inv_json = '"inventory":{"items":['..table.concat(inv_parts, ",")..'],"total_slots":'..#inv..',"free_slots":'..inv.count_empty_stacks()..'}'
 
@@ -181,7 +185,7 @@ internal sealed partial class FactorioService
             local queue_parts = {}
             if queue then
                 for _, item in pairs(queue) do
-                    queue_parts[#queue_parts+1] = '{"recipe":"'..item.recipe..'","count":'..item.count..'}'
+                    queue_parts[#queue_parts+1] = '{"recipe":"'..esc(item.recipe)..'","count":'..item.count..'}'
                 end
             end
             local craft_json = '"crafting_queue":['..table.concat(queue_parts, ",")..']'
@@ -191,7 +195,7 @@ internal sealed partial class FactorioService
             local tech = force.current_research
             local research_json
             if tech then
-                research_json = '"research":{"active":true,"technology":"'..tech.name..'","progress":'..string.format("%.3f", force.research_progress)..'}'
+                research_json = '"research":{"active":true,"technology":"'..esc(tech.name)..'","progress":'..string.format("%.3f", force.research_progress)..'}'
             else
                 research_json = '"research":{"active":false}'
             end
@@ -212,7 +216,7 @@ internal sealed partial class FactorioService
             end
             local res_parts = {}
             for _, s in pairs(res_summary) do
-                res_parts[#res_parts+1] = '{"name":"'..s.name..'","patches":'..s.count..',"total_amount":'..s.total_amount..',"center_x":'..string.format("%.1f", s.cx/s.count)..',"center_y":'..string.format("%.1f", s.cy/s.count)..'}'
+                res_parts[#res_parts+1] = '{"name":"'..esc(s.name)..'","patches":'..s.count..',"total_amount":'..s.total_amount..',"center_x":'..string.format("%.1f", s.cx/s.count)..',"center_y":'..string.format("%.1f", s.cy/s.count)..'}'
             end
             local resources_json = '"nearby_resources":{"scan_radius":{{resourceScanRadius}},"resources":['..table.concat(res_parts, ",")..']}'
 
@@ -226,7 +230,7 @@ internal sealed partial class FactorioService
             end
             local ent_parts = {}
             for name, count in pairs(ent_summary) do
-                ent_parts[#ent_parts+1] = '{"name":"'..name..'","count":'..count..'}'
+                ent_parts[#ent_parts+1] = '{"name":"'..esc(name)..'","count":'..count..'}'
             end
             local entities_json = '"nearby_entities":{"scan_radius":{{entityScanRadius}},"types":['..table.concat(ent_parts, ",")..']}'
 
@@ -243,12 +247,16 @@ internal sealed partial class FactorioService
                 local stats = pole.electric_network_statistics
                 local prec = defines.flow_precision_index.five_seconds
                 local total_prod = 0
-                for name, _ in pairs(stats.output_counts) do
-                    total_prod = total_prod + stats.get_flow_count{name=name, category="output", precision_index=prec}
+                if stats.output_counts then
+                    for name, _ in pairs(stats.output_counts) do
+                        total_prod = total_prod + stats.get_flow_count{name=name, category="output", precision_index=prec}
+                    end
                 end
                 local total_cons = 0
-                for name, _ in pairs(stats.input_counts) do
-                    total_cons = total_cons + stats.get_flow_count{name=name, category="input", precision_index=prec}
+                if stats.input_counts then
+                    for name, _ in pairs(stats.input_counts) do
+                        total_cons = total_cons + stats.get_flow_count{name=name, category="input", precision_index=prec}
+                    end
                 end
                 local satisfaction = 100.0
                 if total_cons > 0 then satisfaction = math.min(100, (total_prod / total_cons) * 100) end
@@ -274,6 +282,7 @@ internal sealed partial class FactorioService
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
             local player = game.connected_players[1]
             local pos = player.position
             local surface = player.surface
@@ -299,7 +308,7 @@ internal sealed partial class FactorioService
             end
             local dir_names = {}
             for k, v in pairs(defines.direction) do dir_names[v] = k end
-            local result = '{"success":true,"entity":"'..best.name..'","type":"'..best.type..'","x":'..best.position.x..',"y":'..best.position.y..',"distance":'..string.format("%.1f", best_dist)
+            local result = '{"success":true,"entity":"'..esc(best.name)..'","type":"'..esc(best.type)..'","x":'..best.position.x..',"y":'..best.position.y..',"distance":'..string.format("%.1f", best_dist)
             local dn = dir_names[best.direction]
             if dn then result = result..',"direction":"'..dn..'"' end
             if best.type == "resource" then result = result..',"amount":'..best.amount end
@@ -381,10 +390,11 @@ internal sealed partial class FactorioService
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
 
         var posExpr = centerX.HasValue && centerY.HasValue
-            ? string.Create(CultureInfo.InvariantCulture, $"{{{centerX.Value},{centerY.Value}}}")
+            ? string.Create(CultureInfo.InvariantCulture, $"{{x={centerX.Value},y={centerY.Value}}}")
             : "player.position";
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
             local player = game.connected_players[1]
             local surface = player.surface
             local center = {{posExpr}}
@@ -405,7 +415,7 @@ internal sealed partial class FactorioService
             end
             local res_parts = {}
             for _, s in pairs(res_sum) do
-                res_parts[#res_parts+1] = '{"name":"'..s.name..'","count":'..s.count..',"total_amount":'..s.total_amount..',"center_x":'..string.format("%.1f", s.sx/s.count)..',"center_y":'..string.format("%.1f", s.sy/s.count)..'}'
+                res_parts[#res_parts+1] = '{"name":"'..esc(s.name)..'","count":'..s.count..',"total_amount":'..s.total_amount..',"center_x":'..string.format("%.1f", s.sx/s.count)..',"center_y":'..string.format("%.1f", s.sy/s.count)..'}'
             end
 
             -- Machines / structures (non-resource, non-character entities)
@@ -431,7 +441,7 @@ internal sealed partial class FactorioService
             end
             local mach_parts = {}
             for _, m in pairs(machines) do
-                mach_parts[#mach_parts+1] = '{"name":"'..m.name..'","type":"'..m.type..'","count":'..m.count..',"working":'..m.working..',"idle":'..m.idle..'}'
+                mach_parts[#mach_parts+1] = '{"name":"'..esc(m.name)..'","type":"'..esc(m.type)..'","count":'..m.count..',"working":'..m.working..',"idle":'..m.idle..'}'
             end
 
             -- Threats (enemies)
@@ -442,7 +452,7 @@ internal sealed partial class FactorioService
             end
             local threat_parts = {}
             for name, count in pairs(threat_sum) do
-                threat_parts[#threat_parts+1] = '{"name":"'..name..'","count":'..count..'}'
+                threat_parts[#threat_parts+1] = '{"name":"'..esc(name)..'","count":'..count..'}'
             end
 
             -- Free space estimate: total tiles minus occupied tiles
@@ -454,7 +464,7 @@ internal sealed partial class FactorioService
 
             local free_json = '"free_space":{"total_tiles":'..total_tiles..',"occupied":'..occupied..',"free_percent":'..string.format("%.1f", free_pct)..'}'
 
-            rcon.print('{"center_x":'..string.format("%.1f", center[1] or center.x or 0)..',"center_y":'..string.format("%.1f", center[2] or center.y or 0)..',"radius":{{radius}},'
+            rcon.print('{"center_x":'..string.format("%.1f", center.x)..',"center_y":'..string.format("%.1f", center.y)..',"radius":{{radius}},'
                 ..'"resources":['..table.concat(res_parts, ",")..'],'
                 ..'"machines":['..table.concat(mach_parts, ",")..'],'
                 ..'"threats":['..table.concat(threat_parts, ",")..'],'
@@ -495,6 +505,7 @@ internal sealed partial class FactorioService
         var halfWidth = width / 2.0;
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
             local player = game.connected_players[1]
             local pos = player.position
             local surface = player.surface
@@ -526,7 +537,7 @@ internal sealed partial class FactorioService
                     local perp = math.abs(ex*px + ey*py)
                     if proj > 0 and proj <= range and perp <= hw then
                         local dist = math.sqrt(ex*ex + ey*ey)
-                        local entry = '{"name":"'..e.name..'","type":"'..e.type..'","x":'..string.format("%.1f", e.position.x)..',"y":'..string.format("%.1f", e.position.y)..',"distance":'..string.format("%.1f", dist)
+                        local entry = '{"name":"'..esc(e.name)..'","type":"'..esc(e.type)..'","x":'..string.format("%.1f", e.position.x)..',"y":'..string.format("%.1f", e.position.y)..',"distance":'..string.format("%.1f", dist)
                         local dn = dir_names[e.direction]
                         if dn then entry = entry..',"direction":"'..dn..'"' end
                         if e.type == "resource" then entry = entry..',"amount":'..e.amount end
@@ -562,15 +573,15 @@ internal sealed partial class FactorioService
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(searchRadius);
 
         var posExpr = centerX.HasValue && centerY.HasValue
-            ? string.Create(CultureInfo.InvariantCulture, $"{{{centerX.Value},{centerY.Value}}}")
+            ? string.Create(CultureInfo.InvariantCulture, $"{{x={centerX.Value},y={centerY.Value}}}")
             : "player.position";
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
             local player = game.connected_players[1]
             local surface = player.surface
             local center = {{posExpr}}
-            local cx = center[1] or center.x
-            local cy = center[2] or center.y
+            local cx = center.x
+            local cy = center.y
             local w = {{width}}
             local h = {{height}}
             local search_r = {{searchRadius}}

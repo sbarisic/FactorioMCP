@@ -95,21 +95,21 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-- [ ] **Factory Analysis Tools** — `GetProductionStatus`: what's being produced, bottlenecks, idle machines. `FindUnpoweredEntities`: list entities without power. `FindIdleMachines`: list machines not working. `FindMissingInputs(x, y)`: returns which input items an assembler/furnace is missing. Essential for AI to understand and debug factory state. **(CPX 3)**
-- [ ] **Logistics Flow Tracking** — Given a specific entity, trace the full tree of linked entities through belts and inserters, including flow direction. Track miner output positions and directions as flow starting points. Record which entity outputs to which, enabling the AI to understand how items move through the factory, plan logistics, debug crafting chains, and ensure belts feed into chests so items don't pile up. Create MCP tools to query and visualize the item flow graph. **(CPX 4)**
-- [ ] **Craft & Factory Planning** — `PlanCraft(item, count)`: returns full recipe tree with required intermediates and raw materials. `PlanFactory(goal)`: given a high-level goal like "automate iron plates", return rough ordered steps. Reduces LLM hallucinated plans. **(CPX 3)**
-- [ ] **Power Network Topology** — Trace how electricity flows through the physical network from producers (boilers, solar panels) through electric poles to consumers. Map the pole connectivity graph and show which entities are powered by which network segment. Complements existing `GetElectricNetwork` (aggregate stats) and `InspectEntityPower` (per-entity) with topological awareness for planning expansions and diagnosing coverage gaps. **(CPX 3)**
+- [ ] **Pickup Items** — `pickup_items(radius)`: simulate holding the 'F' key to collect items dropped on the ground within a radius. **(CPX 1)**
+- [ ] **Utility Tools** — `GetReachableEntities(type, max_distance)`: filter entities by reach distance. `CountItemInWorld(item)`: count item across all containers, not just player inventory. `EstimateTravelTime(x, y)`: estimate walk time to a position. **(CPX 2)**
 - [ ] **Inventory Intelligence** — `EnsureItem(item, count)`: auto-crafts or gathers if the player doesn't have enough. `GetInventorySummary`: returns condensed key-value inventory (fewer tokens than full inventory dump). **(CPX 2)**
+- [ ] **Factory Analysis Tools** — `GetProductionStatus`: what's being produced, bottlenecks, idle machines. `FindUnpoweredEntities`: list entities without power. `FindIdleMachines`: list machines not working. `FindMissingInputs(x, y)`: returns which input items an assembler/furnace is missing. Essential for AI to understand and debug factory state. **(CPX 3)**
 
 ### Low Priority
 
-- [ ] **Pickup Items** — `pickup_items(radius)`: simulate holding the 'F' key to collect items dropped on the ground within a radius. **(CPX 1)**
-- [ ] **Collision Slot Query** — `get_available_slots(x, y)`: return a list of adjacent tiles around an entity that aren't blocked by pipes or buildings (collision masking). **(CPX 2)**
 - [ ] **Smart Entity Placement** — `PlaceEntitySmart(entity, near)` e.g. place a stone-furnace near iron-ore. Backend picks best available position automatically. **(CPX 2)**
-- [ ] **Utility Tools** — `GetReachableEntities(type, max_distance)`: filter entities by reach distance. `CountItemInWorld(item)`: count item across all containers, not just player inventory. `EstimateTravelTime(x, y)`: estimate walk time to a position. **(CPX 2)**
+- [ ] **Collision Slot Query** — `get_available_slots(x, y)`: return a list of adjacent tiles around an entity that aren't blocked by pipes or buildings (collision masking). **(CPX 2)**
+- [ ] **Craft & Factory Planning** — `PlanCraft(item, count)`: returns full recipe tree with required intermediates and raw materials. `PlanFactory(goal)`: given a high-level goal like "automate iron plates", return rough ordered steps. Reduces LLM hallucinated plans. **(CPX 3)**
+- [ ] **Power Network Topology** — Trace how electricity flows through the physical network from producers (boilers, solar panels) through electric poles to consumers. Map the pole connectivity graph and show which entities are powered by which network segment. Complements existing `GetElectricNetwork` (aggregate stats) and `InspectEntityPower` (per-entity) with topological awareness for planning expansions and diagnosing coverage gaps. **(CPX 3)**
 - [ ] **Logistics Tools** — Manage logistic robots, request items from logistic network, inspect logistic zones. See [`LuaEntity`](LUA_API.md#world--entities) and [`LuaForce`](LUA_API.md#research--recipes). **(CPX 3)**
 - [ ] **Combat Tools** — Attack entities, manage turrets, check enemy positions, defensive operations. See [`LuaEntity`](LUA_API.md#world--entities) and [`LuaSurface`](LUA_API.md#world--entities). **(CPX 3)**
 - [ ] **Train Management Tools** — Control trains, manage stations, set schedules, inspect train networks. See [`LuaEntity`](LUA_API.md#world--entities) for train/station entities. **(CPX 3)**
+- [ ] **Logistics Flow Tracking** — Given a specific entity, trace the full tree of linked entities through belts and inserters, including flow direction. Track miner output positions and directions as flow starting points. Record which entity outputs to which, enabling the AI to understand how items move through the factory, plan logistics, debug crafting chains, and ensure belts feed into chests so items don't pile up. Create MCP tools to query and visualize the item flow graph. **(CPX 4)**
 
 ### ON HOLD
 
@@ -146,11 +146,11 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-- [ ] **Condense PROMPT.md** — Rewrite the AI prompt file to be 300 lines max while preserving all essential instructions and context. **(CPX 2)**
+- [ ] **Condense PROMPT.md** — Rewrite the AI prompt file to be 300 lines max while preserving all essential instructions and context. Prefer high level functions instead of low level primitives, and remove any redundant or obvious information. **(CPX 2)**
 
 ### Low Priority
 
-*No low priority items*
+- [ ] **Keep TOOLS.md in sync with code** — Add a process note (e.g. in PROMPT.md or a contributing guide) to update TOOLS.md whenever a new MCP tool is added or an existing one is modified, so documentation stays accurate. **(CPX 1)**
 
 ### On Hold
 
@@ -164,7 +164,8 @@ RCON connection settings are read from environment variables:
 
 #### High Priority
 
-*No high priority items*
+- [ ] **`SummarizeAreaAsync` / `FindBuildableAreaAsync` coordinate access inconsistency** — `FactorioService.World.cs`: these methods access center coordinates using `center[1] or center.x` fallback pattern. When `posExpr` is `player.position` (a table with `.x`/`.y`), `center[1]` is nil and falls through. When it's `{x, y}` (array), `.x` is nil and falls through. Both work but are fragile and confusing. Standardize to always use named fields `{x=..., y=...}` format in `posExpr`. **(CPX 1)**
+- [ ] **Duplicated entity selection pattern** — `FactorioService.Entity.cs` and `FactorioService.Wait.cs`: the "sort by resource type, find first non-resource" entity selection pattern is duplicated ~10 times across methods. Extract into a shared Lua helper function injected at the top of scripts. **(CPX 2)**
 
 #### Medium Priority
 
@@ -172,7 +173,8 @@ RCON connection settings are read from environment variables:
 
 #### Low Priority
 
-*No low priority items*
+- [ ] **VisionService center fallback is unnecessary** — `VisionService.cs` line 92-94: `if type(center) ~= "table" then center = {x=center.x, y=center.y} end` followed by `local cx = center.x or center[1]`. The `player.position` is always a table, and the array-style `posExpr` is also a table, so the guard never triggers. Simplify to always use `{x=..., y=...}` style `posExpr` and access `.x`/`.y` directly. **(CPX 1)**
+- [ ] **`LookInDirectionAsync` should guard nil `e.direction`** — `FactorioService.World.cs`: some entities don't have a direction property. `dir_names[e.direction]` handles nil safely (returns nil), but the `if dn then` guard is correct. However, `dir_names[e.direction]` with nil direction is a silent no-op — consider guarding for clarity. **(CPX 1)**
 
 ---
 
@@ -185,6 +187,21 @@ RCON connection settings are read from environment variables:
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
 *No uncategorized items*
+
+### Rejected / Not Applicable
+
+The following reported issues were investigated and found to be **not bugs** in the Factorio 2 context:
+
+- ~~`string.Create(CultureInfo.InvariantCulture, $$"""...""")` misuse~~ — This is the correct .NET API overload `string.Create(IFormatProvider, ref DefaultInterpolatedStringHandler)` that ensures culture-safe double formatting (`.` not `,`). Not a bug.
+- ~~`{{"{"}}{...}{{"}"}}` produces invalid Lua~~ — In `$$"""` raw strings, this correctly produces `{{...}}` which is valid Lua table-of-tables for area construction. Not a bug.
+- ~~`invert=true` in `find_entities_filtered`~~ — Verified in Factorio 2 API docs: `EntitySearchFilters` has an `invert` boolean field ("Whether the filters should be inverted"). Valid API usage.
+- ~~`player.crafting_queue` is invalid~~ — Verified in Factorio 2 API: `LuaPlayer.crafting_queue` returns `array[CraftingQueueItem]?`. Valid property.
+- ~~`get_contents()` returns `{name = count}` dict~~ — In Factorio 2, `LuaInventory.get_contents()` returns `array[ItemWithQualityCount]` where each item has `.name`, `.quality`, `.count` fields. The `item.name` and `item.count` access pattern is correct.
+- ~~`e.type == "assembling-machine"` is wrong~~ — `assembling-machine` IS the prototype type for all assembling machines (1/2/3 are entity names). Valid check.
+- ~~C# ternary `{{(reverse ? "true" : "false")}}` in raw strings~~ — Works correctly in `$$"""` raw string interpolation. Compiles and produces valid Lua.
+- ~~`TransferAllItemsAsync` inventory iteration with `for i = 1, #inv`~~ — Factorio inventories support numeric indexing and `#inv` returns the slot count. The `stack.valid_for_read` guard correctly skips empty slots.
+- ~~`#inv` for slot count reporting~~ — `#inv` returns the inventory size (number of slots) which is the intended value for slot count display.
+- ~~Unsafe `defines.direction.{{direction}}`~~ — Direction values are validated in C# with `ArgumentException.ThrowIfNullOrWhiteSpace` and come from controlled MCP tool parameters, not arbitrary user input.
 
 ---
 

@@ -60,6 +60,8 @@ internal sealed partial class FactorioService
     public Task<string> MineEntityAtAsync(double x, double y, CancellationToken cancellationToken = default)
     {
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            {{LuaEntitySort}}
             local player = game.connected_players[1]
             local player_pos = player.position
             local dx = {{x}} - player_pos.x
@@ -74,14 +76,9 @@ internal sealed partial class FactorioService
                 rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
                 return
             end
-            -- Sort: non-resource entities first so we don't accidentally mine ore under a drill
-            table.sort(entities, function(a, b)
-                local a_res = a.type == "resource" and 1 or 0
-                local b_res = b.type == "resource" and 1 or 0
-                return a_res < b_res
-            end)
+            sort_entities(entities)
             local e = entities[1]
-            local name = e.name
+            local name = esc(e.name)
             if e.type == "resource" then
                 -- Resource entities must be mined with MineResource for realistic timing
                 rcon.print('{"success":false,"error":"use_mine_resource","entity":"'..name..'"'..
@@ -108,6 +105,8 @@ internal sealed partial class FactorioService
     public Task<string> RotateEntityAsync(double x, double y, bool reverse = false, CancellationToken cancellationToken = default)
     {
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            {{LuaEntitySort}}
             local player = game.connected_players[1]
             local player_pos = player.position
             local dx = {{x}} - player_pos.x
@@ -122,11 +121,7 @@ internal sealed partial class FactorioService
                 rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
                 return
             end
-            table.sort(entities, function(a, b)
-                local a_res = a.type == "resource" and 1 or 0
-                local b_res = b.type == "resource" and 1 or 0
-                return a_res < b_res
-            end)
+            sort_entities(entities)
             local e = nil
             for _, ent in pairs(entities) do
                 if ent.type ~= "resource" then e = ent break end
@@ -140,11 +135,11 @@ internal sealed partial class FactorioService
             local prev_dir = dir_names[e.direction] or "unknown"
             local rotated = e.rotate({reverse={{(reverse ? "true" : "false")}}, by_player=player})
             if not rotated then
-                rcon.print('{"success":false,"error":"rotation_failed","entity":"'..e.name..'","direction":"'..prev_dir..'"}')
+                rcon.print('{"success":false,"error":"rotation_failed","entity":"'..esc(e.name)..'","direction":"'..prev_dir..'"}')
                 return
             end
             local new_dir = dir_names[e.direction] or "unknown"
-            rcon.print('{"success":true,"entity":"'..e.name..'","previous_direction":"'..prev_dir..'","new_direction":"'..new_dir..'","x":'..e.position.x..',"y":'..e.position.y..'}')
+            rcon.print('{"success":true,"entity":"'..esc(e.name)..'","previous_direction":"'..prev_dir..'","new_direction":"'..new_dir..'","x":'..e.position.x..',"y":'..e.position.y..'}')
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -159,6 +154,8 @@ internal sealed partial class FactorioService
         ArgumentException.ThrowIfNullOrWhiteSpace(inventoryType);
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            {{LuaEntitySort}}
             local player = game.connected_players[1]
             local player_pos = player.position
             local dx = {{x}} - player_pos.x
@@ -169,12 +166,7 @@ internal sealed partial class FactorioService
                 return
             end
             local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
-            -- Prioritize non-resource entities
-            table.sort(entities, function(a, b)
-                local a_res = a.type == "resource" and 1 or 0
-                local b_res = b.type == "resource" and 1 or 0
-                return a_res < b_res
-            end)
+            sort_entities(entities)
             local e = nil
             for _, ent in pairs(entities) do
                 if ent.type ~= "resource" then e = ent break end
@@ -199,7 +191,7 @@ internal sealed partial class FactorioService
             end
             local inv = e.get_inventory(inv_type)
             if not inv then
-                rcon.print('{"success":false,"error":"no_inventory","entity":"'..e.name..'","inventory_type":"{{inventoryType}}"}')
+                rcon.print('{"success":false,"error":"no_inventory","entity":"'..esc(e.name)..'","inventory_type":"{{inventoryType}}"}')
                 return
             end
             local available = player.get_item_count("{{itemName}}")
@@ -212,7 +204,7 @@ internal sealed partial class FactorioService
             if inserted > 0 then
                 player.remove_item{name="{{itemName}}", count=inserted}
             end
-            rcon.print('{"success":true,"entity":"'..e.name..'","item":"{{itemName}}","inserted":'..inserted..',"requested":'..({{count}})..'}')  
+            rcon.print('{"success":true,"entity":"'..esc(e.name)..'","item":"{{itemName}}","inserted":'..inserted..',"requested":'..({{count}})..'}')  
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -230,6 +222,8 @@ internal sealed partial class FactorioService
         ArgumentException.ThrowIfNullOrWhiteSpace(inventoryType);
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            {{LuaEntitySort}}
             local player = game.connected_players[1]
             local player_pos = player.position
             local dx = {{x}} - player_pos.x
@@ -240,11 +234,7 @@ internal sealed partial class FactorioService
                 return
             end
             local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
-            table.sort(entities, function(a, b)
-                local a_res = a.type == "resource" and 1 or 0
-                local b_res = b.type == "resource" and 1 or 0
-                return a_res < b_res
-            end)
+            sort_entities(entities)
             local e = nil
             for _, ent in pairs(entities) do
                 if ent.type ~= "resource" then e = ent break end
@@ -268,12 +258,12 @@ internal sealed partial class FactorioService
             end
             local inv = e.get_inventory(inv_type)
             if not inv then
-                rcon.print('{"success":false,"error":"no_inventory","entity":"'..e.name..'","inventory_type":"{{inventoryType}}"}')
+                rcon.print('{"success":false,"error":"no_inventory","entity":"'..esc(e.name)..'","inventory_type":"{{inventoryType}}"}')
                 return
             end
             local item_count = inv.get_item_count("{{itemName}}")
             if item_count == 0 then
-                rcon.print('{"success":false,"error":"no_items","entity":"'..e.name..'","item":"{{itemName}}","available":0}')
+                rcon.print('{"success":false,"error":"no_items","entity":"'..esc(e.name)..'","item":"{{itemName}}","available":0}')
                 return
             end
             local to_remove = math.min({{count}}, item_count)
@@ -286,7 +276,7 @@ internal sealed partial class FactorioService
                 end
             end
             local inv_full = inserted < removed
-            rcon.print('{"success":true,"entity":"'..e.name..'","item":"{{itemName}}","removed":'..inserted..',"requested":'..({{count}})..',"inventory_full":'..tostring(inv_full)..'}')  
+            rcon.print('{"success":true,"entity":"'..esc(e.name)..'","item":"{{itemName}}","removed":'..removed..',"transferred":'..inserted..',"requested":'..({{count}})..',"inventory_full":'..tostring(inv_full)..'}')  
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -300,6 +290,8 @@ internal sealed partial class FactorioService
     public Task<string> InspectEntityAsync(double x, double y, CancellationToken cancellationToken = default)
     {
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            {{LuaEntitySort}}
             local player = game.connected_players[1]
             local player_pos = player.position
             local dx = {{x}} - player_pos.x
@@ -310,11 +302,7 @@ internal sealed partial class FactorioService
                 return
             end
             local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
-            table.sort(entities, function(a, b)
-                local a_res = a.type == "resource" and 1 or 0
-                local b_res = b.type == "resource" and 1 or 0
-                return a_res < b_res
-            end)
+            sort_entities(entities)
             local e = nil
             for _, ent in pairs(entities) do
                 if ent.type ~= "resource" then e = ent break end
@@ -324,7 +312,7 @@ internal sealed partial class FactorioService
                 return
             end
             local surface = player.surface
-            local result = '{"success":true,"entity":"'..e.name..'","type":"'..e.type..'","position":{"x":'..e.position.x..',"y":'..e.position.y..'}'
+            local result = '{"success":true,"entity":"'..esc(e.name)..'","type":"'..esc(e.type)..'","position":{"x":'..e.position.x..',"y":'..e.position.y..'}'
             -- Status
             if e.status then
                 local status_names = {}
@@ -342,7 +330,7 @@ internal sealed partial class FactorioService
             -- Recipe (assembling machines)
             local ok_recipe, recipe = pcall(function() return e.get_recipe() end)
             if ok_recipe and recipe then
-                result = result..',"recipe":"'..recipe.name..'"'
+                result = result..',"recipe":"'..esc(recipe.name)..'"'
             end
             -- Inventories
             local inv_names = {"fuel", "furnace_source", "furnace_result", "chest", "assembling_machine_input", "assembling_machine_output"}
@@ -354,7 +342,7 @@ internal sealed partial class FactorioService
                     local contents = inv.get_contents()
                     local items = {}
                     for _, item_stack in pairs(contents) do
-                        items[#items+1] = '{"name":"'..item_stack.name..'","count":'..item_stack.count..'}'
+                        items[#items+1] = '{"name":"'..esc(item_stack.name)..'","count":'..item_stack.count..'}'
                     end
                     inv_parts[#inv_parts+1] = '"'..inv_name..'":[' ..table.concat(items, ",")..']'
                 end
@@ -368,7 +356,7 @@ internal sealed partial class FactorioService
             end
             -- Mining target (for mining drills)
             if e.type == "mining-drill" and e.mining_target then
-                result = result..',"mining_target":"'..e.mining_target.name..'"'
+                result = result..',"mining_target":"'..esc(e.mining_target.name)..'"'
             end
             -- Direction (for all directional entities)
             local dir_names = {}
@@ -397,14 +385,14 @@ internal sealed partial class FactorioService
                     local drop_parts = {}
                     for _, de in pairs(drop_ents) do
                         if de.name ~= "character" and de ~= e then
-                            drop_parts[#drop_parts+1] = '"'..de.name..'"'
+                            drop_parts[#drop_parts+1] = '"'..esc(de.name)..'"'
                         end
                     end
                     local pickup_ents = surface.find_entities_filtered{position={pickup_x, pickup_y}, radius=0.5}
                     local pickup_parts = {}
                     for _, pe in pairs(pickup_ents) do
                         if pe.name ~= "character" and pe ~= e then
-                            pickup_parts[#pickup_parts+1] = '"'..pe.name..'"'
+                            pickup_parts[#pickup_parts+1] = '"'..esc(pe.name)..'"'
                         end
                     end
                     result = result..',"inserter_info":{"drop":{"x":'..drop_x..',"y":'..drop_y..',"entities":['..table.concat(drop_parts, ",")..']}'
@@ -433,6 +421,7 @@ internal sealed partial class FactorioService
         ArgumentException.ThrowIfNullOrWhiteSpace(inventoryType);
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
             local player = game.connected_players[1]
             local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
             if #entities == 0 then
@@ -442,7 +431,7 @@ internal sealed partial class FactorioService
             local e = entities[1]
             local inv = e.get_inventory(defines.inventory.{{inventoryType}})
             if not inv then
-                rcon.print('{"success":false,"error":"no_inventory","entity":"'..e.name..'","inventory_type":"{{inventoryType}}"}')
+                rcon.print('{"success":false,"error":"no_inventory","entity":"'..esc(e.name)..'","inventory_type":"{{inventoryType}}"}')
                 return
             end
             local transferred = {}
@@ -456,7 +445,7 @@ internal sealed partial class FactorioService
                     local inserted = player.insert{name=name, count=cnt}
                     if inserted > 0 then
                         stack.count = cnt - inserted
-                        transferred[#transferred+1] = '{"item":"'..name..'","count":'..inserted..'}'
+                        transferred[#transferred+1] = '{"item":"'..esc(name)..'","count":'..inserted..'}'
                         total = total + inserted
                     end
                     if inserted < cnt then
@@ -465,7 +454,7 @@ internal sealed partial class FactorioService
                     end
                 end
             end
-            rcon.print('{"success":true,"entity":"'..e.name..'","transferred":['..table.concat(transferred, ",")..'],"total_items":'..total..',"inventory_full":'..tostring(inv_full)..'}')  
+            rcon.print('{"success":true,"entity":"'..esc(e.name)..'","transferred":['..table.concat(transferred, ",")..'],"total_items":'..total..',"inventory_full":'..tostring(inv_full)..'}')  
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -484,6 +473,7 @@ internal sealed partial class FactorioService
         ArgumentException.ThrowIfNullOrWhiteSpace(inventoryType);
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
             local player = game.connected_players[1]
             local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
             if #entities == 0 then
@@ -493,15 +483,15 @@ internal sealed partial class FactorioService
             local e = entities[1]
             local inv = e.get_inventory(defines.inventory.{{inventoryType}})
             if not inv then
-                rcon.print('{"success":false,"error":"no_inventory","entity":"'..e.name..'","inventory_type":"{{inventoryType}}"}')
+                rcon.print('{"success":false,"error":"no_inventory","entity":"'..esc(e.name)..'","inventory_type":"{{inventoryType}}"}')
                 return
             end
             local contents = inv.get_contents()
             local parts = {}
             for _, item in pairs(contents) do
-                parts[#parts+1] = '{"name":"'..item.name..'","count":'..item.count..'}'
+                parts[#parts+1] = '{"name":"'..esc(item.name)..'","count":'..item.count..'}'
             end
-            rcon.print('{"success":true,"entity":"'..e.name..'","inventory_type":"{{inventoryType}}","items":['..table.concat(parts, ",")..'],"slots":'..#inv..',"empty_slots":'..inv.count_empty_stacks()..'}')
+            rcon.print('{"success":true,"entity":"'..esc(e.name)..'","inventory_type":"{{inventoryType}}","items":['..table.concat(parts, ",")..'],"slots":'..#inv..',"empty_slots":'..inv.count_empty_stacks()..'}')
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -521,6 +511,7 @@ internal sealed partial class FactorioService
         ArgumentException.ThrowIfNullOrWhiteSpace(direction);
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
             local dir = defines.direction.{{direction}}
             local ix, iy = {{x}}, {{y}}
 
@@ -552,7 +543,7 @@ internal sealed partial class FactorioService
             local drop_parts = {}
             for _, e in pairs(drop_entities) do
                 if e.name ~= "character" then
-                    drop_parts[#drop_parts+1] = '{"name":"'..e.name..'","type":"'..e.type..'"}'
+                    drop_parts[#drop_parts+1] = '{"name":"'..esc(e.name)..'","type":"'..esc(e.type)..'"}'
                 end
             end
 
@@ -561,7 +552,7 @@ internal sealed partial class FactorioService
             local pickup_parts = {}
             for _, e in pairs(pickup_entities) do
                 if e.name ~= "character" then
-                    pickup_parts[#pickup_parts+1] = '{"name":"'..e.name..'","type":"'..e.type..'"}'
+                    pickup_parts[#pickup_parts+1] = '{"name":"'..esc(e.name)..'","type":"'..esc(e.type)..'"}'
                 end
             end
 
@@ -599,15 +590,12 @@ internal sealed partial class FactorioService
         // inbound = inserter drops into target (faces toward target)
         // outbound = inserter picks from target (faces away from target)
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            {{LuaEntitySort}}
             local player = game.connected_players[1]
             local surface = player.surface
             local target_entities = surface.find_entities_filtered{position={{{targetX}}, {{targetY}}}, radius=1}
-            -- Prioritize non-resource entities
-            table.sort(target_entities, function(a, b)
-                local a_res = a.type == "resource" and 1 or 0
-                local b_res = b.type == "resource" and 1 or 0
-                return a_res < b_res
-            end)
+            sort_entities(target_entities)
             local target = nil
             for _, e in pairs(target_entities) do
                 if e.type ~= "resource" then target = e break end
@@ -692,7 +680,7 @@ internal sealed partial class FactorioService
 
             rcon.print('{"success":true,"inserter":"{{inserterName}}","x":'..inserter_x..',"y":'..inserter_y..
                 ',"direction":"'..dir_name..'"'..
-                ',"target":"'..target.name..'"'..
+                ',"target":"'..esc(target.name)..'"'..
                 ',"side":"'..side..'"'..
                 ',"flow":"'..(inbound and "inbound" or "outbound")..'"'..
                 '}')
@@ -716,16 +704,14 @@ internal sealed partial class FactorioService
         ArgumentException.ThrowIfNullOrWhiteSpace(inserterName);
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            {{LuaEntitySort}}
             local player = game.connected_players[1]
             local surface = player.surface
 
             -- Find source entity
             local src_entities = surface.find_entities_filtered{position={{{sourceX}}, {{sourceY}}}, radius=1}
-            table.sort(src_entities, function(a, b)
-                local a_res = a.type == "resource" and 1 or 0
-                local b_res = b.type == "resource" and 1 or 0
-                return a_res < b_res
-            end)
+            sort_entities(src_entities)
             local source = nil
             for _, e in pairs(src_entities) do
                 if e.type ~= "resource" then source = e break end
@@ -737,11 +723,7 @@ internal sealed partial class FactorioService
 
             -- Find destination entity
             local dst_entities = surface.find_entities_filtered{position={{{destX}}, {{destY}}}, radius=1}
-            table.sort(dst_entities, function(a, b)
-                local a_res = a.type == "resource" and 1 or 0
-                local b_res = b.type == "resource" and 1 or 0
-                return a_res < b_res
-            end)
+            sort_entities(dst_entities)
             local dest = nil
             for _, e in pairs(dst_entities) do
                 if e.type ~= "resource" then dest = e break end
@@ -804,8 +786,8 @@ internal sealed partial class FactorioService
 
             rcon.print('{"success":true,"inserter":"{{inserterName}}","x":'..inserter_x..',"y":'..inserter_y..
                 ',"direction":"'..dir_name..'"'..
-                ',"source":"'..source.name..'","source_x":'..sx..',"source_y":'..sy..
-                ',"dest":"'..dest.name..'","dest_x":'..dx..',"dest_y":'..dy..
+                ',"source":"'..esc(source.name)..'","source_x":'..sx..',"source_y":'..sy..
+                ',"dest":"'..esc(dest.name)..'","dest_x":'..dx..',"dest_y":'..dy..
                 '}')
             """);
 
