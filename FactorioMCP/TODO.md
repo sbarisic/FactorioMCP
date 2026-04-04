@@ -186,7 +186,12 @@ RCON connection settings are read from environment variables:
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
-*No uncategorized items*
+- **`place_entity` returns error on success** — `place_entity`, `insert_between`, and `place_ghost_entity` always return a generic `"An error occurred invoking 'place_entity'."` error even when the entity is successfully placed in the game world. Building memory is updated correctly and the entity appears in-game. The `missing_item` failure case works correctly (returns structured JSON). Only the success path throws before returning. This is a false-negative that makes it impossible for the LLM to know if placement succeeded without a follow-up inspection call.
+- **`walk_to_position` / `move_to_resource` / `refuel_entity` immediately return `stuck`** — Any coordinate-based navigation call with a target more than ~2 tiles away returns `stuck` instantly without the character moving. The A* pathfinder never engages. Reproduction: player at (28, -64), `walk_to_position(35, -60)` → instant `stuck`, distance 8.0. `move_to_entity` (entity-based navigation) works correctly and returns `arrived`. Issue appears isolated to coordinate-based pathfinding. `refuel_entity` is also affected since it internally calls `walk_to_position`.
+- **`wait_for_entity_inventory` throws MCP protocol timeout** — The tool throws `MCP error -32001: Request timed out` at the protocol level instead of cleanly returning a timeout result. This crashes the MCP connection rather than returning a structured `{"status": "timeout"}` response. The tool should catch the long-poll internally and return a clean failure.
+- **`insert_items` to `furnace_source` silently fails** — Inserting ore into `furnace_source` reports `success: true, inserted: 5` but a follow-up `get_entity_inventory(furnace_source)` shows 0 items. The furnace status confirms `no_ingredients`. The item count is deducted from player inventory but nothing appears in the furnace input slot. Inserting into `fuel` works correctly.
+- **`set_goal` returns error on success** — `set_goal` always returns `"An error occurred invoking 'set_goal'."` but `get_all_goals` confirms the goal was created successfully. Same false-negative pattern as `place_entity`.
+- **`execute_lua` example uses Factorio 1.x API** — `game.table_to_json()` does not exist in Factorio 2 (Space Age). The correct API is `helpers.table_to_json()`. Any tool docs or prompt examples referencing `game.table_to_json` will cause runtime errors.
 
 ### Rejected / Not Applicable
 
