@@ -97,12 +97,11 @@ public class MiningServiceTests
     }
 
     [Fact]
-    public async Task StartMiningResource_OnTickHandlerAlsoChecksWalkState()
+    public async Task StartMiningResource_OnTickHandlerOnlyChecksMineState()
     {
         await _service.StartMiningResourceAsync(5, 5);
 
-        // The shared on_tick handler must handle both walking and mining
-        Assert.Contains("storage.walk_state", _rcon.LastCommand!);
+        // The mining on_tick handler only handles mining (not walking - that's separate now)
         Assert.Contains("storage.mine_state", _rcon.LastCommand!);
     }
 
@@ -194,8 +193,7 @@ public class MiningServiceTests
     {
         await _service.StopMiningAsync();
 
-        // Handler should only be removed if walk_state is also nil
-        Assert.Contains("storage.walk_state", _rcon.LastCommand!);
+        // Handler should only be removed if mine_state is nil
         Assert.Contains("storage.mine_state", _rcon.LastCommand!);
         Assert.Contains("script.on_event(defines.events.on_tick, nil)", _rcon.LastCommand!);
     }

@@ -14,9 +14,33 @@ namespace FactorioMCP.Services;
 internal sealed class MiningService(RconClient rcon)
 {
     /// <summary>
+    /// Lua code to install the mining on_tick handler that re-applies mining_state every tick.
+    /// Required in Factorio 2 where mining_state does not persist across ticks.
+    /// </summary>
+    private const string InstallMiningOnTickHandler = """
+        script.on_event(defines.events.on_tick, function()
+            local p = game.connected_players[1]
+            if not p then return end
+            if storage.mine_state then
+                p.update_selected_entity(storage.mine_state.position)
+                p.mining_state = {mining = true, position = storage.mine_state.position}
+            end
+        end)
+        """;
+
+    /// <summary>
+    /// Lua code to remove the on_tick handler if mining is no longer active.
+    /// </summary>
+    private const string RemoveMiningOnTickIfIdle = """
+        if not storage.mine_state then
+            script.on_event(defines.events.on_tick, nil)
+        end
+        """;
+
+    /// <summary>
     /// Start mining a resource entity at the given position using <c>player.mining_state</c>.
     /// Validates proximity, selects the entity via <c>update_selected_entity</c>, stores
-    /// mining position in <c>storage.mine_state</c>, and installs the shared on_tick handler
+    /// mining position in <c>storage.mine_state</c>, and installs the on_tick handler
     /// to continuously re-apply mining_state every tick (required in Factorio 2 where
     /// mining_state does not persist across ticks). Returns entity info, current amount,
     /// and estimated mining time per unit.
@@ -48,7 +72,7 @@ internal sealed class MiningService(RconClient rcon)
             -- Store exact entity position for the on_tick handler
             local epos = {e.position.x, e.position.y}
             storage.mine_state = {position = epos}
-            {{PathfindingService.InstallOnTickHandler}}
+            {{InstallMiningOnTickHandler}}
             -- Select the entity and start mining immediately
             player.update_selected_entity(epos)
             player.mining_state = {mining = true, position = epos}
@@ -97,8 +121,8 @@ internal sealed class MiningService(RconClient rcon)
     }
 
     /// <summary>
-    /// Stop mining by clearing <c>storage.mine_state</c> and removing the shared on_tick
-    /// handler if walking is also stopped.
+    /// Stop mining by clearing <c>storage.mine_state</c> and removing the on_tick
+    /// handler if mining is no longer active.
     /// </summary>
     public Task<string> StopMiningAsync(CancellationToken cancellationToken = default)
     {
@@ -106,7 +130,7 @@ internal sealed class MiningService(RconClient rcon)
             local player = game.connected_players[1]
             storage.mine_state = nil
             player.mining_state = {mining = false}
-            {{PathfindingService.RemoveOnTickIfIdle}}
+            {{RemoveMiningOnTickIfIdle}}
             rcon.print('{"success":true,"status":"mining_stopped"}')
             """;
 

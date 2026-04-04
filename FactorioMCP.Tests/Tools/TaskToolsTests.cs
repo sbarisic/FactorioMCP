@@ -26,21 +26,27 @@ public class TaskToolsTests
         var rcon = new ScriptedRconClient([
             // 1. FindBestResourcePatch → patch at (30, 10)
             """{"success":true,"resource":"iron-ore","best_patch":{"center_x":30.0,"center_y":10.0,"count":50,"total_amount":10000,"distance":31.6},"total_entities":50,"total_patches":2,"alternatives":[]}""",
-            // 2. PathfindingService.GetPlayerPosition (walk init)
+            // 2. PathfindingService.GetPositionAsync (walk init)
             """{"x":0,"y":0}""",
-            // 3. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 4. GetNavigationStatusAsync (poll — arrived)
-            """{"status":"arrived","waypoint":5,"total_waypoints":5,"x":29,"y":9}""",
-            // 5. CleanupAsync
+            // 3. EnsurePathHandlerInstalledAsync
             """ok""",
-            // 6. FindNearestEntity → resource entity nearby
+            // 4. RequestPathAsync (returns request ID)
+            """1""",
+            // 5. GetPathResultAsync (path ready)
+            """{"status":"ok","path":[{"x":15,"y":5},{"x":29,"y":9}]}""",
+            // 6. DrawPathAsync
+            """ok""",
+            // 7. GetPositionAsync (poll — arrived at destination)
+            """{"x":29,"y":9}""",
+            // 8. StopWalkingAsync
+            """ok""",
+            // 9. FindNearestEntity → resource entity nearby
             """{"success":true,"entity":"iron-ore","type":"resource","x":29.5,"y":9.5,"distance":0.7,"total_found":10}""",
-            // 7. MiningService.StartMiningResource
+            // 10. MiningService.StartMiningResource
             """{"success":true,"entity":"iron-ore","amount":50,"mining_time_per_unit":0.50,"x":29.5,"y":9.5,"status":"mining_started"}""",
-            // 8. MiningService.GetMiningStatus — mined enough
+            // 11. MiningService.GetMiningStatus — mined enough
             """{"is_mining":true,"depleted":false,"remaining":40,"mined":10,"entity":"iron-ore"}""",
-            // 9. MiningService.StopMining
+            // 12. MiningService.StopMining
             """{"success":true,"status":"mining_stopped"}"""
         ]);
         var factorio = new FactorioService(rcon);
@@ -84,14 +90,14 @@ public class TaskToolsTests
         var rcon = new ScriptedRconClient([
             // 1. FindBestResourcePatch → patch at (50, 0)
             """{"success":true,"resource":"coal","best_patch":{"center_x":50.0,"center_y":0.0,"count":100,"total_amount":50000,"distance":50.0},"total_entities":100,"total_patches":1,"alternatives":[]}""",
-            // 2. PathfindingService.GetPlayerPosition (walk init)
+            // 2. PathfindingService.GetPositionAsync (walk init)
             """{"x":0,"y":0}""",
-            // 3. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 4. GetNavigationStatusAsync (poll — stuck)
-            """{"status":"stuck","waypoint":2,"total_waypoints":10,"x":1,"y":0}""",
-            // 5. CleanupAsync
-            """ok"""
+            // 3. EnsurePathHandlerInstalledAsync
+            """ok""",
+            // 4. RequestPathAsync (returns request ID)
+            """1""",
+            // 5. GetPathResultAsync (no path found)
+            """{"status":"no_path"}"""
         ]);
         var factorio = new FactorioService(rcon);
         var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
@@ -104,7 +110,6 @@ public class TaskToolsTests
 
         Assert.Contains("\"success\":false", result);
         Assert.Contains("\"status\":\"walk_failed\"", result);
-        Assert.Contains("\"walk_status\":\"stuck\"", result);
         Assert.Contains("\"mined\":0", result);
     }
 
@@ -187,17 +192,23 @@ public class TaskToolsTests
     public async Task RefuelEntity_WalksAndInsertsFuel()
     {
         var rcon = new ScriptedRconClient([
-            // 1. PathfindingService.GetPlayerPosition → far from entity
+            // 1. TaskTools RefuelEntity checks position first
             """{"x":0,"y":0}""",
-            // 2. PathfindingService.GetPlayerPosition (walk init inside WalkToAsync)
+            // 2. PathfindingService.GetPositionAsync (initial check in WalkToAsync)
             """{"x":0,"y":0}""",
-            // 3. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 4. GetNavigationStatusAsync (poll — arrived)
-            """{"status":"arrived","waypoint":4,"total_waypoints":4,"x":19,"y":0}""",
-            // 5. CleanupAsync
+            // 3. EnsurePathHandlerInstalledAsync
             """ok""",
-            // 6. InsertItems (fuel into entity)
+            // 4. RequestPathAsync (returns request ID)
+            """1""",
+            // 5. GetPathResultAsync (path ready)
+            """{"status":"ok","path":[{"x":10,"y":0},{"x":19,"y":0}]}""",
+            // 6. DrawPathAsync
+            """ok""",
+            // 7. GetPositionAsync (arrived at destination)
+            """{"x":19,"y":0}""",
+            // 8. StopWalkingAsync
+            """ok""",
+            // 9. InsertItems (fuel into entity)
             """{"success":true,"entity":"stone-furnace","item":"coal","inserted":5,"requested":5}"""
         ]);
         var factorio = new FactorioService(rcon);
@@ -221,7 +232,7 @@ public class TaskToolsTests
     public async Task RefuelEntity_AlreadyNear_SkipsWalk()
     {
         var rcon = new ScriptedRconClient([
-            // 1. PathfindingService.GetPlayerPosition → already within reach
+            // 1. PathfindingService.GetPositionAsync → already within reach
             """{"x":9.5,"y":0}""",
             // 2. InsertItems (fuel)
             """{"success":true,"entity":"burner-mining-drill","item":"coal","inserted":10,"requested":10}"""
@@ -245,16 +256,16 @@ public class TaskToolsTests
     public async Task RefuelEntity_WalkStuck_ReturnsWalkFailed()
     {
         var rcon = new ScriptedRconClient([
-            // 1. PathfindingService.GetPlayerPosition → far away
+            // 1. TaskTools RefuelEntity checks position first
             """{"x":0,"y":0}""",
-            // 2. PathfindingService.GetPlayerPosition (walk init)
+            // 2. PathfindingService.GetPositionAsync (initial check in WalkToAsync)
             """{"x":0,"y":0}""",
-            // 3. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 4. GetNavigationStatusAsync (poll — stuck)
-            """{"status":"stuck","waypoint":1,"total_waypoints":10,"x":0.5,"y":0}""",
-            // 5. CleanupAsync
-            """ok"""
+            // 3. EnsurePathHandlerInstalledAsync
+            """ok""",
+            // 4. RequestPathAsync (returns request ID)
+            """1""",
+            // 5. GetPathResultAsync (no path found)
+            """{"status":"no_path"}"""
         ]);
         var factorio = new FactorioService(rcon);
         var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
@@ -267,14 +278,13 @@ public class TaskToolsTests
 
         Assert.Contains("\"success\":false", result);
         Assert.Contains("\"status\":\"walk_failed\"", result);
-        Assert.Contains("\"walk_status\":\"stuck\"", result);
     }
 
     [Fact]
     public async Task RefuelEntity_InsertFails_ReturnsError()
     {
         var rcon = new ScriptedRconClient([
-            // 1. PathfindingService.GetPlayerPosition → already near
+            // 1. PathfindingService.GetPositionAsync → already near
             """{"x":4.5,"y":0}""",
             // 2. InsertItems → fails
             """{"success":false,"error":"no_entity_at_position"}"""
@@ -332,23 +342,29 @@ public class TaskToolsTests
     public async Task Smelt_WithExplicitFurnace_WalksInsertsAndCollects()
     {
         var rcon = new ScriptedRconClient([
-            // 1. PathfindingService.GetPlayerPosition (walk init)
+            // 1. PathfindingService.GetPositionAsync (walk init)
             """{"x":0,"y":0}""",
-            // 2. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 3. GetNavigationStatusAsync (poll — arrived)
-            """{"status":"arrived","waypoint":3,"total_waypoints":3,"x":14,"y":0}""",
-            // 4. CleanupAsync
+            // 2. EnsurePathHandlerInstalledAsync
             """ok""",
-            // 5. InsertItems ore into furnace_source
+            // 3. RequestPathAsync (returns request ID)
+            """1""",
+            // 4. GetPathResultAsync (path ready)
+            """{"status":"ok","path":[{"x":7,"y":0},{"x":14,"y":0}]}""",
+            // 5. DrawPathAsync
+            """ok""",
+            // 6. GetPositionAsync (poll — arrived)
+            """{"x":14,"y":0}""",
+            // 7. StopWalkingAsync
+            """ok""",
+            // 8. InsertItems ore into furnace_source
             """{"success":true,"entity":"stone-furnace","item":"iron-ore","inserted":10,"requested":10}""",
-            // 6. InsertItems fuel
+            // 9. InsertItems fuel
             """{"success":true,"entity":"stone-furnace","item":"coal","inserted":5,"requested":5}""",
-            // 7. QueryFurnaceState (poll 1 — still smelting)
+            // 10. QueryFurnaceState (poll 1 — still smelting)
             """{"source_count":5,"result_count":3,"status":"working"}""",
-            // 8. QueryFurnaceState (poll 2 — done, source empty and not working)
+            // 11. QueryFurnaceState (poll 2 — done, source empty and not working)
             """{"source_count":0,"result_count":10,"status":"idle"}""",
-            // 9. RemoveItems (collect output)
+            // 12. RemoveItems (collect output)
             """{"success":true,"entity":"stone-furnace","item":"iron-plate","removed":10,"requested":1000}"""
         ]);
         var factorio = new FactorioService(rcon);
@@ -376,21 +392,27 @@ public class TaskToolsTests
         var rcon = new ScriptedRconClient([
             // 1. PathfindingService.GetPlayerPosition (FindFurnace → building memory search)
             """{"x":0,"y":0}""",
-            // 2. PathfindingService.GetPlayerPosition (walk init)
+            // 2. PathfindingService.GetPositionAsync (walk init)
             """{"x":0,"y":0}""",
-            // 3. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 4. GetNavigationStatusAsync (poll — arrived)
-            """{"status":"arrived","waypoint":5,"total_waypoints":5,"x":24,"y":0}""",
-            // 5. CleanupAsync
+            // 3. EnsurePathHandlerInstalledAsync
             """ok""",
-            // 6. InsertItems ore
+            // 4. RequestPathAsync (returns request ID)
+            """1""",
+            // 5. GetPathResultAsync (path ready)
+            """{"status":"ok","path":[{"x":12,"y":0},{"x":24,"y":0}]}""",
+            // 6. DrawPathAsync
+            """ok""",
+            // 7. GetPositionAsync (poll — arrived)
+            """{"x":24,"y":0}""",
+            // 8. StopWalkingAsync
+            """ok""",
+            // 9. InsertItems ore
             """{"success":true,"entity":"stone-furnace","item":"copper-ore","inserted":5,"requested":5}""",
-            // 7. InsertItems fuel
+            // 10. InsertItems fuel
             """{"success":true,"entity":"stone-furnace","item":"coal","inserted":3,"requested":3}""",
-            // 8. QueryFurnaceState — done immediately (source empty, not working)
+            // 11. QueryFurnaceState — done immediately (source empty, not working)
             """{"source_count":0,"result_count":5,"status":"idle"}""",
-            // 9. RemoveItems (collect)
+            // 12. RemoveItems (collect)
             """{"success":true,"entity":"stone-furnace","item":"copper-plate","removed":5,"requested":1000}"""
         ]);
         var factorio = new FactorioService(rcon);
@@ -412,25 +434,31 @@ public class TaskToolsTests
     public async Task Smelt_FindsFurnaceFromWorldSearch()
     {
         var rcon = new ScriptedRconClient([
-            // 1. PathfindingService.GetPlayerPosition (building memory search — no match)
+            // 1. PathfindingService.GetPositionAsync (building memory search — no match)
             """{"x":0,"y":0}""",
             // 2. FindNearestEntity("furnace") → found world entity
             """{"success":true,"entity":"steel-furnace","type":"furnace","x":10,"y":5,"distance":11.2,"total_found":1}""",
-            // 3. PathfindingService.GetPlayerPosition (walk init)
+            // 3. PathfindingService.GetPositionAsync (walk init)
             """{"x":0,"y":0}""",
-            // 4. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 5. GetNavigationStatusAsync (poll — arrived)
-            """{"status":"arrived","waypoint":3,"total_waypoints":3,"x":9,"y":4.5}""",
-            // 6. CleanupAsync
+            // 4. EnsurePathHandlerInstalledAsync
             """ok""",
-            // 7. InsertItems ore
+            // 5. RequestPathAsync (returns request ID)
+            """1""",
+            // 6. GetPathResultAsync (path ready)
+            """{"status":"ok","path":[{"x":5,"y":2},{"x":9,"y":4.5}]}""",
+            // 7. DrawPathAsync
+            """ok""",
+            // 8. GetPositionAsync (poll — arrived)
+            """{"x":9,"y":4.5}""",
+            // 9. StopWalkingAsync
+            """ok""",
+            // 10. InsertItems ore
             """{"success":true,"entity":"steel-furnace","item":"iron-ore","inserted":20,"requested":20}""",
-            // 8. InsertItems fuel
+            // 11. InsertItems fuel
             """{"success":true,"entity":"steel-furnace","item":"coal","inserted":10,"requested":10}""",
-            // 9. QueryFurnaceState — done (source empty, not working)
+            // 12. QueryFurnaceState — done (source empty, not working)
             """{"source_count":0,"result_count":20,"status":"idle"}""",
-            // 10. RemoveItems (collect)
+            // 13. RemoveItems (collect)
             """{"success":true,"entity":"steel-furnace","item":"iron-plate","removed":20,"requested":1000}"""
         ]);
         var factorio = new FactorioService(rcon);
@@ -451,7 +479,7 @@ public class TaskToolsTests
     public async Task Smelt_NoFurnaceFound_ReturnsError()
     {
         var rcon = new ScriptedRconClient([
-            // 1. PathfindingService.GetPlayerPosition (building memory search)
+            // 1. PathfindingService.GetPositionAsync (building memory search)
             """{"x":0,"y":0}""",
             // 2. FindNearestEntity("furnace") → not found
             """{"success":false,"error":"not_found","filter":"furnace","radius":100}"""
@@ -474,14 +502,14 @@ public class TaskToolsTests
     public async Task Smelt_WalkStuck_ReturnsWalkFailed()
     {
         var rcon = new ScriptedRconClient([
-            // 1. PathfindingService.GetPlayerPosition (walk init for explicit furnace)
+            // 1. PathfindingService.GetPositionAsync (walk init for explicit furnace)
             """{"x":0,"y":0}""",
-            // 2. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 3. GetNavigationStatusAsync (poll — stuck)
-            """{"status":"stuck","waypoint":1,"total_waypoints":10,"x":0.5,"y":0}""",
-            // 4. CleanupAsync
-            """ok"""
+            // 2. EnsurePathHandlerInstalledAsync
+            """ok""",
+            // 3. RequestPathAsync (returns request ID)
+            """1""",
+            // 4. GetPathResultAsync (no path found)
+            """{"status":"no_path"}"""
         ]);
         var factorio = new FactorioService(rcon);
         var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
@@ -495,14 +523,13 @@ public class TaskToolsTests
 
         Assert.Contains("\"success\":false", result);
         Assert.Contains("\"status\":\"walk_failed\"", result);
-        Assert.Contains("\"walk_status\":\"stuck\"", result);
     }
 
     [Fact]
     public async Task Smelt_OreInsertFails_ReturnsError()
     {
         var rcon = new ScriptedRconClient([
-            // 1. PathfindingService.GetPlayerPosition (walk init for explicit furnace — already near)
+            // 1. PathfindingService.GetPositionAsync (walk init for explicit furnace — already near)
             """{"x":4,"y":0}""",
             // 2. InsertItems ore → fails
             """{"success":false,"error":"no_entity_at_position"}"""
@@ -525,7 +552,7 @@ public class TaskToolsTests
     public async Task Smelt_CollectsZeroOutput_ReturnsTimeout()
     {
         var rcon = new ScriptedRconClient([
-            // 1. PathfindingService.GetPlayerPosition (walk init for explicit furnace — already near)
+            // 1. PathfindingService.GetPositionAsync (walk init for explicit furnace — already near)
             """{"x":4,"y":0}""",
             // 2. InsertItems ore
             """{"success":true,"entity":"stone-furnace","item":"iron-ore","inserted":5,"requested":5}""",

@@ -20,13 +20,19 @@ public class NavigationToolsTests
         var rcon = new ScriptedRconClient([
             // 1. FindNearestEntity → found entity at (20, 0)
             """{"success":true,"entity":"stone-furnace","type":"furnace","x":20,"y":0,"distance":20.0,"total_found":3}""",
-            // 2. PathfindingService.GetPlayerPosition (walk init)
+            // 2. PathfindingService.GetPositionAsync (walk init)
             """{"x":0,"y":0}""",
-            // 3. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 4. GetNavigationStatusAsync (poll — arrived)
-            """{"status":"arrived","waypoint":5,"total_waypoints":5,"x":19.5,"y":0}""",
-            // 5. CleanupAsync
+            // 3. EnsurePathHandlerInstalledAsync
+            """ok""",
+            // 4. RequestPathAsync (returns request ID)
+            """1""",
+            // 5. GetPathResultAsync (path ready)
+            """{"status":"ok","path":[{"x":10,"y":0},{"x":19.5,"y":0}]}""",
+            // 6. DrawPathAsync
+            """ok""",
+            // 7. GetPositionAsync (poll — arrived)
+            """{"x":19.5,"y":0}""",
+            // 8. StopWalkingAsync
             """ok"""
         ]);
         var factorio = new FactorioService(rcon);
@@ -49,7 +55,7 @@ public class NavigationToolsTests
         var rcon = new ScriptedRconClient([
             // 1. FindNearestEntity → found entity at (1, 0)
             """{"success":true,"entity":"iron-chest","type":"container","x":1,"y":0,"distance":1.0,"total_found":1}""",
-            // 2. PathfindingService.GetPlayerPosition → already within tolerance
+            // 2. PathfindingService.GetPositionAsync → already within tolerance
             """{"x":0.5,"y":0}"""
         ]);
         var factorio = new FactorioService(rcon);
@@ -95,14 +101,14 @@ public class NavigationToolsTests
         var rcon = new ScriptedRconClient([
             // 1. FindNearestEntity
             """{"success":true,"entity":"stone-furnace","type":"furnace","x":50,"y":0,"distance":50.0,"total_found":1}""",
-            // 2. GetPlayerPosition (walk init)
+            // 2. GetPositionAsync (walk init)
             """{"x":0,"y":0}""",
-            // 3. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 4. GetNavigationStatusAsync (poll — stuck)
-            """{"status":"stuck","waypoint":2,"total_waypoints":10,"x":1,"y":0}""",
-            // 5. CleanupAsync
-            """ok"""
+            // 3. EnsurePathHandlerInstalledAsync
+            """ok""",
+            // 4. RequestPathAsync (returns request ID)
+            """1""",
+            // 5. GetPathResultAsync (no path)
+            """{"status":"no_path"}"""
         ]);
         var factorio = new FactorioService(rcon);
         var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
@@ -113,7 +119,7 @@ public class NavigationToolsTests
         var result = await tools.MoveToEntity("stone-furnace", tolerance: 2.0);
 
         Assert.Contains("\"success\":false", result);
-        Assert.Contains("\"walk_status\":\"stuck\"", result);
+        Assert.Contains("\"walk_status\":\"no_path\"", result);
     }
 
     // ── MoveToResource — Target found and arrived ───────────────────
@@ -124,13 +130,19 @@ public class NavigationToolsTests
         var rcon = new ScriptedRconClient([
             // 1. FindBestResourcePatch → found patch centered at (30, 10)
             """{"success":true,"resource":"iron-ore","best_patch":{"center_x":30.0,"center_y":10.0,"count":50,"total_amount":10000,"distance":31.6},"total_entities":50,"total_patches":2,"alternatives":[]}""",
-            // 2. GetPlayerPosition (walk init)
+            // 2. GetPositionAsync (walk init)
             """{"x":0,"y":0}""",
-            // 3. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 4. GetNavigationStatusAsync (poll — arrived)
-            """{"status":"arrived","waypoint":8,"total_waypoints":8,"x":28,"y":9}""",
-            // 5. CleanupAsync
+            // 3. EnsurePathHandlerInstalledAsync
+            """ok""",
+            // 4. RequestPathAsync (returns request ID)
+            """1""",
+            // 5. GetPathResultAsync (path ready)
+            """{"status":"ok","path":[{"x":15,"y":5},{"x":28,"y":9}]}""",
+            // 6. DrawPathAsync
+            """ok""",
+            // 7. GetPositionAsync (poll — arrived)
+            """{"x":28,"y":9}""",
+            // 8. StopWalkingAsync
             """ok"""
         ]);
         var factorio = new FactorioService(rcon);
@@ -177,13 +189,19 @@ public class NavigationToolsTests
         var rcon = new ScriptedRconClient([
             // 1. GetPlayerPosition (for building search — via FactorioService)
             """{"x":0,"y":0}""",
-            // 2. PathfindingService.GetPlayerPosition (walk init)
+            // 2. PathfindingService.GetPositionAsync (walk init)
             """{"x":0,"y":0}""",
-            // 3. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 4. GetNavigationStatusAsync (poll — arrived)
-            """{"status":"arrived","waypoint":3,"total_waypoints":3,"x":14,"y":0}""",
-            // 5. CleanupAsync
+            // 3. EnsurePathHandlerInstalledAsync
+            """ok""",
+            // 4. RequestPathAsync (returns request ID)
+            """1""",
+            // 5. GetPathResultAsync (path ready)
+            """{"status":"ok","path":[{"x":7,"y":0},{"x":14,"y":0}]}""",
+            // 6. DrawPathAsync
+            """ok""",
+            // 7. GetPositionAsync (poll — arrived)
+            """{"x":14,"y":0}""",
+            // 8. StopWalkingAsync
             """ok"""
         ]);
         var factorio = new FactorioService(rcon);
@@ -211,13 +229,19 @@ public class NavigationToolsTests
         var rcon = new ScriptedRconClient([
             // 1. GetPlayerPosition (for building search)
             """{"x":0,"y":0}""",
-            // 2. PathfindingService.GetPlayerPosition (walk init)
+            // 2. PathfindingService.GetPositionAsync (walk init)
             """{"x":0,"y":0}""",
-            // 3. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 4. GetNavigationStatusAsync (poll — arrived)
-            """{"status":"arrived","waypoint":2,"total_waypoints":2,"x":0,"y":9}""",
-            // 5. CleanupAsync
+            // 3. EnsurePathHandlerInstalledAsync
+            """ok""",
+            // 4. RequestPathAsync (returns request ID)
+            """1""",
+            // 5. GetPathResultAsync (path ready)
+            """{"status":"ok","path":[{"x":0,"y":5},{"x":0,"y":9}]}""",
+            // 6. DrawPathAsync
+            """ok""",
+            // 7. GetPositionAsync (poll — arrived)
+            """{"x":0,"y":9}""",
+            // 8. StopWalkingAsync
             """ok"""
         ]);
         var factorio = new FactorioService(rcon);
@@ -265,13 +289,19 @@ public class NavigationToolsTests
         var rcon = new ScriptedRconClient([
             // 1. GetPlayerPosition (for building search)
             """{"x":0,"y":0}""",
-            // 2. PathfindingService.GetPlayerPosition (walk init)
+            // 2. PathfindingService.GetPositionAsync (walk init)
             """{"x":0,"y":0}""",
-            // 3. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 4. GetNavigationStatusAsync (poll — arrived)
-            """{"status":"arrived","waypoint":1,"total_waypoints":1,"x":4,"y":0}""",
-            // 5. CleanupAsync
+            // 3. EnsurePathHandlerInstalledAsync
+            """ok""",
+            // 4. RequestPathAsync (returns request ID)
+            """1""",
+            // 5. GetPathResultAsync (path ready - needs 2+ waypoints for DrawPathAsync to execute)
+            """{"status":"ok","path":[{"x":2,"y":0},{"x":4,"y":0}]}""",
+            // 6. DrawPathAsync
+            """ok""",
+            // 7. GetPositionAsync (poll — arrived within tolerance of target at 5,0)
+            """{"x":4,"y":0}""",
+            // 8. StopWalkingAsync
             """ok"""
         ]);
         var factorio = new FactorioService(rcon);
@@ -299,7 +329,7 @@ public class NavigationToolsTests
         var rcon = new ScriptedRconClient([
             // 1. GetPlayerPosition (for building search)
             """{"x":0,"y":0}""",
-            // 2. PathfindingService.GetPlayerPosition (walk init — already near)
+            // 2. PathfindingService.GetPositionAsync (walk init — already near)
             """{"x":0,"y":0}"""
         ]);
         var factorio = new FactorioService(rcon);

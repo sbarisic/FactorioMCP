@@ -1,258 +1,31 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using FactorioMCP.Rcon;
 
 namespace FactorioMCP.Services;
 
 /// <summary>
-/// Centralized pathfinding service that uses Factorio's built-in A* pathfinder
-/// (<c>surface.request_path</c>) to navigate the player around obstacles.
-/// Replaces the old "walk straight, detect stuck, try perpendicular" approach
-/// with proper collision-aware pathfinding and waypoint following.
+/// Pathfinding service using Factorio's A* pathfinder with C#-driven waypoint following.
 /// 
-/// Flow:
-///   1. C# calls <see cref="RequestPathAsync"/> → Lua <c>request_path</c> (async)
-///   2. Lua <c>on_script_path_request_finished</c> stores the path in <c>storage.nav_path</c>
-///   3. Lua <c>on_tick</c> handler walks toward each waypoint, advancing when close enough
-///   4. C# polls <see cref="GetNavigationStatusAsync"/> until arrived/stuck/timeout
-///   5. Debug lines are drawn on the map for the path
+/// Design: All navigation logic runs in C#, with Lua only used for:
+///   1. Requesting paths (async via request_path)
+///   2. Receiving path results (minimal event handler)
+///   3. Setting walking direction (simple command)
+/// 
+/// This approach is simpler and more robust than Lua-based on_tick handlers because:
+///   - All state lives in C# (easier to debug, test, cancel)
+///   - No complex Lua event handler registration/cleanup per request
+///   - Predictable behavior with clear control flow
 /// </summary>
 internal sealed class PathfindingService(RconClient rcon)
 {
     /// <summary>
-    /// Default poll interval for walking. Can be overridden in tests.
+    /// Poll interval for position checks during walking. Can be overridden in tests.
     /// </summary>
-    internal TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(0.5);
+    internal TimeSpan PollInterval { get; set; } = TimeSpan.FromMilliseconds(150);
 
-    // ── Lua Constants ───────────────────────────────────────────────
-
-    /// <summary>
-    /// Installs the pathfinding event handlers:
-    /// 1. <c>on_script_path_request_finished</c> — receives computed path, stores in
-    ///    <c>storage.nav_path</c>, draws debug lines, starts walking
-    /// 2. <c>on_tick</c> — follows waypoints: walks toward current waypoint,
-    ///    advances index when close, also handles mining state
-    /// </summary>
-    internal const string InstallPathfindingHandlers = """
-        script.on_event(defines.events.on_script_path_request_finished, function(event)
-            if event.id ~= storage.nav_request_id then return end
-            if not event.path or #event.path == 0 then
-                storage.nav_path = nil
-                storage.nav_status = "no_path"
-                return
-            end
-            if event.try_again_later then
-                storage.nav_path = nil
-                storage.nav_status = "busy"
-                return
-            end
-            storage.nav_path = event.path
-            storage.nav_index = 1
-            storage.nav_status = "walking"
-            storage.nav_stuck_ticks = 0
-            storage.nav_prev_pos = nil
-            -- Draw debug path lines
-            local p = game.connected_players[1]
-            if p then
-                local s = p.surface
-                for i = 1, #event.path - 1 do
-                    rendering.draw_line{
-                        color = {r=0, g=1, b=0.3, a=0.7},
-                        width = 2,
-                        from = event.path[i].position,
-                        to = event.path[i+1].position,
-                        surface = s,
-                        time_to_live = 1800,
-                        draw_on_ground = true
-                    }
-                end
-                -- Draw target circle
-                local last = event.path[#event.path].position
-                rendering.draw_circle{
-                    color = {r=0, g=1, b=0, a=0.5},
-                    radius = storage.nav_tolerance or 1.5,
-                    filled = false,
-                    width = 2,
-                    target = last,
-                    surface = s,
-                    time_to_live = 1800,
-                    draw_on_ground = true
-                }
-            end
-        end)
-        """;
-
-    /// <summary>
-    /// On_tick handler that follows waypoints from <c>storage.nav_path</c> and
-    /// also continues mining if <c>storage.mine_state</c> is set.
-    /// 
-    /// Key features:
-    /// - Progress-based waypoint advancement (close-enough + passed-by dot-product test)
-    /// - Look-ahead targeting for smoother movement on curves
-    /// - Direction dead-zone: at sector boundaries, biases toward the direction component
-    ///   that has the larger delta, preventing oscillation from atan2 instability
-    /// - Stuck detection: marks stuck if no distance progress toward final goal over 120 ticks
-    /// </summary>
-    internal const string InstallOnTickHandler = """
-        script.on_event(defines.events.on_tick, function()
-            local p = game.connected_players[1]
-            if not p then return end
-            -- Mining (re-apply every tick, Factorio 2 requirement)
-            if storage.mine_state then
-                p.update_selected_entity(storage.mine_state.position)
-                p.mining_state = {mining = true, position = storage.mine_state.position}
-            end
-            -- Path following
-            if not storage.nav_path or not storage.nav_index then return end
-            local path = storage.nav_path
-            local idx = storage.nav_index
-            local pos = p.position
-            if idx > #path then
-                storage.nav_status = "arrived"
-                storage.nav_path = nil
-                storage.nav_index = nil
-                storage.walk_state = nil
-                p.walking_state = {walking = false}
-                storage.nav_stuck_ticks = 0
-                return
-            end
-            -- Progress-based waypoint advancement:
-            -- Skip waypoints we have passed or are very close to.
-            local advanced = true
-            while advanced and idx <= #path do
-                advanced = false
-                local wp = path[idx].position
-                local dx = wp.x - pos.x
-                local dy = wp.y - pos.y
-                local dist_sq = dx*dx + dy*dy
-                -- Tolerance: 1.5 for intermediate waypoints, user-specified for final
-                local tol = 1.5
-                if idx == #path then
-                    tol = storage.nav_tolerance or 1.5
-                end
-                -- Close enough: advance
-                if dist_sq < tol * tol then
-                    idx = idx + 1
-                    storage.nav_index = idx
-                    advanced = true
-                -- Passed-by test for non-final waypoints:
-                -- If the next waypoint exists, check if we've passed the current one
-                -- by testing if the vector from current wp to player points roughly
-                -- toward the next wp (dot product > 0).
-                elseif idx < #path then
-                    local nwp = path[idx + 1].position
-                    local wnx = nwp.x - wp.x
-                    local wny = nwp.y - wp.y
-                    local wpx = pos.x - wp.x
-                    local wpy = pos.y - wp.y
-                    local dot = wnx * wpx + wny * wpy
-                    if dot > 0 then
-                        local seg_len_sq = wnx*wnx + wny*wny
-                        if seg_len_sq > 0.01 then
-                            local cross = math.abs(wnx * wpy - wny * wpx)
-                            local perp_dist = cross / math.sqrt(seg_len_sq)
-                            if perp_dist < 3.0 then
-                                idx = idx + 1
-                                storage.nav_index = idx
-                                advanced = true
-                            end
-                        end
-                    end
-                end
-            end
-            -- Check if we finished all waypoints
-            if idx > #path then
-                storage.nav_status = "arrived"
-                storage.nav_path = nil
-                storage.nav_index = nil
-                storage.walk_state = nil
-                p.walking_state = {walking = false}
-                storage.nav_stuck_ticks = 0
-                return
-            end
-            -- Look-ahead: target a waypoint a few steps ahead for smoother movement
-            local look_ahead = idx
-            local max_look = math.min(idx + 4, #path)
-            for la = idx + 1, max_look do
-                local lawp = path[la].position
-                local ladx = lawp.x - pos.x
-                local lady = lawp.y - pos.y
-                local la_dist_sq = ladx*ladx + lady*lady
-                if la_dist_sq < 36 then
-                    look_ahead = la
-                end
-            end
-            local target = path[look_ahead].position
-            local dx = target.x - pos.x
-            local dy = target.y - pos.y
-            -- Stuck detection: track distance to FINAL goal position.
-            -- If no progress toward the goal over 120 ticks (2 sec), mark stuck.
-            local final_wp = path[#path].position
-            local goal_dx = final_wp.x - pos.x
-            local goal_dy = final_wp.y - pos.y
-            local goal_dist_sq = goal_dx*goal_dx + goal_dy*goal_dy
-            if not storage.nav_best_goal_dist_sq then
-                storage.nav_best_goal_dist_sq = goal_dist_sq
-                storage.nav_stuck_ticks = 0
-            end
-            if goal_dist_sq < storage.nav_best_goal_dist_sq - 0.1 then
-                storage.nav_best_goal_dist_sq = goal_dist_sq
-                storage.nav_stuck_ticks = 0
-            else
-                storage.nav_stuck_ticks = (storage.nav_stuck_ticks or 0) + 1
-                if storage.nav_stuck_ticks > 120 then
-                    storage.nav_status = "stuck"
-                    storage.nav_path = nil
-                    storage.nav_index = nil
-                    storage.walk_state = nil
-                    p.walking_state = {walking = false}
-                    return
-                end
-            end
-            -- Direction selection with dead-zone to prevent oscillation.
-            -- The 8 directions map to sectors of 45 deg each. When the ideal angle
-            -- falls near a sector boundary (within ~5 deg), atan2 noise from
-            -- sub-tile position changes causes the direction to flip every tick.
-            --
-            -- Fix: use component-based direction selection. Pick the axis-aligned
-            -- or diagonal direction whose movement vector best matches (dx, dy).
-            -- Ties are broken by preferring the cardinal direction (N/S/E/W) which
-            -- guarantees progress along the dominant axis without zigzag.
-            --
-            -- Direction vectors (defines.direction):
-            -- 0=N(0,-1) 1=NE(1,-1) 2=E(1,0) 3=SE(1,1) 4=S(0,1) 5=SW(-1,1) 6=W(-1,0) 7=NW(-1,-1)
-            local adx = math.abs(dx)
-            local ady = math.abs(dy)
-            local dir
-            -- If one component dominates heavily (>2.4x the other), use cardinal direction
-            -- This avoids diagonal oscillation when movement is mostly along one axis
-            if ady > adx * 2.414 then
-                -- Mostly vertical: use N or S
-                dir = dy < 0 and 0 or 4
-            elseif adx > ady * 2.414 then
-                -- Mostly horizontal: use E or W
-                dir = dx > 0 and 2 or 6
-            else
-                -- Diagonal movement: pick the appropriate diagonal
-                if dx > 0 then
-                    dir = dy < 0 and 1 or 3
-                else
-                    dir = dy < 0 and 7 or 5
-                end
-            end
-            storage.walk_state = {direction = dir}
-            p.walking_state = {walking = true, direction = dir}
-        end)
-        """;
-
-    /// <summary>
-    /// Removes the on_tick handler only if neither pathfinding nor mining is active.
-    /// </summary>
-    internal const string RemoveOnTickIfIdle = """
-        if not storage.nav_path and not storage.mine_state and not storage.walk_state then
-            script.on_event(defines.events.on_tick, nil)
-        end
-        """;
+    private bool _pathHandlerInstalled;
 
     // ── Public API ──────────────────────────────────────────────────
 
@@ -267,119 +40,64 @@ internal sealed class PathfindingService(RconClient rcon)
         double timeoutSeconds,
         CancellationToken cancellationToken = default)
     {
-        var pollInterval = PollInterval;
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(Math.Max(timeoutSeconds, 0.5));
 
         // Check if already at target
-        var posJson = await GetPlayerPositionAsync(cancellationToken);
-        var (px, py) = ParsePosition(posJson);
+        var (px, py) = await GetPositionAsync(cancellationToken);
         var dist = Distance(px, py, targetX, targetY);
 
         if (dist <= tolerance)
             return FormatResult("arrived", px, py, targetX, targetY, dist, tolerance);
 
-        // Request path from Factorio's pathfinder
-        var requestResult = await RequestPathAsync(targetX, targetY, tolerance, cancellationToken);
-        using var reqDoc = JsonDocument.Parse(requestResult);
-        var reqRoot = reqDoc.RootElement;
+        // Ensure path handler is installed (once per session)
+        await EnsurePathHandlerInstalledAsync(cancellationToken);
 
-        if (!reqRoot.TryGetProperty("success", out var successProp) || !successProp.GetBoolean())
+        // Request path from Factorio's A* pathfinder
+        var requestId = await RequestPathAsync(targetX, targetY, tolerance, cancellationToken);
+        if (requestId < 0)
+            return FormatResult("no_character", px, py, targetX, targetY, dist, tolerance);
+
+        // Wait for path computation (usually 1-2 game ticks)
+        List<(double x, double y)>? waypoints = null;
+        for (int i = 0; i < 20 && waypoints is null; i++)
         {
-            var error = reqRoot.TryGetProperty("error", out var errProp)
-                ? errProp.GetString() ?? "request_failed"
-                : "request_failed";
-            return FormatResult(error, px, py, targetX, targetY, dist, tolerance);
-        }
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+            var (status, path) = await GetPathResultAsync(requestId, cancellationToken);
 
-        // Poll until the path is computed and walking completes
-        try
-        {
-            // Wait for path computation (usually 1-2 ticks)
-            await Task.Delay(TimeSpan.FromMilliseconds(200), cancellationToken);
-
-            while (DateTime.UtcNow < deadline)
+            if (status == "ok" && path is not null)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var statusJson = await GetNavigationStatusAsync(cancellationToken);
-                using var statusDoc = JsonDocument.Parse(statusJson);
-                var statusRoot = statusDoc.RootElement;
-
-                var status = statusRoot.GetProperty("status").GetString() ?? "unknown";
-                px = statusRoot.GetProperty("x").GetDouble();
-                py = statusRoot.GetProperty("y").GetDouble();
-                dist = Distance(px, py, targetX, targetY);
-
-                switch (status)
-                {
-                    case "arrived":
-                        await CleanupAsync(cancellationToken);
-                        return FormatResult("arrived", px, py, targetX, targetY, dist, tolerance);
-
-                    case "stuck":
-                        await CleanupAsync(cancellationToken);
-                        return FormatResult("stuck", px, py, targetX, targetY, dist, tolerance);
-
-                    case "no_path":
-                        await CleanupAsync(cancellationToken);
-                        return FormatResult("no_path", px, py, targetX, targetY, dist, tolerance);
-
-                    case "busy":
-                        // Pathfinder overloaded, retry once after a delay
-                        await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-                        await RequestPathAsync(targetX, targetY, tolerance, cancellationToken);
-                        break;
-
-                    case "walking":
-                    case "waiting":
-                        // Still in progress — check if close enough despite status
-                        if (dist <= tolerance)
-                        {
-                            await StopAsync(cancellationToken);
-                            return FormatResult("arrived", px, py, targetX, targetY, dist, tolerance);
-                        }
-                        break;
-                }
-
-                await Task.Delay(pollInterval, cancellationToken);
+                waypoints = path;
+                break;
+            }
+            if (status == "no_path")
+                return FormatResult("no_path", px, py, targetX, targetY, dist, tolerance);
+            if (status == "busy")
+            {
+                // Pathfinder overloaded, wait and retry
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                requestId = await RequestPathAsync(targetX, targetY, tolerance, cancellationToken);
             }
         }
-        catch
-        {
-            try { await StopAsync(CancellationToken.None); } catch { }
-            throw;
-        }
 
-        // Timeout
-        await StopAsync(cancellationToken);
-        posJson = await GetPlayerPositionAsync(cancellationToken);
-        (px, py) = ParsePosition(posJson);
-        dist = Distance(px, py, targetX, targetY);
-        return FormatResult("timeout", px, py, targetX, targetY, dist, tolerance);
+        if (waypoints is null || waypoints.Count == 0)
+            return FormatResult("no_path", px, py, targetX, targetY, dist, tolerance);
+
+        // Draw debug visualization
+        await DrawPathAsync(waypoints, tolerance, cancellationToken);
+
+        // Follow waypoints from C#
+        return await FollowWaypointsAsync(waypoints, targetX, targetY, tolerance, deadline, cancellationToken);
     }
 
     /// <summary>
-    /// Stop all navigation — clears path, stops walking, removes handlers if idle.
+    /// Stop the player from walking and clear navigation state.
     /// </summary>
-    public Task<string> StopAsync(CancellationToken cancellationToken = default)
+    public async Task<string> StopAsync(CancellationToken cancellationToken = default)
     {
-        return rcon.ExecuteLuaAsync($$"""
-            local player = game.connected_players[1]
-            storage.nav_path = nil
-            storage.nav_index = nil
-            storage.nav_status = nil
-            storage.nav_request_id = nil
-            storage.nav_tolerance = nil
-            storage.nav_stuck_ticks = 0
-            storage.nav_cur_dir = nil
-            storage.nav_best_goal_dist_sq = nil
-            storage.walk_state = nil
-            player.walking_state = {walking = false, direction = defines.direction.north}
-            {{RemoveOnTickIfIdle}}
-            local p = player.position
-            rcon.print('{"status":"stopped","x":'..p.x..',"y":'..p.y..'}')
-            """,
-            cancellationToken);
+        await StopWalkingAsync(cancellationToken);
+        var (x, y) = await GetPositionAsync(cancellationToken);
+        return string.Create(CultureInfo.InvariantCulture,
+            $$"""{"status":"stopped","x":{{x}},"y":{{y}}}""");
     }
 
     /// <summary>
@@ -390,30 +108,216 @@ internal sealed class PathfindingService(RconClient rcon)
         return rcon.ExecuteLuaAsync("""
             local p = game.connected_players[1].position
             rcon.print('{"x":'..p.x..',"y":'..p.y..'}')
-            """,
-            cancellationToken);
+            """, cancellationToken);
     }
 
-    // ── Internal Methods ────────────────────────────────────────────
+    // ── Waypoint Following ──────────────────────────────────────────
+
+    private async Task<string> FollowWaypointsAsync(
+        List<(double x, double y)> waypoints,
+        double targetX, double targetY,
+        double tolerance,
+        DateTime deadline,
+        CancellationToken cancellationToken)
+    {
+        int waypointIndex = 0;
+        double bestDistToGoal = double.MaxValue;
+        int stuckCount = 0;
+        const int maxStuckCount = 40; // ~6 seconds at 150ms poll
+
+        try
+        {
+            while (DateTime.UtcNow < deadline)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var (px, py) = await GetPositionAsync(cancellationToken);
+
+                // Advance through waypoints we've reached or passed
+                waypointIndex = AdvanceWaypoints(waypoints, waypointIndex, px, py, tolerance);
+
+                // Check if we've reached the destination
+                var dist = Distance(px, py, targetX, targetY);
+                if (waypointIndex >= waypoints.Count || dist <= tolerance)
+                {
+                    await StopWalkingAsync(cancellationToken);
+                    return FormatResult("arrived", px, py, targetX, targetY, dist, tolerance);
+                }
+
+                // Stuck detection: no progress toward goal
+                if (dist < bestDistToGoal - 0.1)
+                {
+                    bestDistToGoal = dist;
+                    stuckCount = 0;
+                }
+                else if (++stuckCount > maxStuckCount)
+                {
+                    await StopWalkingAsync(cancellationToken);
+                    return FormatResult("stuck", px, py, targetX, targetY, dist, tolerance);
+                }
+
+                // Look-ahead: target a waypoint ahead for smoother curves
+                var targetWpIndex = GetLookAheadIndex(waypoints, waypointIndex, px, py);
+                var (wpx, wpy) = waypoints[targetWpIndex];
+
+                // Set walking direction
+                var direction = CalculateDirection(px, py, wpx, wpy);
+                await SetWalkingDirectionAsync(direction, cancellationToken);
+
+                await Task.Delay(PollInterval, cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            try { await StopWalkingAsync(CancellationToken.None); } catch { }
+            throw;
+        }
+
+        // Timeout
+        await StopWalkingAsync(cancellationToken);
+        var (finalX, finalY) = await GetPositionAsync(cancellationToken);
+        var finalDist = Distance(finalX, finalY, targetX, targetY);
+        return FormatResult("timeout", finalX, finalY, targetX, targetY, finalDist, tolerance);
+    }
 
     /// <summary>
-    /// Request a path from Factorio's A* pathfinder. The result arrives asynchronously
-    /// via <c>on_script_path_request_finished</c>.
+    /// Advance waypoint index past waypoints that have been reached or passed.
     /// </summary>
-    internal Task<string> RequestPathAsync(
+    private static int AdvanceWaypoints(
+        List<(double x, double y)> waypoints, int currentIndex,
+        double playerX, double playerY, double finalTolerance)
+    {
+        while (currentIndex < waypoints.Count)
+        {
+            var (wpx, wpy) = waypoints[currentIndex];
+            var wpDist = Distance(playerX, playerY, wpx, wpy);
+            var wpTolerance = currentIndex == waypoints.Count - 1 ? finalTolerance : 1.5;
+
+            // Close enough to waypoint
+            if (wpDist <= wpTolerance)
+            {
+                currentIndex++;
+                continue;
+            }
+
+            // Passed-by test for intermediate waypoints using dot product
+            if (currentIndex < waypoints.Count - 1)
+            {
+                var (nwpx, nwpy) = waypoints[currentIndex + 1];
+                var segX = nwpx - wpx;
+                var segY = nwpy - wpy;
+                var toPlayerX = playerX - wpx;
+                var toPlayerY = playerY - wpy;
+                var dot = segX * toPlayerX + segY * toPlayerY;
+
+                if (dot > 0)
+                {
+                    var segLenSq = segX * segX + segY * segY;
+                    if (segLenSq > 0.01)
+                    {
+                        var cross = Math.Abs(segX * toPlayerY - segY * toPlayerX);
+                        var perpDist = cross / Math.Sqrt(segLenSq);
+                        if (perpDist < 3.0)
+                        {
+                            currentIndex++;
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            break;
+        }
+
+        return currentIndex;
+    }
+
+    /// <summary>
+    /// Get look-ahead waypoint index for smoother movement on curves.
+    /// </summary>
+    private static int GetLookAheadIndex(
+        List<(double x, double y)> waypoints, int currentIndex,
+        double playerX, double playerY)
+    {
+        var lookAhead = currentIndex;
+        var maxLook = Math.Min(currentIndex + 5, waypoints.Count);
+
+        for (int i = currentIndex + 1; i < maxLook; i++)
+        {
+            var (wpx, wpy) = waypoints[i];
+            if (Distance(playerX, playerY, wpx, wpy) < 6.0)
+                lookAhead = i;
+        }
+
+        return lookAhead;
+    }
+
+    /// <summary>
+    /// Calculate Factorio direction (0-7) using component-based selection
+    /// to avoid oscillation at sector boundaries.
+    /// Direction mapping: 0=N 1=NE 2=E 3=SE 4=S 5=SW 6=W 7=NW
+    /// </summary>
+    private static int CalculateDirection(double fromX, double fromY, double toX, double toY)
+    {
+        var dx = toX - fromX;
+        var dy = toY - fromY;
+        var adx = Math.Abs(dx);
+        var ady = Math.Abs(dy);
+
+        const double threshold = 2.414; // tan(67.5°) - use cardinal if one axis dominates
+
+        if (ady > adx * threshold)
+            return dy < 0 ? 0 : 4; // North or South
+
+        if (adx > ady * threshold)
+            return dx > 0 ? 2 : 6; // East or West
+
+        // Diagonal
+        if (dx > 0)
+            return dy < 0 ? 1 : 3; // NE or SE
+
+        return dy < 0 ? 7 : 5; // NW or SW
+    }
+
+    // ── Lua Commands ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Install the path result handler once per session.
+    /// </summary>
+    private async Task EnsurePathHandlerInstalledAsync(CancellationToken cancellationToken)
+    {
+        if (_pathHandlerInstalled) return;
+
+        await rcon.ExecuteLuaAsync("""
+            storage.nav_results = storage.nav_results or {}
+            script.on_event(defines.events.on_script_path_request_finished, function(event)
+                if event.path and #event.path > 0 then
+                    storage.nav_results[event.id] = {status = "ok", path = event.path}
+                elseif event.try_again_later then
+                    storage.nav_results[event.id] = {status = "busy"}
+                else
+                    storage.nav_results[event.id] = {status = "no_path"}
+                end
+            end)
+            rcon.print('ok')
+            """, cancellationToken);
+
+        _pathHandlerInstalled = true;
+    }
+
+    /// <summary>
+    /// Request a path from Factorio's A* pathfinder.
+    /// </summary>
+    private async Task<int> RequestPathAsync(
         double targetX, double targetY, double tolerance,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
             local p = game.connected_players[1]
             if not p.character or not p.character.valid then
-                rcon.print('{"success":false,"error":"no_character"}')
+                rcon.print('-1')
                 return
             end
-            storage.nav_status = "waiting"
-            storage.nav_tolerance = {{tolerance}}
-            {{InstallPathfindingHandlers}}
-            {{InstallOnTickHandler}}
             local id = p.surface.request_path{
                 bounding_box = p.character.prototype.collision_box,
                 collision_mask = p.character.prototype.collision_mask,
@@ -422,59 +326,105 @@ internal sealed class PathfindingService(RconClient rcon)
                 force = p.force,
                 radius = {{tolerance}},
                 entity_to_ignore = p.character,
-                pathfind_flags = {
-                    prefer_straight_paths = true,
-                    no_break = true
-                }
+                pathfind_flags = {prefer_straight_paths = true, no_break = true}
             }
-            storage.nav_request_id = id
-            local pos = p.position
-            rcon.print('{"success":true,"request_id":'..id..',"x":'..pos.x..',"y":'..pos.y..'}')
+            rcon.print(tostring(id))
             """);
-        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+
+        var result = await rcon.ExecuteLuaAsync(lua, cancellationToken);
+        return int.TryParse(result.Trim(), out var id) ? id : -1;
     }
 
     /// <summary>
-    /// Query current navigation status: waiting for path, walking, arrived, stuck, or no_path.
+    /// Get the result of a path request.
     /// </summary>
-    internal Task<string> GetNavigationStatusAsync(CancellationToken cancellationToken = default)
+    private async Task<(string status, List<(double x, double y)>? path)> GetPathResultAsync(
+        int requestId, CancellationToken cancellationToken)
+    {
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local r = storage.nav_results and storage.nav_results[{{requestId}}]
+            if not r then
+                rcon.print('{"status":"waiting"}')
+                return
+            end
+            if r.status ~= "ok" then
+                storage.nav_results[{{requestId}}] = nil
+                rcon.print('{"status":"'..r.status..'"}')
+                return
+            end
+            local pts = {}
+            for i, wp in ipairs(r.path) do
+                pts[i] = '{"x":'..wp.position.x..',"y":'..wp.position.y..'}'
+            end
+            storage.nav_results[{{requestId}}] = nil
+            rcon.print('{"status":"ok","path":['..table.concat(pts, ',')..']}')
+            """);
+
+        var result = await rcon.ExecuteLuaAsync(lua, cancellationToken);
+
+        using var doc = JsonDocument.Parse(result);
+        var root = doc.RootElement;
+        var status = root.GetProperty("status").GetString() ?? "unknown";
+
+        if (status != "ok" || !root.TryGetProperty("path", out var pathProp))
+            return (status, null);
+
+        var waypoints = new List<(double, double)>(pathProp.GetArrayLength());
+        foreach (var wp in pathProp.EnumerateArray())
+            waypoints.Add((wp.GetProperty("x").GetDouble(), wp.GetProperty("y").GetDouble()));
+
+        return (status, waypoints);
+    }
+
+    private async Task<(double x, double y)> GetPositionAsync(CancellationToken cancellationToken)
+    {
+        var json = await GetPlayerPositionAsync(cancellationToken);
+        return ParsePosition(json);
+    }
+
+    private Task StopWalkingAsync(CancellationToken cancellationToken)
     {
         return rcon.ExecuteLuaAsync("""
-            local p = game.connected_players[1]
-            local pos = p.position
-            local status = storage.nav_status or "idle"
-            local idx = storage.nav_index or 0
-            local total = 0
-            if storage.nav_path then total = #storage.nav_path end
-            rcon.print('{"status":"'..status..'"'..
-                ',"waypoint":'..idx..
-                ',"total_waypoints":'..total..
-                ',"x":'..pos.x..
-                ',"y":'..pos.y..'}')
-            """,
-            cancellationToken);
+            game.connected_players[1].walking_state = {walking = false, direction = defines.direction.north}
+            rcon.print('ok')
+            """, cancellationToken);
+    }
+
+    private Task SetWalkingDirectionAsync(int direction, CancellationToken cancellationToken)
+    {
+        return rcon.ExecuteLuaAsync(string.Create(CultureInfo.InvariantCulture, $$"""
+            game.connected_players[1].walking_state = {walking = true, direction = {{direction}}}
+            rcon.print('ok')
+            """), cancellationToken);
     }
 
     /// <summary>
-    /// Clean up navigation state without stopping walking (for terminal states).
+    /// Draw debug path visualization on the game map.
     /// </summary>
-    private Task<string> CleanupAsync(CancellationToken cancellationToken = default)
+    private Task DrawPathAsync(List<(double x, double y)> waypoints, double tolerance, CancellationToken cancellationToken)
     {
-        return rcon.ExecuteLuaAsync($$"""
-            storage.nav_path = nil
-            storage.nav_index = nil
-            storage.nav_request_id = nil
-            storage.nav_tolerance = nil
-            storage.nav_stuck_ticks = 0
-            storage.nav_cur_dir = nil
-            storage.nav_best_goal_dist_sq = nil
-            storage.walk_state = nil
-            local player = game.connected_players[1]
-            player.walking_state = {walking = false, direction = defines.direction.north}
-            {{RemoveOnTickIfIdle}}
-            rcon.print('ok')
-            """,
-            cancellationToken);
+        if (waypoints.Count < 2)
+            return Task.CompletedTask;
+
+        var lua = new StringBuilder();
+        lua.Append("local s = game.connected_players[1].surface\n");
+
+        for (int i = 0; i < waypoints.Count - 1; i++)
+        {
+            var (x1, y1) = waypoints[i];
+            var (x2, y2) = waypoints[i + 1];
+            lua.AppendFormat(CultureInfo.InvariantCulture,
+                "rendering.draw_line{{color={{r=0,g=1,b=0.3,a=0.7}},width=2,from={{x={0},y={1}}},to={{x={2},y={3}}},surface=s,time_to_live=1800,draw_on_ground=true}}\n",
+                x1, y1, x2, y2);
+        }
+
+        var (lastX, lastY) = waypoints[^1];
+        lua.AppendFormat(CultureInfo.InvariantCulture,
+            "rendering.draw_circle{{color={{r=0,g=1,b=0,a=0.5}},radius={0},filled=false,width=2,target={{x={1},y={2}}},surface=s,time_to_live=1800,draw_on_ground=true}}\n",
+            tolerance, lastX, lastY);
+        lua.Append("rcon.print('ok')");
+
+        return rcon.ExecuteLuaAsync(lua.ToString(), cancellationToken);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────

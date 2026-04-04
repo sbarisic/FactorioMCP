@@ -13,7 +13,7 @@ public class MovementToolsTests
     public async Task WalkToPosition_AlreadyAtTarget_ReturnsArrivedImmediately()
     {
         var rcon = new ScriptedRconClient([
-            // PathfindingService.GetPlayerPositionAsync → already at target
+            // PathfindingService.GetPositionAsync → already at target
             """{"x":10,"y":20}"""
         ]);
         var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
@@ -31,7 +31,7 @@ public class MovementToolsTests
     public async Task WalkToPosition_WithinTolerance_ReturnsArrivedImmediately()
     {
         var rcon = new ScriptedRconClient([
-            // GetPlayerPosition → within 1 tile of target
+            // GetPosition → within 1 tile of target
             """{"x":10.5,"y":20.5}"""
         ]);
         var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
@@ -49,13 +49,19 @@ public class MovementToolsTests
     public async Task WalkToPosition_PathfindingArrives_ReturnsArrived()
     {
         var rcon = new ScriptedRconClient([
-            // 1. GetPlayerPosition (initial check — far from target)
+            // 1. GetPositionAsync (initial check — far from target)
             """{"x":0,"y":0}""",
-            // 2. RequestPathAsync (request_path + install handlers)
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 3. GetNavigationStatusAsync (poll — arrived)
-            """{"status":"arrived","waypoint":5,"total_waypoints":5,"x":9.5,"y":0}""",
-            // 4. CleanupAsync
+            // 2. EnsurePathHandlerInstalledAsync
+            """ok""",
+            // 3. RequestPathAsync
+            """1""",
+            // 4. GetPathResultAsync (path ready with waypoints)
+            """{"status":"ok","path":[{"x":5,"y":0},{"x":9.5,"y":0}]}""",
+            // 5. DrawPathAsync
+            """ok""",
+            // 6. GetPositionAsync (poll — arrived at destination)
+            """{"x":9.5,"y":0}""",
+            // 7. StopWalkingAsync
             """ok"""
         ]);
         var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
@@ -67,44 +73,20 @@ public class MovementToolsTests
         Assert.Contains("\"status\":\"arrived\"", result);
     }
 
-    // ── WalkToPosition — Stuck detection ─────────────────────────────
-
-    [Fact]
-    public async Task WalkToPosition_PathfindingStuck_ReturnsStuck()
-    {
-        var rcon = new ScriptedRconClient([
-            // 1. GetPlayerPosition (initial check)
-            """{"x":0,"y":0}""",
-            // 2. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 3. GetNavigationStatusAsync (poll — stuck)
-            """{"status":"stuck","waypoint":2,"total_waypoints":10,"x":1,"y":0}""",
-            // 4. CleanupAsync
-            """ok"""
-        ]);
-        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
-        var queue = new GameCommandQueue();
-        var tools = new MovementTools(pathfinding, queue);
-
-        var result = await tools.WalkToPosition(50, 0, tolerance: 2.0);
-
-        Assert.Contains("\"status\":\"stuck\"", result);
-    }
-
     // ── WalkToPosition — No path ─────────────────────────────────────
 
     [Fact]
     public async Task WalkToPosition_NoPath_ReturnsNoPath()
     {
         var rcon = new ScriptedRconClient([
-            // 1. GetPlayerPosition (initial check)
+            // 1. GetPositionAsync (initial check)
             """{"x":0,"y":0}""",
-            // 2. RequestPathAsync
-            """{"success":true,"request_id":1,"x":0,"y":0}""",
-            // 3. GetNavigationStatusAsync (poll — no path found)
-            """{"status":"no_path","waypoint":0,"total_waypoints":0,"x":0,"y":0}""",
-            // 4. CleanupAsync
-            """ok"""
+            // 2. EnsurePathHandlerInstalledAsync
+            """ok""",
+            // 3. RequestPathAsync
+            """1""",
+            // 4. GetPathResultAsync (no path found)
+            """{"status":"no_path"}"""
         ]);
         var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var queue = new GameCommandQueue();
@@ -141,7 +123,10 @@ public class MovementToolsTests
     public async Task StopWalking_CallsPathfindingStop()
     {
         var rcon = new ScriptedRconClient([
-            """{"status":"stopped","x":5,"y":10}"""
+            // StopWalkingAsync
+            """ok""",
+            // GetPositionAsync
+            """{"x":5,"y":10}"""
         ]);
         var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var queue = new GameCommandQueue();

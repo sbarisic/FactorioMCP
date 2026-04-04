@@ -172,11 +172,18 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task MovementTools_StopWalking_DelegatesToFactorioService()
     {
-        var tools = new MovementTools(_pathfinding, _queue);
+        // Use ScriptedRconClient since StopAsync needs valid JSON responses
+        var rcon = new ScriptedRconClient([
+            """ok""",  // StopWalkingAsync
+            """{"x":0,"y":0}"""  // GetPositionAsync
+        ]);
+        var pathfinding = new PathfindingService(rcon);
+        var queue = new GameCommandQueue();
+        var tools = new MovementTools(pathfinding, queue);
 
         var result = await tools.StopWalking();
 
-        Assert.Contains("walking", _rcon.LastCommand!);
+        Assert.Contains("walking", rcon.AllCommands[0]);
         Assert.Equal("Stopped walking.", result);
     }
 
