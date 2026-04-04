@@ -1,5 +1,7 @@
 using FactorioMCP.Rcon;
 using FactorioMCP.Services;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
 
 namespace FactorioMCP.Tests.Services;
@@ -341,5 +343,96 @@ public class VisionServiceTests
         {
             Directory.Delete(Path.GetDirectoryName(tempDir)!, true);
         }
+    }
+
+    // ── OptimizeImage — Image size reduction ────────────────────────
+
+    private static byte[] CreateTestPng(int width, int height)
+    {
+        using var image = new Image<Rgba32>(width, height);
+        using var ms = new MemoryStream();
+        image.SaveAsPng(ms);
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void OptimizeImage_SmallImage_ReturnsPngUnchanged()
+    {
+        var small = CreateTestPng(100, 100);
+
+        var (data, mimeType) = VisionService.OptimizeImage(small);
+
+        Assert.Equal(small, data);
+        Assert.Equal("image/png", mimeType);
+    }
+
+    [Fact]
+    public void OptimizeImage_LargeImage_ReducesSizeBelowLimit()
+    {
+        // Create a large PNG (random pixels compress poorly)
+        using var image = new Image<Rgba32>(1920, 1080);
+        var rng = new Random(42);
+        for (int y = 0; y < image.Height; y++)
+            for (int x = 0; x < image.Width; x++)
+                image[x, y] = new Rgba32((byte)rng.Next(256), (byte)rng.Next(256), (byte)rng.Next(256));
+
+        using var ms = new MemoryStream();
+        image.SaveAsPng(ms);
+        var largeBytes = ms.ToArray();
+
+        Assert.True(largeBytes.Length > VisionService.MaxImageSizeBytes,
+            $"Test image should exceed max size but was {largeBytes.Length} bytes");
+
+        var (data, mimeType) = VisionService.OptimizeImage(largeBytes);
+
+        Assert.True(data.Length <= VisionService.MaxImageSizeBytes,
+            $"Optimized image should be at most {VisionService.MaxImageSizeBytes} bytes but was {data.Length}");
+        Assert.Equal("image/jpeg", mimeType);
+    }
+
+    [Fact]
+    public void OptimizeImage_LargeImage_ReturnsJpeg()
+    {
+        // Create a PNG that exceeds the limit with noisy data
+        using var image = new Image<Rgba32>(1920, 1080);
+        var rng = new Random(123);
+        for (int y = 0; y < image.Height; y++)
+            for (int x = 0; x < image.Width; x++)
+                image[x, y] = new Rgba32((byte)rng.Next(256), (byte)rng.Next(256), (byte)rng.Next(256));
+
+        using var ms = new MemoryStream();
+        image.SaveAsPng(ms);
+        var largeBytes = ms.ToArray();
+
+        var (data, mimeType) = VisionService.OptimizeImage(largeBytes);
+
+        Assert.Equal("image/jpeg", mimeType);
+        // Verify it's valid JPEG (starts with FFD8)
+        Assert.True(data.Length >= 2);
+        Assert.Equal(0xFF, data[0]);
+        Assert.Equal(0xD8, data[1]);
+    }
+
+    [Fact]
+    public void OptimizeImage_CustomMaxSize_RespectsLimit()
+    {
+        var png = CreateTestPng(200, 200);
+        // Use a very small max to force optimization
+        var maxSize = 100;
+
+        var (data, mimeType) = VisionService.OptimizeImage(png, maxSize);
+
+        Assert.Equal("image/jpeg", mimeType);
+    }
+
+    [Fact]
+    public void OptimizeImage_ImageExactlyAtLimit_ReturnsPng()
+    {
+        var small = CreateTestPng(10, 10);
+        // Set max to exactly the image size
+        var (data, mimeType) = VisionService.OptimizeImage(small, small.Length);
+
+        Assert.Equal(small, data);
+        Assert.Equal("image/png", mimeType);
     }
 }

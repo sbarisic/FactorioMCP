@@ -1,5 +1,8 @@
 using System.Globalization;
 using FactorioMCP.Rcon;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Processing;
 
 namespace FactorioMCP.Services;
 
@@ -15,6 +18,12 @@ internal sealed class VisionService(RconClient rcon)
     /// Default screenshot path within Factorio's <c>script-output</c> folder.
     /// </summary>
     private const string ScreenshotFileName = "ai-player/vision.png";
+
+    /// <summary>
+    /// Maximum image size in bytes before optimization kicks in (1 MB).
+    /// Images larger than this are re-encoded as JPEG and/or downscaled.
+    /// </summary>
+    internal const int MaxImageSizeBytes = 1_048_576;
 
     /// <summary>
     /// The local filesystem directory that maps to Factorio's <c>script-output</c>.
@@ -258,5 +267,55 @@ internal sealed class VisionService(RconClient rcon)
                 ..',"tiles_high":'..string.format("%.1f", tiles_h)
                 ..',"entities":['..table.concat(legend_parts, ",")..']}')
             """);
+    }
+
+    /// <summary>
+    /// Optimize image bytes if they exceed <see cref="MaxImageSizeBytes"/>.
+    /// Converts to JPEG and progressively downscales until the image fits within the limit.
+    /// </summary>
+    /// <param name="imageBytes">Raw image bytes (typically PNG).</param>
+    /// <param name="maxSizeBytes">Maximum allowed size in bytes.</param>
+    /// <returns>
+    /// A tuple of (optimized image bytes, MIME type). If the image was already small enough,
+    /// returns the original bytes with <c>"image/png"</c>. Otherwise returns JPEG-encoded
+    /// bytes with <c>"image/jpeg"</c>.
+    /// </returns>
+    internal static (byte[] Data, string MimeType) OptimizeImage(byte[] imageBytes, int maxSizeBytes = MaxImageSizeBytes)
+    {
+        if (imageBytes.Length <= maxSizeBytes)
+            return (imageBytes, "image/png");
+
+        using var image = Image.Load(imageBytes);
+
+        // Try JPEG encoding at quality 85 first (no resize)
+        var quality = 85;
+        var result = EncodeJpeg(image, quality);
+        if (result.Length <= maxSizeBytes)
+            return (result, "image/jpeg");
+
+        // Progressively downscale until the image fits
+        var scale = 0.75;
+        while (scale >= 0.2)
+        {
+            var newWidth = Math.Max(1, (int)(image.Width * scale));
+            var newHeight = Math.Max(1, (int)(image.Height * scale));
+
+            using var resized = image.Clone(ctx => ctx.Resize(newWidth, newHeight));
+            result = EncodeJpeg(resized, quality);
+            if (result.Length <= maxSizeBytes)
+                return (result, "image/jpeg");
+
+            scale -= 0.15;
+        }
+
+        // Last resort: smallest scale already tried, return whatever we have
+        return (result, "image/jpeg");
+    }
+
+    private static byte[] EncodeJpeg(Image image, int quality)
+    {
+        using var ms = new MemoryStream();
+        image.Save(ms, new JpegEncoder { Quality = quality });
+        return ms.ToArray();
     }
 }
