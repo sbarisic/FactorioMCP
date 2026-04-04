@@ -44,7 +44,8 @@ internal sealed class VisionTools(VisionService vision, GameCommandQueue queue)
 
         if (imageBytes is { Length: > 0 })
         {
-            content.Add(ImageContentBlock.FromBytes(imageBytes, "image/png"));
+            var (optimized, mimeType) = VisionService.OptimizeImage(imageBytes);
+            content.Add(ImageContentBlock.FromBytes(optimized, mimeType));
         }
 
         // Always include the text legend (works for both vision and text-only models)

@@ -1,5 +1,7 @@
 using FactorioMCP.Rcon;
 using FactorioMCP.Services;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
 
 namespace FactorioMCP.Tests.Services;
@@ -341,5 +343,115 @@ public class VisionServiceTests
         {
             Directory.Delete(Path.GetDirectoryName(tempDir)!, true);
         }
+    }
+
+    // ── OptimizeImage — Image size reduction ────────────────────────
+
+    private static byte[] CreateTestPng(int width, int height)
+    {
+        using var image = new Image<Rgba32>(width, height);
+        using var ms = new MemoryStream();
+        image.SaveAsPng(ms);
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void OptimizeImage_AlwaysReturnsJpeg()
+    {
+        var png = CreateTestPng(100, 100);
+
+        var (data, mimeType) = VisionService.OptimizeImage(png);
+
+        Assert.Equal("image/jpeg", mimeType);
+        // Verify JPEG magic bytes (FFD8)
+        Assert.True(data.Length >= 2);
+        Assert.Equal(0xFF, data[0]);
+        Assert.Equal(0xD8, data[1]);
+    }
+
+    [Fact]
+    public void OptimizeImage_SmallImage_DoesNotResize()
+    {
+        // Image smaller than MaxDimension should keep its dimensions
+        var png = CreateTestPng(100, 80);
+
+        var (data, _) = VisionService.OptimizeImage(png);
+
+        using var result = Image.Load(data);
+        Assert.Equal(100, result.Width);
+        Assert.Equal(80, result.Height);
+    }
+
+    [Fact]
+    public void OptimizeImage_LargeImage_DownscalesToMaxDimension()
+    {
+        var png = CreateTestPng(1920, 1080);
+
+        var (data, mimeType) = VisionService.OptimizeImage(png);
+
+        Assert.Equal("image/jpeg", mimeType);
+        using var result = Image.Load(data);
+        // Longest side (1920) should be scaled to MaxDimension (1024)
+        Assert.Equal(VisionService.MaxDimension, result.Width);
+        // Height should be proportionally scaled: 1080 * (1024/1920) ≈ 576
+        Assert.True(result.Height <= VisionService.MaxDimension);
+        Assert.True(result.Height > 0);
+    }
+
+    [Fact]
+    public void OptimizeImage_TallImage_DownscalesByHeight()
+    {
+        // Tall image where height is the longest side
+        var png = CreateTestPng(600, 2000);
+
+        var (data, _) = VisionService.OptimizeImage(png);
+
+        using var result = Image.Load(data);
+        Assert.Equal(VisionService.MaxDimension, result.Height);
+        Assert.True(result.Width < VisionService.MaxDimension);
+    }
+
+    [Fact]
+    public void OptimizeImage_CustomMaxDimension_RespectsLimit()
+    {
+        var png = CreateTestPng(500, 300);
+
+        var (data, _) = VisionService.OptimizeImage(png, maxDimension: 200);
+
+        using var result = Image.Load(data);
+        Assert.Equal(200, result.Width);
+        Assert.True(result.Height <= 200);
+    }
+
+    [Fact]
+    public void OptimizeImage_ImageExactlyAtMaxDimension_DoesNotResize()
+    {
+        var png = CreateTestPng(VisionService.MaxDimension, 500);
+
+        var (data, _) = VisionService.OptimizeImage(png);
+
+        using var result = Image.Load(data);
+        Assert.Equal(VisionService.MaxDimension, result.Width);
+        Assert.Equal(500, result.Height);
+    }
+
+    [Fact]
+    public void OptimizeImage_LargeImage_OutputSmallerThanInput()
+    {
+        // Create a large PNG with random-ish data
+        using var image = new Image<Rgba32>(1920, 1080);
+        var rng = new Random(42);
+        for (int y = 0; y < image.Height; y++)
+            for (int x = 0; x < image.Width; x++)
+                image[x, y] = new Rgba32((byte)rng.Next(256), (byte)rng.Next(256), (byte)rng.Next(256));
+
+        using var ms = new MemoryStream();
+        image.SaveAsPng(ms);
+        var largeBytes = ms.ToArray();
+
+        var (data, _) = VisionService.OptimizeImage(largeBytes);
+
+        Assert.True(data.Length < largeBytes.Length,
+            $"Optimized image ({data.Length} bytes) should be smaller than original ({largeBytes.Length} bytes)");
     }
 }
