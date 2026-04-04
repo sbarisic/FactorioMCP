@@ -53,7 +53,8 @@ FactorioMCP.Tests → FactorioMCP
 | Energy Service | ✅ Functional | Electric network statistics (production/consumption/satisfaction) and per-entity power inspection |
 | Goal Planner | ✅ Functional | AI goal tracking with state machine lifecycle, ordered steps, suspend/resume, and JSON file persistence |
 | Building Memory | ✅ Functional | Tracks placed buildings with spatial queries, auto-tracking on place/mine, labels, and JSON file persistence |
-| MCP Tools | ✅ Functional | Movement, inventory/crafting, entity placement/mining, entity interaction (insert/remove items, inspect), world scanning, proximity checking, chat message, goal planning, energy management, research, building memory, task primitives (gather/refuel/smelt) tools exposed via MCP SDK |
+| Vision Service | ✅ Functional | Annotated screenshots with entity bounding box overlays, inserter direction arrows, numbered labels, and structured map legends for vision-model analysis |
+| MCP Tools | ✅ Functional | Movement, inventory/crafting, entity placement/mining, entity interaction (insert/remove items, inspect), world scanning, proximity checking, chat message, goal planning, energy management, research, building memory, vision screenshots, task primitives (gather/refuel/smelt) tools exposed via MCP SDK |
 | MCP Hosting | ✅ Functional | Program.cs wiring with DI, configuration, stdio transport |
 | Realistic Behaviors | ✅ Functional | Walking with real physics, crafting with real queue, proximity validation on place/mine, wait/polling for crafting completion, position arrival, and game tick timing — no cheating |
 
@@ -89,8 +90,6 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
-- [ ] **Vision Screenshot** — `take_screenshot()`: return a base64 screenshot image for vision models to identify bottlenecks or plan layouts. Overlay entity bounds, directional indicators (inserter drop/pickup positions as absolute coordinates), and metadata as a "Map Legend" to give the image depth/context. **(CPX 3)**
-- [ ] **Smart Inserter Placement** — `place_inserter(target_x, target_y, side, direction)`: accept a target entity and a side (top/bottom/left/right) plus direction (inbound/outbound). C# backend calculates the exact tile offset based on entity size. Also `insert_between(source_pos, destination_pos)` to auto-place an inserter in the 1-tile gap between two entities with correct orientation. **(CPX 3)**
 - [ ] **Ghost Placement Validation** — LLM places ghost entities first, C# validates placement (prototype, orientation, connectivity). Returns corrective errors like "Inserter at {10,11} is pointing at a wall, not the Assembler" to create a feedback loop before committing real entities. **(CPX 3)**
 
 

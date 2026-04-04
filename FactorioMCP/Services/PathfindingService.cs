@@ -85,8 +85,13 @@ internal sealed class PathfindingService(RconClient rcon)
     /// <summary>
     /// On_tick handler that follows waypoints from <c>storage.nav_path</c> and
     /// also continues mining if <c>storage.mine_state</c> is set.
-    /// Uses <c>math.atan2</c> for precise direction (not limited to 8 directions)
-    /// for smooth curved path following.
+    /// 
+    /// Key features:
+    /// - Progress-based waypoint advancement (close-enough + passed-by dot-product test)
+    /// - Look-ahead targeting for smoother movement on curves
+    /// - Direction dead-zone: at sector boundaries, biases toward the direction component
+    ///   that has the larger delta, preventing oscillation from atan2 instability
+    /// - Stuck detection: marks stuck if no distance progress toward final goal over 120 ticks
     /// </summary>
     internal const string InstallOnTickHandler = """
         script.on_event(defines.events.on_tick, function()
@@ -101,6 +106,7 @@ internal sealed class PathfindingService(RconClient rcon)
             if not storage.nav_path or not storage.nav_index then return end
             local path = storage.nav_path
             local idx = storage.nav_index
+            local pos = p.position
             if idx > #path then
                 storage.nav_status = "arrived"
                 storage.nav_path = nil
@@ -110,54 +116,130 @@ internal sealed class PathfindingService(RconClient rcon)
                 storage.nav_stuck_ticks = 0
                 return
             end
-            local target = path[idx].position
-            local pos = p.position
+            -- Progress-based waypoint advancement:
+            -- Skip waypoints we have passed or are very close to.
+            local advanced = true
+            while advanced and idx <= #path do
+                advanced = false
+                local wp = path[idx].position
+                local dx = wp.x - pos.x
+                local dy = wp.y - pos.y
+                local dist_sq = dx*dx + dy*dy
+                -- Tolerance: 1.5 for intermediate waypoints, user-specified for final
+                local tol = 1.5
+                if idx == #path then
+                    tol = storage.nav_tolerance or 1.5
+                end
+                -- Close enough: advance
+                if dist_sq < tol * tol then
+                    idx = idx + 1
+                    storage.nav_index = idx
+                    advanced = true
+                -- Passed-by test for non-final waypoints:
+                -- If the next waypoint exists, check if we've passed the current one
+                -- by testing if the vector from current wp to player points roughly
+                -- toward the next wp (dot product > 0).
+                elseif idx < #path then
+                    local nwp = path[idx + 1].position
+                    local wnx = nwp.x - wp.x
+                    local wny = nwp.y - wp.y
+                    local wpx = pos.x - wp.x
+                    local wpy = pos.y - wp.y
+                    local dot = wnx * wpx + wny * wpy
+                    if dot > 0 then
+                        local seg_len_sq = wnx*wnx + wny*wny
+                        if seg_len_sq > 0.01 then
+                            local cross = math.abs(wnx * wpy - wny * wpx)
+                            local perp_dist = cross / math.sqrt(seg_len_sq)
+                            if perp_dist < 3.0 then
+                                idx = idx + 1
+                                storage.nav_index = idx
+                                advanced = true
+                            end
+                        end
+                    end
+                end
+            end
+            -- Check if we finished all waypoints
+            if idx > #path then
+                storage.nav_status = "arrived"
+                storage.nav_path = nil
+                storage.nav_index = nil
+                storage.walk_state = nil
+                p.walking_state = {walking = false}
+                storage.nav_stuck_ticks = 0
+                return
+            end
+            -- Look-ahead: target a waypoint a few steps ahead for smoother movement
+            local look_ahead = idx
+            local max_look = math.min(idx + 4, #path)
+            for la = idx + 1, max_look do
+                local lawp = path[la].position
+                local ladx = lawp.x - pos.x
+                local lady = lawp.y - pos.y
+                local la_dist_sq = ladx*ladx + lady*lady
+                if la_dist_sq < 36 then
+                    look_ahead = la
+                end
+            end
+            local target = path[look_ahead].position
             local dx = target.x - pos.x
             local dy = target.y - pos.y
-            local dist_sq = dx*dx + dy*dy
-            -- Check if close enough to current waypoint
-            local wp_tolerance = 0.5
-            -- Use larger tolerance for final waypoint
-            if idx == #path then
-                wp_tolerance = storage.nav_tolerance or 1.5
+            -- Stuck detection: track distance to FINAL goal position.
+            -- If no progress toward the goal over 120 ticks (2 sec), mark stuck.
+            local final_wp = path[#path].position
+            local goal_dx = final_wp.x - pos.x
+            local goal_dy = final_wp.y - pos.y
+            local goal_dist_sq = goal_dx*goal_dx + goal_dy*goal_dy
+            if not storage.nav_best_goal_dist_sq then
+                storage.nav_best_goal_dist_sq = goal_dist_sq
+                storage.nav_stuck_ticks = 0
             end
-            if dist_sq < wp_tolerance * wp_tolerance then
-                storage.nav_index = idx + 1
-                if idx + 1 > #path then
-                    storage.nav_status = "arrived"
+            if goal_dist_sq < storage.nav_best_goal_dist_sq - 0.1 then
+                storage.nav_best_goal_dist_sq = goal_dist_sq
+                storage.nav_stuck_ticks = 0
+            else
+                storage.nav_stuck_ticks = (storage.nav_stuck_ticks or 0) + 1
+                if storage.nav_stuck_ticks > 120 then
+                    storage.nav_status = "stuck"
                     storage.nav_path = nil
                     storage.nav_index = nil
                     storage.walk_state = nil
                     p.walking_state = {walking = false}
-                    storage.nav_stuck_ticks = 0
                     return
                 end
-                target = path[idx + 1].position
-                dx = target.x - pos.x
-                dy = target.y - pos.y
             end
-            -- Stuck detection: if position hasn't changed in 120 ticks (2 sec)
-            if storage.nav_prev_pos then
-                local pdx = pos.x - storage.nav_prev_pos.x
-                local pdy = pos.y - storage.nav_prev_pos.y
-                if pdx*pdx + pdy*pdy < 0.01 then
-                    storage.nav_stuck_ticks = (storage.nav_stuck_ticks or 0) + 1
-                    if storage.nav_stuck_ticks > 120 then
-                        storage.nav_status = "stuck"
-                        storage.nav_path = nil
-                        storage.nav_index = nil
-                        storage.walk_state = nil
-                        p.walking_state = {walking = false}
-                        return
-                    end
+            -- Direction selection with dead-zone to prevent oscillation.
+            -- The 8 directions map to sectors of 45 deg each. When the ideal angle
+            -- falls near a sector boundary (within ~5 deg), atan2 noise from
+            -- sub-tile position changes causes the direction to flip every tick.
+            --
+            -- Fix: use component-based direction selection. Pick the axis-aligned
+            -- or diagonal direction whose movement vector best matches (dx, dy).
+            -- Ties are broken by preferring the cardinal direction (N/S/E/W) which
+            -- guarantees progress along the dominant axis without zigzag.
+            --
+            -- Direction vectors (defines.direction):
+            -- 0=N(0,-1) 1=NE(1,-1) 2=E(1,0) 3=SE(1,1) 4=S(0,1) 5=SW(-1,1) 6=W(-1,0) 7=NW(-1,-1)
+            local adx = math.abs(dx)
+            local ady = math.abs(dy)
+            local dir
+            -- If one component dominates heavily (>2.4x the other), use cardinal direction
+            -- This avoids diagonal oscillation when movement is mostly along one axis
+            if ady > adx * 2.414 then
+                -- Mostly vertical: use N or S
+                dir = dy < 0 and 0 or 4
+            elseif adx > ady * 2.414 then
+                -- Mostly horizontal: use E or W
+                dir = dx > 0 and 2 or 6
+            else
+                -- Diagonal movement: pick the appropriate diagonal
+                if dx > 0 then
+                    dir = dy < 0 and 1 or 3
                 else
-                    storage.nav_stuck_ticks = 0
+                    dir = dy < 0 and 7 or 5
                 end
             end
-            storage.nav_prev_pos = {x = pos.x, y = pos.y}
-            -- Walk toward current waypoint using 8-direction mapping
-            local dir = math.atan2(dx, -dy) * (4 / math.pi) % 8
-            dir = math.floor(dir + 0.5) % 8
             storage.walk_state = {direction = dir}
             p.walking_state = {walking = true, direction = dir}
         end)
@@ -289,7 +371,8 @@ internal sealed class PathfindingService(RconClient rcon)
             storage.nav_request_id = nil
             storage.nav_tolerance = nil
             storage.nav_stuck_ticks = 0
-            storage.nav_prev_pos = nil
+            storage.nav_cur_dir = nil
+            storage.nav_best_goal_dist_sq = nil
             storage.walk_state = nil
             player.walking_state = {walking = false, direction = defines.direction.north}
             {{RemoveOnTickIfIdle}}
@@ -338,6 +421,7 @@ internal sealed class PathfindingService(RconClient rcon)
                 goal = {x={{targetX}}, y={{targetY}}},
                 force = p.force,
                 radius = {{tolerance}},
+                entity_to_ignore = p.character,
                 pathfind_flags = {
                     prefer_straight_paths = true,
                     no_break = true
@@ -382,7 +466,8 @@ internal sealed class PathfindingService(RconClient rcon)
             storage.nav_request_id = nil
             storage.nav_tolerance = nil
             storage.nav_stuck_ticks = 0
-            storage.nav_prev_pos = nil
+            storage.nav_cur_dir = nil
+            storage.nav_best_goal_dist_sq = nil
             storage.walk_state = nil
             local player = game.connected_players[1]
             player.walking_state = {walking = false, direction = defines.direction.north}

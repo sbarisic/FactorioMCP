@@ -190,13 +190,5 @@
     "direction": "south",
     "label": null,
     "placed_at": "2026-04-02T20:39:48.1464486Z"
-  },
-  {
-    "entity_name": "burner-mining-drill",
-    "x": 23,
-    "y": -190,
-    "direction": "south",
-    "label": null,
-    "placed_at": "2026-04-04T12:12:34.2005392Z"
   }
 ]
