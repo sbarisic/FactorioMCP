@@ -77,6 +77,28 @@ public partial class FactorioServiceTests
     }
 
     [Fact]
+    public async Task WalkAsync_OnTickHandlerAlsoChecksMineState()
+    {
+        await _service.WalkAsync("north");
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.Contains("storage.mine_state", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task WalkAsync_OnTickHandlerSelectsEntityBeforeMining()
+    {
+        await _service.WalkAsync("north");
+
+        Assert.NotNull(_rcon.LastCommand);
+        // update_selected_entity must be called before mining_state in the on_tick handler
+        Assert.Contains("update_selected_entity", _rcon.LastCommand);
+        int selectIdx = _rcon.LastCommand.IndexOf("update_selected_entity(storage.mine_state.position)");
+        int miningIdx = _rcon.LastCommand.IndexOf("p.mining_state = {mining = true");
+        Assert.True(selectIdx < miningIdx, "update_selected_entity must come before mining_state in on_tick handler");
+    }
+
+    [Fact]
     public async Task StopWalkingAsync_ClearsWalkState()
     {
         await _service.StopWalkingAsync();
@@ -86,11 +108,13 @@ public partial class FactorioServiceTests
     }
 
     [Fact]
-    public async Task StopWalkingAsync_RemovesOnTickHandler()
+    public async Task StopWalkingAsync_RemovesOnTickHandlerConditionally()
     {
         await _service.StopWalkingAsync();
 
         Assert.NotNull(_rcon.LastCommand);
+        // Handler is only removed when BOTH walk and mine are nil
+        Assert.Contains("not storage.walk_state and not storage.mine_state", _rcon.LastCommand);
         Assert.Contains("script.on_event(defines.events.on_tick, nil)", _rcon.LastCommand);
     }
 

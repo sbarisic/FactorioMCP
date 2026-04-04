@@ -15,8 +15,10 @@ internal sealed class MiningService(RconClient rcon)
 {
     /// <summary>
     /// Start mining a resource entity at the given position using <c>player.mining_state</c>.
-    /// Validates proximity, selects the entity via <c>update_selected_entity</c>, and sets
-    /// mining state to begin tick-based extraction. Returns entity info, current amount,
+    /// Validates proximity, selects the entity via <c>update_selected_entity</c>, stores
+    /// mining position in <c>storage.mine_state</c>, and installs the shared on_tick handler
+    /// to continuously re-apply mining_state every tick (required in Factorio 2 where
+    /// mining_state does not persist across ticks). Returns entity info, current amount,
     /// and estimated mining time per unit.
     /// </summary>
     public Task<string> StartMiningResourceAsync(double x, double y, CancellationToken cancellationToken = default)
@@ -43,9 +45,13 @@ internal sealed class MiningService(RconClient rcon)
             local name = e.name
             local amount = e.amount or 0
             local mining_time = e.prototype.mineable_properties.mining_time or 1.0
-            -- Select the entity and start mining
-            player.update_selected_entity(pos)
-            player.mining_state = {mining = true, position = pos}
+            -- Store exact entity position for the on_tick handler
+            local epos = {e.position.x, e.position.y}
+            storage.mine_state = {position = epos}
+            {{FactorioService.InstallOnTickHandler}}
+            -- Select the entity and start mining immediately
+            player.update_selected_entity(epos)
+            player.mining_state = {mining = true, position = epos}
             rcon.print('{"success":true,"entity":"'..name..'"'..
                 ',"amount":'..amount..
                 ',"mining_time_per_unit":'..string.format("%.2f", mining_time)..
@@ -91,13 +97,16 @@ internal sealed class MiningService(RconClient rcon)
     }
 
     /// <summary>
-    /// Stop mining by setting <c>mining_state</c> to not mining.
+    /// Stop mining by clearing <c>storage.mine_state</c> and removing the shared on_tick
+    /// handler if walking is also stopped.
     /// </summary>
     public Task<string> StopMiningAsync(CancellationToken cancellationToken = default)
     {
-        const string lua = """
+        var lua = $$"""
             local player = game.connected_players[1]
+            storage.mine_state = nil
             player.mining_state = {mining = false}
+            {{FactorioService.RemoveOnTickIfIdle}}
             rcon.print('{"success":true,"status":"mining_stopped"}')
             """;
 

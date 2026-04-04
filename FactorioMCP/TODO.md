@@ -182,10 +182,11 @@ RCON connection settings are read from environment variables:
 ### Active Bugs
 
 - [ ] **Stale Building Memory After Manual Removal** — Building memory tracks entities placed by the AI but has no way to detect when entities are removed outside the MCP tools (e.g. manually by a player, destroyed by enemies, or removed by other mods). `GetAllBuildings`/`GetClosestBuildingOfType`/`GetBuildingsNear` return phantom entries for entities that no longer exist in the world, causing `InspectEntity` and `MoveToBuilding` to walk to empty positions. Needs a validation/reconciliation mechanism — either periodic world verification (scan tracked positions for actual entities), on-demand validation before returning results, or a `ValidateBuildingMemory` tool that prunes stale entries. **(CPX 3)**
+- [ ] **RCON First-Call Returns `"nothing"` After Server Restart** — Intermittently, the first RCON command after MCP server restart returns the literal string `"nothing"` instead of expected JSON output from `rcon.print()`. Subsequent identical calls succeed immediately. Observed with `GetPlayerPosition` but may affect any first command. `GetGameTick` called in parallel at the same time succeeded, suggesting it's timing-related rather than a connection issue. Possibly caused by `InitializeChatListenerAsync` (the startup Lua command) interfering with subsequent response reads, or a warm-up delay in the RCON connection. **(CPX 2)**
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
-- [ ] **RCON First-Call Returns `"nothing"` After Server Restart** — Intermittently, the first RCON command after MCP server restart returns the literal string `"nothing"` instead of expected JSON output from `rcon.print()`. Subsequent identical calls succeed immediately. Observed with `GetPlayerPosition` but may affect any first command. `GetGameTick` called in parallel at the same time succeeded, suggesting it's timing-related rather than a connection issue. Possibly caused by `InitializeChatListenerAsync` (the startup Lua command) interfering with subsequent response reads, or a warm-up delay in the RCON connection. **(CPX 2)**
+*No uncategorized items*
 
 ---
 

@@ -187,10 +187,11 @@ internal sealed partial class FactorioService
             local craft_json = '"crafting_queue":['..table.concat(queue_parts, ",")..']'
 
             -- Research
-            local tech = player.force.current_research
+            local force = player.force
+            local tech = force.current_research
             local research_json
             if tech then
-                research_json = '"research":{"active":true,"technology":"'..tech.name..'","progress":'..string.format("%.3f", tech.research_progress)..'}'
+                research_json = '"research":{"active":true,"technology":"'..tech.name..'","progress":'..string.format("%.3f", force.research_progress)..'}'
             else
                 research_json = '"research":{"active":false}'
             end

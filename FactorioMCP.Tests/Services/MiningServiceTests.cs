@@ -80,6 +80,46 @@ public class MiningServiceTests
     }
 
     [Fact]
+    public async Task StartMiningResource_StoresMineStateInStorage()
+    {
+        await _service.StartMiningResourceAsync(5, 5);
+
+        Assert.Contains("storage.mine_state", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StartMiningResource_InstallsOnTickHandler()
+    {
+        await _service.StartMiningResourceAsync(5, 5);
+
+        Assert.Contains("script.on_event(defines.events.on_tick", _rcon.LastCommand!);
+        Assert.Contains("storage.mine_state", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StartMiningResource_OnTickHandlerAlsoChecksWalkState()
+    {
+        await _service.StartMiningResourceAsync(5, 5);
+
+        // The shared on_tick handler must handle both walking and mining
+        Assert.Contains("storage.walk_state", _rcon.LastCommand!);
+        Assert.Contains("storage.mine_state", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StartMiningResource_OnTickHandlerSelectsEntityBeforeMining()
+    {
+        await _service.StartMiningResourceAsync(5, 5);
+
+        // update_selected_entity must be called before mining_state in the on_tick handler
+        // so the player has a selected entity to mine
+        Assert.Contains("update_selected_entity", _rcon.LastCommand!);
+        int selectIdx = _rcon.LastCommand!.IndexOf("update_selected_entity(storage.mine_state.position)");
+        int miningIdx = _rcon.LastCommand.IndexOf("p.mining_state = {mining = true");
+        Assert.True(selectIdx < miningIdx, "update_selected_entity must come before mining_state in on_tick handler");
+    }
+
+    [Fact]
     public async Task StartMiningResource_IncludesMiningTimeInOutput()
     {
         await _service.StartMiningResourceAsync(5, 5);
@@ -139,6 +179,25 @@ public class MiningServiceTests
         await _service.StopMiningAsync();
 
         Assert.Contains("mining = false", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StopMining_ClearsMineStateInStorage()
+    {
+        await _service.StopMiningAsync();
+
+        Assert.Contains("storage.mine_state = nil", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task StopMining_RemovesOnTickHandlerConditionally()
+    {
+        await _service.StopMiningAsync();
+
+        // Handler should only be removed if walk_state is also nil
+        Assert.Contains("storage.walk_state", _rcon.LastCommand!);
+        Assert.Contains("storage.mine_state", _rcon.LastCommand!);
+        Assert.Contains("script.on_event(defines.events.on_tick, nil)", _rcon.LastCommand!);
     }
 
     [Fact]

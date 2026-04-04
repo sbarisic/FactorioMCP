@@ -542,7 +542,7 @@ public class McpToolIntegrationTests
 
         Assert.Contains("automation", _rcon.LastCommand!);
         Assert.Contains("force.technologies", _rcon.LastCommand!);
-        Assert.Contains("tech.effects", _rcon.LastCommand!);
+        Assert.Contains("tech.prototype.effects", _rcon.LastCommand!);
     }
 
     [Fact]

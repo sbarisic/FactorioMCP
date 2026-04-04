@@ -10,9 +10,10 @@ internal sealed partial class FactorioService
     public Task<string> GetResearchStatusAsync(CancellationToken cancellationToken = default)
     {
         return rcon.ExecuteLuaAsync("""
-            local tech = game.connected_players[1].force.current_research
+            local force = game.connected_players[1].force
+            local tech = force.current_research
             if tech then
-                rcon.print('{"researching":true,"technology":"'..tech.name..'","progress":'..string.format("%.3f", tech.research_progress)..'}')
+                rcon.print('{"researching":true,"technology":"'..tech.name..'","progress":'..string.format("%.3f", force.research_progress)..'}')
             else
                 rcon.print('{"researching":false}')
             end
@@ -154,7 +155,7 @@ internal sealed partial class FactorioService
                 prereqs[#prereqs+1] = '"'..name..'"'
             end
             local effects = {}
-            for _, e in pairs(tech.effects) do
+            for _, e in pairs(tech.prototype.effects) do
                 if e.type == "unlock-recipe" then
                     effects[#effects+1] = '{"type":"unlock-recipe","recipe":"'..e.recipe..'"}'
                 else
