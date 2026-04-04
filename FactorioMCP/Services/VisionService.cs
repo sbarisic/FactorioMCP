@@ -1,5 +1,8 @@
 using System.Globalization;
 using FactorioMCP.Rcon;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Processing;
 
 namespace FactorioMCP.Services;
 
@@ -15,6 +18,24 @@ internal sealed class VisionService(RconClient rcon)
     /// Default screenshot path within Factorio's <c>script-output</c> folder.
     /// </summary>
     private const string ScreenshotFileName = "ai-player/vision.png";
+
+    /// <summary>
+    /// Maximum image size in bytes before optimization kicks in (1 MB).
+    /// Images larger than this are re-encoded as JPEG and/or downscaled.
+    /// </summary>
+    internal const int MaxImageSizeBytes = 1_048_576;
+
+    /// <summary>
+    /// Maximum pixel dimension (width or height) for images sent to the LLM.
+    /// Keeping images at or below this size dramatically reduces the token count
+    /// that vision models must process, which is the main source of latency.
+    /// </summary>
+    internal const int MaxDimension = 1024;
+
+    /// <summary>
+    /// JPEG encoding quality used when optimizing images for the LLM.
+    /// </summary>
+    private const int JpegQuality = 80;
 
     /// <summary>
     /// The local filesystem directory that maps to Factorio's <c>script-output</c>.
@@ -258,5 +279,42 @@ internal sealed class VisionService(RconClient rcon)
                 ..',"tiles_high":'..string.format("%.1f", tiles_h)
                 ..',"entities":['..table.concat(legend_parts, ",")..']}')
             """);
+    }
+
+    /// <summary>
+    /// Optimize image for LLM consumption by downscaling to <see cref="MaxDimension"/> pixels
+    /// on the longest side and encoding as JPEG. This reduces both the base64 payload size
+    /// and the token count that vision models must process, which is the main source of latency
+    /// after the screenshot is returned.
+    /// </summary>
+    /// <param name="imageBytes">Raw image bytes (typically PNG from Factorio).</param>
+    /// <param name="maxDimension">Maximum pixel dimension on the longest side.</param>
+    /// <returns>
+    /// A tuple of (optimized image bytes, MIME type). If the image already fits within
+    /// <paramref name="maxDimension"/>, it is JPEG-encoded without resizing. Otherwise it is
+    /// downscaled proportionally first.
+    /// </returns>
+    internal static (byte[] Data, string MimeType) OptimizeImage(byte[] imageBytes, int maxDimension = MaxDimension)
+    {
+        using var image = Image.Load(imageBytes);
+
+        var longestSide = Math.Max(image.Width, image.Height);
+
+        if (longestSide > maxDimension)
+        {
+            var scale = (double)maxDimension / longestSide;
+            var newWidth = Math.Max(1, (int)(image.Width * scale));
+            var newHeight = Math.Max(1, (int)(image.Height * scale));
+            image.Mutate(ctx => ctx.Resize(newWidth, newHeight));
+        }
+
+        return (EncodeJpeg(image, JpegQuality), "image/jpeg");
+    }
+
+    private static byte[] EncodeJpeg(Image image, int quality)
+    {
+        using var ms = new MemoryStream();
+        image.Save(ms, new JpegEncoder { Quality = quality });
+        return ms.ToArray();
     }
 }
