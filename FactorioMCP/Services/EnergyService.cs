@@ -21,6 +21,7 @@ internal sealed class EnergyService(RconClient rcon)
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(radius, 0);
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{FactorioService.LuaJsonEscape}}
             local player = game.connected_players[1]
             local surface = player.surface
             local pos = player.position
