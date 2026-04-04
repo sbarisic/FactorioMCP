@@ -630,4 +630,119 @@ internal sealed partial class FactorioService
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
+
+    /// <summary>
+    /// Get entities within the player's reach distance, optionally filtered by entity type/name.
+    /// If maxDistance is not specified, uses the player's reach_distance.
+    /// </summary>
+    public Task<string> GetReachableEntitiesAsync(string? type = null, double? maxDistance = null, CancellationToken cancellationToken = default)
+    {
+        if (maxDistance.HasValue)
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxDistance.Value);
+
+        var escapedType = type?.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        var filterExpr = escapedType is not null
+            ? string.Create(CultureInfo.InvariantCulture, $"name=\"{escapedType}\"")
+            : "";
+
+        var radiusExpr = maxDistance.HasValue
+            ? string.Create(CultureInfo.InvariantCulture, $"{maxDistance.Value}")
+            : "radius";
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            local player = game.connected_players[1]
+            local radius = player.reach_distance
+            local entities = player.surface.find_entities_filtered{
+                position=player.position, radius={{radiusExpr}}{{(escapedType is not null ? $", {filterExpr}" : "")}}
+            }
+            local parts = {}
+            for _, e in pairs(entities) do
+                if e ~= player.character then
+                    local dx = e.position.x - player.position.x
+                    local dy = e.position.y - player.position.y
+                    local dist = math.sqrt(dx*dx + dy*dy)
+                    parts[#parts+1] = '{"name":"'..esc(e.name)..'","type":"'..esc(e.type)..'","x":'..string.format("%.1f", e.position.x)..',"y":'..string.format("%.1f", e.position.y)..',"distance":'..string.format("%.1f", dist)..'}'
+                end
+            end
+            rcon.print('{"reach_distance":'..radius..',"search_radius":'..{{radiusExpr}}..',"count":'..#parts..',"entities":['..table.concat(parts, ",")..']}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Count an item across all nearby containers (chests, furnaces, assemblers) and player inventory.
+    /// </summary>
+    public Task<string> CountItemInWorldAsync(string itemName, double radius = 50, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemName);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+
+        var escapedItemName = itemName.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            local player = game.connected_players[1]
+            local item = "{{escapedItemName}}"
+            local player_count = player.get_item_count(item)
+            local container_total = 0
+            local containers = {}
+            local inv_types = {
+                {defines.inventory.chest, "chest"},
+                {defines.inventory.furnace_source, "furnace_source"},
+                {defines.inventory.furnace_result, "furnace_result"},
+                {defines.inventory.assembling_machine_input, "assembling_machine_input"},
+                {defines.inventory.assembling_machine_output, "assembling_machine_output"}
+            }
+            local entities = player.surface.find_entities_filtered{
+                position=player.position, radius={{radius}}
+            }
+            for _, e in pairs(entities) do
+                if e ~= player.character then
+                    local entity_count = 0
+                    for _, inv_pair in pairs(inv_types) do
+                        local inv = e.get_inventory(inv_pair[1])
+                        if inv then
+                            entity_count = entity_count + inv.get_item_count(item)
+                        end
+                    end
+                    if entity_count > 0 then
+                        container_total = container_total + entity_count
+                        containers[#containers+1] = '{"name":"'..esc(e.name)..'","x":'..string.format("%.1f", e.position.x)..',"y":'..string.format("%.1f", e.position.y)..',"count":'..entity_count..'}'
+                    end
+                end
+            end
+            local total = player_count + container_total
+            rcon.print('{"item":"'..esc(item)..'","total":'..total..',"player_count":'..player_count..',"container_count":'..container_total..',"search_radius":{{radius}},"containers":['..table.concat(containers, ",")..']}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Estimate walk time to a position based on straight-line distance and player speed.
+    /// </summary>
+    public Task<string> EstimateTravelTimeAsync(double x, double y, CancellationToken cancellationToken = default)
+    {
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local px = player.position.x
+            local py = player.position.y
+            local tx = {{x}}
+            local ty = {{y}}
+            local dx = tx - px
+            local dy = ty - py
+            local distance = math.sqrt(dx*dx + dy*dy)
+            local speed = player.character_running_speed
+            local tiles_per_second = speed * 60
+            local seconds = 0
+            if tiles_per_second > 0 then
+                seconds = distance / tiles_per_second
+            end
+            rcon.print('{"distance":'..string.format("%.1f", distance)..',"estimated_seconds":'..string.format("%.1f", seconds)..',"tiles_per_second":'..string.format("%.1f", tiles_per_second)..',"player_x":'..string.format("%.1f", px)..',"player_y":'..string.format("%.1f", py)..',"target_x":'..string.format("%.1f", tx)..',"target_y":'..string.format("%.1f", ty)..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
 }
