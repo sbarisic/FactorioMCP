@@ -185,7 +185,7 @@ RCON connection settings are read from environment variables:
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
-*No uncategorized items*
+- Revise player movement, when player is following a waypoint line (for example going straight up), and the player goes either a bit to the left or to the right, the player starts oscillating between left and right directions because the direction calculation is based on 8 sectors. This can be fixed by adding a "dead zone" in the direction calculation, so that if the player is within a certain distance from the center of the sector, it will not change direction.
 
 ### Rejected / Not Applicable
 

@@ -30,7 +30,7 @@ internal sealed class VisionService(RconClient rcon)
     /// Keeping images at or below this size dramatically reduces the token count
     /// that vision models must process, which is the main source of latency.
     /// </summary>
-    internal const int MaxDimension = 1024;
+    internal const int MaxDimension = 512;
 
     /// <summary>
     /// JPEG encoding quality used when optimizing images for the LLM.
