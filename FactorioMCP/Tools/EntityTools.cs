@@ -256,6 +256,22 @@ internal sealed class EntityTools(FactorioService factorio, MiningService mining
         }
     }
 
+    [McpServerTool, Description(
+        "Get available adjacent tile slots around an entity at the given position. " +
+        "Checks each tile on the perimeter of the entity's bounding box for collision, " +
+        "reporting which slots are free for placing inserters, belts, or other buildings. " +
+        "Each slot includes its coordinates, which side of the entity it is on (north/south/east/west), " +
+        "and whether it is blocked by another entity.")]
+    public Task<string> GetAvailableSlots(
+        [Description("X coordinate of the target entity")]
+        double x,
+        [Description("Y coordinate of the target entity")]
+        double y,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(GetAvailableSlots), ct => factorio.GetAvailableSlotsAsync(x, y, ct), cancellationToken);
+    }
+
     private static bool IsSuccessResponse(string json, out string? newDirection)
     {
         newDirection = null;

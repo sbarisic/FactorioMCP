@@ -700,4 +700,70 @@ public partial class FactorioServiceTests
         Assert.Contains("3.5", _rcon.LastCommand!);
         Assert.Contains("-1.25", _rcon.LastCommand!);
     }
+
+    [Fact]
+    public async Task GetAvailableSlotsAsync_SendsSilentCommand()
+    {
+        await _service.GetAvailableSlotsAsync(10, 20);
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GetAvailableSlotsAsync_SendsCorrectPosition()
+    {
+        await _service.GetAvailableSlotsAsync(5.5, -3.0);
+
+        Assert.Contains("5.5", _rcon.LastCommand!);
+        Assert.Contains("-3", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetAvailableSlotsAsync_FindsEntitiesAtPosition()
+    {
+        await _service.GetAvailableSlotsAsync(3.0, 4.0);
+
+        Assert.Contains("find_entities_filtered", _rcon.LastCommand!);
+        Assert.Contains("radius=0.5", _rcon.LastCommand!);
+        Assert.Contains("limit=1", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetAvailableSlotsAsync_ChecksCanPlaceEntity()
+    {
+        await _service.GetAvailableSlotsAsync(0, 0);
+
+        Assert.Contains("can_place_entity", _rcon.LastCommand!);
+        Assert.Contains("transport-belt", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetAvailableSlotsAsync_OutputsDirections()
+    {
+        await _service.GetAvailableSlotsAsync(0, 0);
+
+        Assert.Contains("\"north\"", _rcon.LastCommand!);
+        Assert.Contains("\"south\"", _rcon.LastCommand!);
+        Assert.Contains("\"east\"", _rcon.LastCommand!);
+        Assert.Contains("\"west\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetAvailableSlotsAsync_OutputsAvailableAndTotalCount()
+    {
+        await _service.GetAvailableSlotsAsync(0, 0);
+
+        Assert.Contains("available_count", _rcon.LastCommand!);
+        Assert.Contains("total_count", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetAvailableSlotsAsync_FormatsDecimalsWithInvariantCulture()
+    {
+        await _service.GetAvailableSlotsAsync(1.5, -2.75);
+
+        Assert.Contains("1.5", _rcon.LastCommand!);
+        Assert.Contains("-2.75", _rcon.LastCommand!);
+    }
 }

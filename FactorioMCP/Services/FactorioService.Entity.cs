@@ -800,4 +800,52 @@ internal sealed partial class FactorioService
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
+
+    public Task<string> GetAvailableSlotsAsync(double x, double y, CancellationToken cancellationToken = default)
+    {
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            local player = game.connected_players[1]
+            local surface = player.surface
+            local entities = surface.find_entities_filtered{position={{{x}},{{y}}}, radius=0.5, limit=1}
+            if #entities == 0 then
+                rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
+                return
+            end
+            local entity = entities[1]
+            local bb = entity.bounding_box
+            local lt = bb.left_top
+            local rb = bb.right_bottom
+            local min_x = math.floor(lt.x)
+            local min_y = math.floor(lt.y)
+            local max_x = math.floor(rb.x - 0.01)
+            local max_y = math.floor(rb.y - 0.01)
+            local slots = {}
+            local available = 0
+            local total = 0
+            local function check(px, py, dir)
+                local pos = {px, py}
+                local free = surface.can_place_entity{name="transport-belt", position=pos}
+                total = total + 1
+                if free then available = available + 1 end
+                slots[#slots+1] = '{"x":'..string.format("%.1f", px)..',"y":'..string.format("%.1f", py)..',"direction":"'..dir..'","blocked":'..(free and 'false' or 'true')..'}'
+            end
+            -- North side (above entity)
+            for tx = min_x, max_x do check(tx + 0.5, min_y - 1 + 0.5, "north") end
+            -- South side (below entity)
+            for tx = min_x, max_x do check(tx + 0.5, max_y + 1 + 0.5, "south") end
+            -- West side (left of entity)
+            for ty = min_y, max_y do check(min_x - 1 + 0.5, ty + 0.5, "west") end
+            -- East side (right of entity)
+            for ty = min_y, max_y do check(max_x + 1 + 0.5, ty + 0.5, "east") end
+            rcon.print('{"success":true,"entity_name":"'..esc(entity.name)..'"'..
+                ',"entity_x":'..string.format("%.1f", entity.position.x)..
+                ',"entity_y":'..string.format("%.1f", entity.position.y)..
+                ',"slots":['..table.concat(slots, ',')..']'..
+                ',"available_count":'..available..
+                ',"total_count":'..total..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
 }
