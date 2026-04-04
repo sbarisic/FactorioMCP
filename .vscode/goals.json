@@ -109,5 +109,54 @@
     "created_at": "2026-04-02T20:19:19.8760756Z",
     "updated_at": "2026-04-02T20:19:19.8760756Z",
     "completed_at": null
+  },
+  {
+    "id": "d663dc24",
+    "description": "Live testing session - verifying bug fixes",
+    "status": "pending",
+    "steps": [
+      {
+        "description": "Test place_entity",
+        "status": "pending",
+        "notes": null
+      },
+      {
+        "description": "Test walk_to_position",
+        "status": "pending",
+        "notes": null
+      },
+      {
+        "description": "Test insert_items",
+        "status": "pending",
+        "notes": null
+      }
+    ],
+    "failure_reason": null,
+    "notes": null,
+    "created_at": "2026-04-04T21:31:21.6088594Z",
+    "updated_at": "2026-04-04T21:31:21.6088598Z",
+    "completed_at": null
+  },
+  {
+    "id": "a6d4c09b",
+    "description": "Test goal for bug verification",
+    "status": "pending",
+    "steps": [
+      {
+        "description": "Step 1",
+        "status": "pending",
+        "notes": null
+      },
+      {
+        "description": "Step 2",
+        "status": "pending",
+        "notes": null
+      }
+    ],
+    "failure_reason": null,
+    "notes": null,
+    "created_at": "2026-04-04T22:22:04.8299626Z",
+    "updated_at": "2026-04-04T22:22:04.8299628Z",
+    "completed_at": null
   }
 ]

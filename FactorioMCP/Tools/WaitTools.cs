@@ -15,17 +15,23 @@ internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue
         "Wait for the crafting queue to empty. Polls the queue periodically until all items " +
         "are crafted or the timeout is reached. Use this after calling Craft to wait for items " +
         "to finish before using them.")]
-    public Task<string> WaitForCrafting(
+    public async Task<string> WaitForCrafting(
         [Description("How often to check the queue in seconds (default 1.0)")]
         double pollIntervalSeconds = 1.0,
         [Description("Maximum time to wait in seconds before giving up (default 60)")]
         double timeoutSeconds = 60,
         CancellationToken cancellationToken = default)
     {
-        return queue.ExecuteAsync(nameof(WaitForCrafting), ct => factorio.WaitForCraftingAsync(
-            TimeSpan.FromSeconds(pollIntervalSeconds),
-            TimeSpan.FromSeconds(timeoutSeconds),
-            ct), cancellationToken);
+        try
+        {
+            return await queue.ExecuteAsync(nameof(WaitForCrafting), ct => factorio.WaitForCraftingAsync(
+                TimeSpan.FromSeconds(pollIntervalSeconds),
+                TimeSpan.FromSeconds(timeoutSeconds),
+                ct), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return """{"status":"timeout","reason":"cancelled"}""";        }
     }
 
     [McpServerTool, Description(
@@ -33,7 +39,7 @@ internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue
         "Polls the player's position periodically. Use this after starting to walk toward a " +
         "destination to wait until arrival. The player must already be walking — this tool " +
         "only waits, it does not start movement.")]
-    public Task<string> WaitForPosition(
+    public async Task<string> WaitForPosition(
         [Description("Target X coordinate to reach")]
         double targetX,
         [Description("Target Y coordinate to reach")]
@@ -46,18 +52,24 @@ internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue
         double timeoutSeconds = 30,
         CancellationToken cancellationToken = default)
     {
-        return queue.ExecuteAsync(nameof(WaitForPosition), ct => factorio.WaitForPositionAsync(
-            targetX, targetY, tolerance,
-            TimeSpan.FromSeconds(pollIntervalSeconds),
-            TimeSpan.FromSeconds(timeoutSeconds),
-            ct), cancellationToken);
+        try
+        {
+            return await queue.ExecuteAsync(nameof(WaitForPosition), ct => factorio.WaitForPositionAsync(
+                targetX, targetY, tolerance,
+                TimeSpan.FromSeconds(pollIntervalSeconds),
+                TimeSpan.FromSeconds(timeoutSeconds),
+                ct), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return """{"status":"timeout","reason":"cancelled"}""";        }
     }
 
     [McpServerTool, Description(
         "Wait for a specified number of game ticks to elapse. Factorio runs at 60 ticks per second " +
         "at normal speed (1x). Use this for precise timing when you need to wait for game mechanics " +
         "to process (e.g. furnace smelting, inserter cycles).")]
-    public Task<string> WaitForTicks(
+    public async Task<string> WaitForTicks(
         [Description("Number of game ticks to wait (60 ticks = 1 second at normal speed)")]
         int ticks,
         [Description("How often to check the tick count in seconds (default 0.5)")]
@@ -66,11 +78,17 @@ internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue
         double timeoutSeconds = 30,
         CancellationToken cancellationToken = default)
     {
-        return queue.ExecuteAsync(nameof(WaitForTicks), ct => factorio.WaitForTicksAsync(
-            ticks,
-            TimeSpan.FromSeconds(pollIntervalSeconds),
-            TimeSpan.FromSeconds(timeoutSeconds),
-            ct), cancellationToken);
+        try
+        {
+            return await queue.ExecuteAsync(nameof(WaitForTicks), ct => factorio.WaitForTicksAsync(
+                ticks,
+                TimeSpan.FromSeconds(pollIntervalSeconds),
+                TimeSpan.FromSeconds(timeoutSeconds),
+                ct), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return """{"status":"timeout","reason":"cancelled"}""";        }
     }
 
     [McpServerTool, Description(
@@ -85,7 +103,7 @@ internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue
         "Wait until the player's inventory contains at least the specified count of an item. " +
         "Use this after starting crafting or mining to reactively wait for items to appear " +
         "instead of polling GetInventory repeatedly.")]
-    public Task<string> WaitForItemCount(
+    public async Task<string> WaitForItemCount(
         [Description("Internal item name (e.g. 'iron-plate', 'electronic-circuit')")]
         string itemName,
         [Description("Minimum item count to wait for")]
@@ -96,11 +114,17 @@ internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue
         double timeoutSeconds = 60,
         CancellationToken cancellationToken = default)
     {
-        return queue.ExecuteAsync(nameof(WaitForItemCount), ct => factorio.WaitForItemCountAsync(
-            itemName, targetCount,
-            TimeSpan.FromSeconds(pollIntervalSeconds),
-            TimeSpan.FromSeconds(timeoutSeconds),
-            ct), cancellationToken);
+        try
+        {
+            return await queue.ExecuteAsync(nameof(WaitForItemCount), ct => factorio.WaitForItemCountAsync(
+                itemName, targetCount,
+                TimeSpan.FromSeconds(pollIntervalSeconds),
+                TimeSpan.FromSeconds(timeoutSeconds),
+                ct), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return """{"status":"timeout","reason":"cancelled"}""";        }
     }
 
     [McpServerTool, Description(
@@ -108,7 +132,7 @@ internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue
         "Status names follow defines.entity_status: 'working', 'no_fuel', 'no_power', " +
         "'item_ingredient_shortage', 'no_recipe', 'output_full', 'idle', etc. " +
         "Use this to reactively wait for machines to finish or detect problems.")]
-    public Task<string> WaitForEntityStatus(
+    public async Task<string> WaitForEntityStatus(
         [Description("X coordinate of the entity")]
         double x,
         [Description("Y coordinate of the entity")]
@@ -121,11 +145,17 @@ internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue
         double timeoutSeconds = 60,
         CancellationToken cancellationToken = default)
     {
-        return queue.ExecuteAsync(nameof(WaitForEntityStatus), ct => factorio.WaitForEntityStatusAsync(
-            x, y, targetStatus,
-            TimeSpan.FromSeconds(pollIntervalSeconds),
-            TimeSpan.FromSeconds(timeoutSeconds),
-            ct), cancellationToken);
+        try
+        {
+            return await queue.ExecuteAsync(nameof(WaitForEntityStatus), ct => factorio.WaitForEntityStatusAsync(
+                x, y, targetStatus,
+                TimeSpan.FromSeconds(pollIntervalSeconds),
+                TimeSpan.FromSeconds(timeoutSeconds),
+                ct), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return """{"status":"timeout","reason":"cancelled"}""";        }
     }
 
     [McpServerTool, Description(
@@ -133,7 +163,7 @@ internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue
         "Use this to wait for furnaces to finish smelting, assemblers to produce output, or " +
         "chests to accumulate items. Inventory types: 'fuel', 'furnace_source', 'furnace_result', " +
         "'chest', 'assembling_machine_input', 'assembling_machine_output'.")]
-    public Task<string> WaitForEntityInventory(
+    public async Task<string> WaitForEntityInventory(
         [Description("X coordinate of the entity")]
         double x,
         [Description("Y coordinate of the entity")]
@@ -150,10 +180,16 @@ internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue
         double timeoutSeconds = 60,
         CancellationToken cancellationToken = default)
     {
-        return queue.ExecuteAsync(nameof(WaitForEntityInventory), ct => factorio.WaitForEntityInventoryAsync(
-            x, y, itemName, targetCount, inventoryType,
-            TimeSpan.FromSeconds(pollIntervalSeconds),
-            TimeSpan.FromSeconds(timeoutSeconds),
-            ct), cancellationToken);
+        try
+        {
+            return await queue.ExecuteAsync(nameof(WaitForEntityInventory), ct => factorio.WaitForEntityInventoryAsync(
+                x, y, itemName, targetCount, inventoryType,
+                TimeSpan.FromSeconds(pollIntervalSeconds),
+                TimeSpan.FromSeconds(timeoutSeconds),
+                ct), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return """{"status":"timeout","reason":"cancelled"}""";        }
     }
 }

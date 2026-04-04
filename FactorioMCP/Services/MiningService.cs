@@ -14,28 +14,9 @@ namespace FactorioMCP.Services;
 internal sealed class MiningService(RconClient rcon)
 {
     /// <summary>
-    /// Lua code to install the mining on_tick handler that re-applies mining_state every tick.
-    /// Required in Factorio 2 where mining_state does not persist across ticks.
+    /// Lua code to install the shared on_tick handler for walking + mining.
     /// </summary>
-    private const string InstallMiningOnTickHandler = """
-        script.on_event(defines.events.on_tick, function()
-            local p = game.connected_players[1]
-            if not p then return end
-            if storage.mine_state then
-                p.update_selected_entity(storage.mine_state.position)
-                p.mining_state = {mining = true, position = storage.mine_state.position}
-            end
-        end)
-        """;
-
-    /// <summary>
-    /// Lua code to remove the on_tick handler if mining is no longer active.
-    /// </summary>
-    private const string RemoveMiningOnTickIfIdle = """
-        if not storage.mine_state then
-            script.on_event(defines.events.on_tick, nil)
-        end
-        """;
+    private const string InstallMiningOnTickHandler = FactorioService.LuaOnTickHandler;
 
     /// <summary>
     /// Start mining a resource entity at the given position using <c>player.mining_state</c>.
@@ -122,16 +103,17 @@ internal sealed class MiningService(RconClient rcon)
     }
 
     /// <summary>
-    /// Stop mining by clearing <c>storage.mine_state</c> and removing the on_tick
-    /// handler if mining is no longer active.
+    /// Stop mining by clearing <c>storage.mine_state</c>.
+    /// The on_tick handler remains installed to avoid interfering with
+    /// PathfindingService's walking — it simply skips the mining block when
+    /// <c>storage.mine_state</c> is nil.
     /// </summary>
     public Task<string> StopMiningAsync(CancellationToken cancellationToken = default)
     {
-        var lua = $$"""
+        var lua = """
             local player = game.connected_players[1]
             storage.mine_state = nil
             player.mining_state = {mining = false}
-            {{RemoveMiningOnTickIfIdle}}
             rcon.print('{"success":true,"status":"mining_stopped"}')
             """;
 

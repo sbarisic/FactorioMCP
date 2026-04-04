@@ -18,18 +18,46 @@ internal sealed partial class FactorioService(RconClient rcon)
     internal const string LuaJsonEscape = """local function esc(s) return s:gsub('\\', '\\\\'):gsub('"', '\\"') end""";
 
     /// <summary>
-    /// Lua helper that sorts entity list so non-resource entities come first.
-    /// Prevents accidentally selecting ore under a drill/furnace.
+    /// Lua helper that sorts entity list so non-resource entities come first and
+    /// filters out the player character entity. Prevents accidentally selecting
+    /// ore under a drill/furnace or selecting the player's own character.
     /// Usage: <c>sort_entities(entities)</c> — mutates in place.
     /// </summary>
     internal const string LuaEntitySort = """
         local function sort_entities(t)
+            local pc = game.connected_players[1].character
+            local j = 1
+            for i = 1, #t do
+                if t[i] ~= pc then t[j] = t[i] j = j + 1 end
+            end
+            for i = j, #t do t[i] = nil end
             table.sort(t, function(a, b)
                 local a_res = a.type == "resource" and 1 or 0
                 local b_res = b.type == "resource" and 1 or 0
                 return a_res < b_res
             end)
         end
+        """;
+
+    /// <summary>
+    /// Lua on_tick handler that continuously re-applies walking_state and mining_state
+    /// every tick. Required in Factorio 2 where both states reset after each tick.
+    /// Reads from <c>storage.walk_dir</c> (set by PathfindingService) and
+    /// <c>storage.mine_state</c> (set by MiningService).
+    /// </summary>
+    internal const string LuaOnTickHandler = """
+        script.on_event(defines.events.on_tick, function()
+            local p = game.connected_players[1]
+            if not p then return end
+            local d = storage.walk_dir
+            if d ~= nil and p.character and p.character.valid then
+                p.walking_state = {walking = true, direction = d}
+            end
+            if storage.mine_state then
+                p.update_selected_entity(storage.mine_state.position)
+                p.mining_state = {mining = true, position = storage.mine_state.position}
+            end
+        end)
         """;
 
     /// <summary>

@@ -189,13 +189,13 @@ public class MiningServiceTests
     }
 
     [Fact]
-    public async Task StopMining_RemovesOnTickHandlerConditionally()
+    public async Task StopMining_KeepsOnTickHandlerInstalled()
     {
         await _service.StopMiningAsync();
 
-        // Handler should only be removed if mine_state is nil
-        Assert.Contains("storage.mine_state", _rcon.LastCommand!);
-        Assert.Contains("script.on_event(defines.events.on_tick, nil)", _rcon.LastCommand!);
+        // on_tick handler should NOT be removed — it's shared with PathfindingService
+        Assert.Contains("storage.mine_state = nil", _rcon.LastCommand!);
+        Assert.DoesNotContain("script.on_event(defines.events.on_tick, nil)", _rcon.LastCommand!);
     }
 
     [Fact]

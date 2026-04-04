@@ -167,7 +167,7 @@ public class EnergyServiceTests
     {
         await _service.InspectEntityPowerAsync(5, -3);
 
-        Assert.Contains("table.sort(entities", _rcon.LastCommand!);
+        Assert.Contains("sort_entities(entities", _rcon.LastCommand!);
         Assert.Contains("resource", _rcon.LastCommand!);
     }
 

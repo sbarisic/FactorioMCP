@@ -130,7 +130,7 @@ RCON connection settings are read from environment variables:
 
 ### Low Priority
 
-- [ ] **Multiplayer Player Targeting**
+- [ ] **Multiplayer Player Targeting** — All Lua commands use `game.connected_players[1]` which is unsafe in multiplayer: wrong player if host changes slot order, breaks with multiple clients on headless server. Should use a configurable player index or name-based lookup. Affects PathfindingService, FactorioService, MiningService, and all tool Lua snippets. **(CPX 3)**
 
 ### ON HOLD
 
@@ -164,8 +164,7 @@ RCON connection settings are read from environment variables:
 
 #### High Priority
 
-- [ ] **`SummarizeAreaAsync` / `FindBuildableAreaAsync` coordinate access inconsistency** — `FactorioService.World.cs`: these methods access center coordinates using `center[1] or center.x` fallback pattern. When `posExpr` is `player.position` (a table with `.x`/`.y`), `center[1]` is nil and falls through. When it's `{x, y}` (array), `.x` is nil and falls through. Both work but are fragile and confusing. Standardize to always use named fields `{x=..., y=...}` format in `posExpr`. **(CPX 1)**
-- [ ] **Duplicated entity selection pattern** — `FactorioService.Entity.cs` and `FactorioService.Wait.cs`: the "sort by resource type, find first non-resource" entity selection pattern is duplicated ~10 times across methods. Extract into a shared Lua helper function injected at the top of scripts. **(CPX 2)**
+*No high priority items*
 
 #### Medium Priority
 
@@ -173,8 +172,8 @@ RCON connection settings are read from environment variables:
 
 #### Low Priority
 
-- [ ] **VisionService center fallback is unnecessary** — `VisionService.cs` line 92-94: `if type(center) ~= "table" then center = {x=center.x, y=center.y} end` followed by `local cx = center.x or center[1]`. The `player.position` is always a table, and the array-style `posExpr` is also a table, so the guard never triggers. Simplify to always use `{x=..., y=...}` style `posExpr` and access `.x`/`.y` directly. **(CPX 1)**
-- [ ] **`LookInDirectionAsync` should guard nil `e.direction`** — `FactorioService.World.cs`: some entities don't have a direction property. `dir_names[e.direction]` handles nil safely (returns nil), but the `if dn then` guard is correct. However, `dir_names[e.direction]` with nil direction is a silent no-op — consider guarding for clarity. **(CPX 1)**
+- [ ] **Lua `script.on_event` handler overwrite risk** — `EnsurePathHandlerInstalledAsync` registers `on_script_path_request_finished` via `script.on_event()` which replaces any existing handler. If another mod or script registers the same event, navigation breaks silently. No handler chaining or isolation. Low risk in single-mod RCON usage but fragile for extensibility. **(CPX 1)**
+- [ ] **`nav_results` TTL cleanup assumes stable tick rate** — Path results older than 600 ticks (~10 seconds) are deleted in `GetPathResultAsync`. Under server lag, pathfinder overload, or backlog spikes, valid results can be cleaned up prematurely before they are polled. Consider using wall-clock timestamps or increasing the TTL margin. **(CPX 1)**
 
 ---
 
@@ -186,18 +185,14 @@ RCON connection settings are read from environment variables:
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
-- **`place_entity` returns error on success** — `place_entity`, `insert_between`, and `place_ghost_entity` always return a generic `"An error occurred invoking 'place_entity'."` error even when the entity is successfully placed in the game world. Building memory is updated correctly and the entity appears in-game. The `missing_item` failure case works correctly (returns structured JSON). Only the success path throws before returning. This is a false-negative that makes it impossible for the LLM to know if placement succeeded without a follow-up inspection call.
-- **`walk_to_position` / `move_to_resource` / `refuel_entity` immediately return `stuck`** — Any coordinate-based navigation call with a target more than ~2 tiles away returns `stuck` instantly without the character moving. The A* pathfinder never engages. Reproduction: player at (28, -64), `walk_to_position(35, -60)` → instant `stuck`, distance 8.0. `move_to_entity` (entity-based navigation) works correctly and returns `arrived`. Issue appears isolated to coordinate-based pathfinding. `refuel_entity` is also affected since it internally calls `walk_to_position`.
-- **`wait_for_entity_inventory` throws MCP protocol timeout** — The tool throws `MCP error -32001: Request timed out` at the protocol level instead of cleanly returning a timeout result. This crashes the MCP connection rather than returning a structured `{"status": "timeout"}` response. The tool should catch the long-poll internally and return a clean failure.
-- **`insert_items` to `furnace_source` silently fails** — Inserting ore into `furnace_source` reports `success: true, inserted: 5` but a follow-up `get_entity_inventory(furnace_source)` shows 0 items. The furnace status confirms `no_ingredients`. The item count is deducted from player inventory but nothing appears in the furnace input slot. Inserting into `fuel` works correctly.
-- **`set_goal` returns error on success** — `set_goal` always returns `"An error occurred invoking 'set_goal'."` but `get_all_goals` confirms the goal was created successfully. Same false-negative pattern as `place_entity`.
-- **`execute_lua` example uses Factorio 1.x API** — `game.table_to_json()` does not exist in Factorio 2 (Space Age). The correct API is `helpers.table_to_json()`. Any tool docs or prompt examples referencing `game.table_to_json` will cause runtime errors.
+*No uncategorized items*
 
 ### Rejected / Not Applicable
 
 The following reported issues were investigated and found to be **not bugs** in the Factorio 2 context:
 
-- ~~`string.Create(CultureInfo.InvariantCulture, $$"""...""")` misuse~~ — This is the correct .NET API overload `string.Create(IFormatProvider, ref DefaultInterpolatedStringHandler)` that ensures culture-safe double formatting (`.` not `,`). Not a bug.
+- ~~`execute_lua` example uses Factorio 1.x API (`game.table_to_json`)~~ — Investigated: no `game.table_to_json()` reference exists anywhere in the codebase — not in tool descriptions, tool code, prompt files, or documentation. `LUA_API.md` correctly documents `table_to_json()` under the `LuaHelpers` class (accessed via `helpers.table_to_json()` in Factorio 2). Not a code bug.
+- ~~`string.Create(CultureInfo.InvariantCulture, $$"""...""")` misuse~~
 - ~~`{{"{"}}{...}{{"}"}}` produces invalid Lua~~ — In `$$"""` raw strings, this correctly produces `{{...}}` which is valid Lua table-of-tables for area construction. Not a bug.
 - ~~`invert=true` in `find_entities_filtered`~~ — Verified in Factorio 2 API docs: `EntitySearchFilters` has an `invert` boolean field ("Whether the filters should be inverted"). Valid API usage.
 - ~~`player.crafting_queue` is invalid~~ — Verified in Factorio 2 API: `LuaPlayer.crafting_queue` returns `array[CraftingQueueItem]?`. Valid property.
@@ -207,6 +202,10 @@ The following reported issues were investigated and found to be **not bugs** in 
 - ~~`TransferAllItemsAsync` inventory iteration with `for i = 1, #inv`~~ — Factorio inventories support numeric indexing and `#inv` returns the slot count. The `stack.valid_for_read` guard correctly skips empty slots.
 - ~~`#inv` for slot count reporting~~ — `#inv` returns the inventory size (number of slots) which is the intended value for slot count display.
 - ~~Unsafe `defines.direction.{{direction}}`~~ — Direction values are validated in C# with `ArgumentException.ThrowIfNullOrWhiteSpace` and come from controlled MCP tool parameters, not arbitrary user input.
+- ~~RCON polling too slow for Factorio tick rate (50ms vs 16.67ms)~~ — `PollInterval` is already 50ms (~3x per tick). Polling faster adds RCON round-trip overhead without benefit since `GameCommandQueue` serializes all operations. The polling loop checks position and issues direction commands — going faster than 50ms would flood RCON with no meaningful improvement in path-following accuracy.
+- ~~Global state coupling (`_pathHandlerInstalled`, `_lastDirection`) across concurrent calls~~ — `GameCommandQueue` uses `SemaphoreSlim(1,1)` to serialize all MCP tool calls. Only one `WalkToAsync` can execute at a time, so `_lastDirection` and `storage.walk_dir` cannot be corrupted by concurrent access.
+- ~~`_lastDirection` not preventing RCON spam / missing Lua `walk_changed` counter~~ — The `if (_lastDirection != direction)` guard in `FollowWaypointsAsync` already prevents redundant RCON calls. `SetWalkingDirectionAsync` sets `_lastDirection` before the RCON call. The suggested `storage.walk_changed` counter would never be read by any code — the on_tick handler simply reads `storage.walk_dir` each tick regardless of a change counter. Direction oscillation in tight corners is a real concern, but is caused by `CalculateDirection` sector boundaries, not missing spam prevention — the guard works correctly.
+- ~~`waypoints[segIndex + 1]` index out-of-bounds risk~~ — Line 153 checks `if (segIndex >= waypoints.Count - 1)` and returns "arrived" before line 179 accesses `waypoints[segIndex + 1]`. The guard guarantees `segIndex + 1` is always a valid index. `AdvanceSegment` cannot return a value exceeding `waypoints.Count - 1` due to its loop condition `while (segIndex < waypoints.Count - 1)`. Degenerate paths (1-segment, duplicate endpoints) are handled by `ProjectOntoSegment` returning 1.0 for zero-length segments, which advances `segIndex` to `Count - 1` and triggers the arrival check. Not a bug.
 
 ---
 

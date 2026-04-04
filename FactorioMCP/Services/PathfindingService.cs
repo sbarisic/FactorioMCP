@@ -11,19 +11,18 @@ namespace FactorioMCP.Services;
 /// Design: All navigation logic runs in C#, with Lua only used for:
 ///   1. Requesting paths (async via request_path)
 ///   2. Receiving path results (minimal event handler)
-///   3. Setting walking direction (simple command)
+///   3. Continuous walking via on_tick handler (Factorio 2 resets walking_state each tick)
 /// 
-/// This approach is simpler and more robust than Lua-based on_tick handlers because:
-///   - All state lives in C# (easier to debug, test, cancel)
-///   - No complex Lua event handler registration/cleanup per request
-///   - Predictable behavior with clear control flow
+/// In Factorio 2, walking_state only persists for a single tick, so a Lua on_tick handler
+/// must re-apply the walking direction every tick. C# controls the direction by writing
+/// to storage.walk_dir, and the on_tick handler reads it to keep the player moving.
 /// </summary>
 internal sealed class PathfindingService(RconClient rcon)
 {
     /// <summary>
     /// Poll interval for position checks during walking. Can be overridden in tests.
     /// </summary>
-    internal TimeSpan PollInterval { get; set; } = TimeSpan.FromMilliseconds(150);
+    internal TimeSpan PollInterval { get; set; } = TimeSpan.FromMilliseconds(50);
 
     private bool _pathHandlerInstalled;
     private int? _lastDirection;
@@ -115,7 +114,7 @@ internal sealed class PathfindingService(RconClient rcon)
             """, cancellationToken);
     }
 
-    // ── Waypoint Following ──────────────────────────────────────────
+    // ── Waypoint Following (Segment-Vector Projection Model) ──────────
 
     private async Task<string> FollowWaypointsAsync(
         List<(double x, double y)> waypoints,
@@ -124,10 +123,12 @@ internal sealed class PathfindingService(RconClient rcon)
         DateTime deadline,
         CancellationToken cancellationToken)
     {
-        int waypointIndex = 0;
-        double bestDistToGoal = double.MaxValue;
+        // Segment index: player walks from waypoints[segIndex] toward waypoints[segIndex+1].
+        // When projection along the segment passes the endpoint, advance to next segment.
+        int segIndex = 0;
+        double bestProgress = 0; // cumulative distance along path (for stuck detection)
         int stuckCount = 0;
-        const int maxStuckCount = 40; // ~6 seconds at 150ms poll
+        const int maxStuckCount = 60; // ~3 seconds at 50ms poll
 
         try
         {
@@ -137,21 +138,30 @@ internal sealed class PathfindingService(RconClient rcon)
 
                 var (px, py) = await GetPositionAsync(cancellationToken);
 
-                // Advance through waypoints we've reached or passed
-                waypointIndex = AdvanceWaypoints(waypoints, waypointIndex, px, py, tolerance);
-
-                // Check if we've reached the destination
+                // Check if we've reached the final destination
                 var dist = Distance(px, py, targetX, targetY);
-                if (waypointIndex >= waypoints.Count || dist <= tolerance)
+                if (dist <= tolerance)
                 {
                     await StopWalkingAsync(cancellationToken);
                     return FormatResult("arrived", px, py, targetX, targetY, dist, tolerance);
                 }
 
-                // Stuck detection: no progress toward goal
-                if (dist < bestDistToGoal)
+                // Advance segments using projection
+                segIndex = AdvanceSegment(waypoints, segIndex, px, py);
+
+                // Past last segment — arrived (close enough to final waypoint)
+                if (segIndex >= waypoints.Count - 1)
                 {
-                    bestDistToGoal = dist;
+                    await StopWalkingAsync(cancellationToken);
+                    return FormatResult("arrived", px, py, targetX, targetY, dist, tolerance);
+                }
+
+                // Stuck detection: measure progress along the path, not toward the goal.
+                // Progress = sum of completed segment lengths + projection on current segment.
+                var progress = GetPathProgress(waypoints, segIndex, px, py);
+                if (progress > bestProgress + 0.1)
+                {
+                    bestProgress = progress;
                     stuckCount = 0;
                 }
                 else
@@ -165,11 +175,8 @@ internal sealed class PathfindingService(RconClient rcon)
                     return FormatResult("stuck", px, py, targetX, targetY, dist, tolerance);
                 }
 
-                // Look-ahead: target a waypoint ahead for smoother curves
-                var targetWpIndex = GetLookAheadIndex(waypoints, waypointIndex, px, py);
-                var (wpx, wpy) = waypoints[targetWpIndex];
-
-                // Set walking direction (skip if unchanged to avoid RCON spam)
+                // Steer toward the endpoint of the current segment
+                var (wpx, wpy) = waypoints[segIndex + 1];
                 var direction = CalculateDirection(px, py, wpx, wpy);
                 if (_lastDirection != direction)
                     await SetWalkingDirectionAsync(direction, cancellationToken);
@@ -191,83 +198,95 @@ internal sealed class PathfindingService(RconClient rcon)
     }
 
     /// <summary>
-    /// Advance waypoint index past waypoints that have been reached or passed.
+    /// Advance the segment index by projecting the player position onto the current segment vector.
+    /// When the projection parameter t >= 1.0 (player has passed the segment endpoint),
+    /// advance to the next segment. Only advances one segment at a time to maintain path fidelity
+    /// and avoid skipping obstacle-avoidance waypoints.
     /// </summary>
-    private static int AdvanceWaypoints(
-        List<(double x, double y)> waypoints, int currentIndex,
-        double playerX, double playerY, double finalTolerance)
-    {
-        while (currentIndex < waypoints.Count)
-        {
-            var (wpx, wpy) = waypoints[currentIndex];
-            var wpDist = Distance(playerX, playerY, wpx, wpy);
-            var wpTolerance = currentIndex == waypoints.Count - 1 ? finalTolerance : 1.5;
-
-            // Close enough to waypoint
-            if (wpDist <= wpTolerance)
-            {
-                currentIndex++;
-                continue;
-            }
-
-            // Passed-by test for intermediate waypoints using dot product
-            if (currentIndex < waypoints.Count - 1)
-            {
-                var (nwpx, nwpy) = waypoints[currentIndex + 1];
-                var segX = nwpx - wpx;
-                var segY = nwpy - wpy;
-                var toPlayerX = playerX - wpx;
-                var toPlayerY = playerY - wpy;
-                var dot = segX * toPlayerX + segY * toPlayerY;
-
-                if (dot > 0)
-                {
-                    var segLenSq = segX * segX + segY * segY;
-                    if (segLenSq > 0.01)
-                    {
-                        var cross = Math.Abs(segX * toPlayerY - segY * toPlayerX);
-                        var perpDist = cross / Math.Sqrt(segLenSq);
-                        if (perpDist < 3.0)
-                        {
-                            currentIndex++;
-                            continue;
-                        }
-                    }
-                }
-            }
-
-            break;
-        }
-
-        return currentIndex;
-    }
-
-    /// <summary>
-    /// Get look-ahead waypoint index for smoother movement on curves.
-    /// </summary>
-    private static int GetLookAheadIndex(
-        List<(double x, double y)> waypoints, int currentIndex,
+    internal static int AdvanceSegment(
+        List<(double x, double y)> waypoints, int segIndex,
         double playerX, double playerY)
     {
-        var lookAhead = currentIndex;
-        var maxLook = Math.Min(currentIndex + 5, waypoints.Count);
-
-        for (int i = currentIndex + 1; i < maxLook; i++)
+        while (segIndex < waypoints.Count - 1)
         {
-            var (wpx, wpy) = waypoints[i];
-            if (Distance(playerX, playerY, wpx, wpy) < 6.0)
-                lookAhead = i;
+            var t = ProjectOntoSegment(waypoints, segIndex, playerX, playerY);
+
+            // Player hasn't passed the segment endpoint yet — stay on this segment
+            if (t < 1.0)
+                break;
+
+            segIndex++;
         }
 
-        return lookAhead;
+        return segIndex;
     }
 
     /// <summary>
-    /// Calculate Factorio direction (0-7) using component-based selection
-    /// to avoid oscillation at sector boundaries.
-    /// Direction mapping: 0=N 1=NE 2=E 3=SE 4=S 5=SW 6=W 7=NW
+    /// Calculate cumulative progress along the path in tiles.
+    /// Sum of completed segment lengths + clamped projection on current segment.
+    /// Used for stuck detection: if this value stops increasing, the player is stuck.
     /// </summary>
-    private static int CalculateDirection(double fromX, double fromY, double toX, double toY)
+    internal static double GetPathProgress(
+        List<(double x, double y)> waypoints, int segIndex,
+        double playerX, double playerY)
+    {
+        double progress = 0;
+
+        // Sum completed segments
+        for (int i = 0; i < segIndex && i < waypoints.Count - 1; i++)
+        {
+            var (ax, ay) = waypoints[i];
+            var (bx, by) = waypoints[i + 1];
+            progress += Distance(ax, ay, bx, by);
+        }
+
+        // Add projection on current segment (clamped to [0, segLen])
+        if (segIndex < waypoints.Count - 1)
+        {
+            var (sx, sy) = waypoints[segIndex];
+            var (ex, ey) = waypoints[segIndex + 1];
+            var segLen = Distance(sx, sy, ex, ey);
+
+            if (segLen > 0.001)
+            {
+                var t = ProjectOntoSegment(waypoints, segIndex, playerX, playerY);
+                progress += Math.Clamp(t, 0, 1) * segLen;
+            }
+        }
+
+        return progress;
+    }
+
+    /// <summary>
+    /// Project the player position onto a path segment, returning the parameter t.
+    /// t=0 means at segment start, t=1 means at segment end, t>1 means past the endpoint.
+    /// Uses the standard vector projection formula: t = dot(player-start, end-start) / |end-start|².
+    /// </summary>
+    internal static double ProjectOntoSegment(
+        List<(double x, double y)> waypoints, int segIndex,
+        double playerX, double playerY)
+    {
+        var (sx, sy) = waypoints[segIndex];
+        var (ex, ey) = waypoints[segIndex + 1];
+        var segX = ex - sx;
+        var segY = ey - sy;
+        var segLenSq = segX * segX + segY * segY;
+
+        if (segLenSq < 0.001)
+            return 1.0; // degenerate segment, treat as passed
+
+        var toPlayerX = playerX - sx;
+        var toPlayerY = playerY - sy;
+        return (segX * toPlayerX + segY * toPlayerY) / segLenSq;
+    }
+
+    /// <summary>
+    /// Calculate Factorio 2 direction (0-15, even values for 8 cardinals) using
+    /// component-based selection to avoid oscillation at sector boundaries.
+    /// Factorio 2 uses 16 directions: 0=N 2=NE 4=E 6=SE 8=S 10=SW 12=W 14=NW
+    /// (odd values are intermediate directions like NNE=1, ENE=3, etc.)
+    /// </summary>
+    internal static int CalculateDirection(double fromX, double fromY, double toX, double toY)
     {
         var dx = toX - fromX;
         var dy = toY - fromY;
@@ -277,29 +296,32 @@ internal sealed class PathfindingService(RconClient rcon)
         const double threshold = 2.414; // tan(67.5°) - use cardinal if one axis dominates
 
         if (ady > adx * threshold)
-            return dy < 0 ? 0 : 4; // North or South
+            return dy < 0 ? 0 : 8; // North or South
 
         if (adx > ady * threshold)
-            return dx > 0 ? 2 : 6; // East or West
+            return dx > 0 ? 4 : 12; // East or West
 
         // Diagonal
         if (dx > 0)
-            return dy < 0 ? 1 : 3; // NE or SE
+            return dy < 0 ? 2 : 6; // NE or SE
 
-        return dy < 0 ? 7 : 5; // NW or SW
+        return dy < 0 ? 14 : 10; // NW or SW
     }
 
     // ── Lua Commands ────────────────────────────────────────────────
 
     /// <summary>
-    /// Install the path result handler once per session.
+    /// Install the path result handler and shared on_tick handler once per session.
+    /// The on_tick handler continuously re-applies walking_state because Factorio 2
+    /// resets it every tick — a single set only moves the player for one tick.
     /// </summary>
     private async Task EnsurePathHandlerInstalledAsync(CancellationToken cancellationToken)
     {
         if (_pathHandlerInstalled) return;
 
-        await rcon.ExecuteLuaAsync("""
+        await rcon.ExecuteLuaAsync($$"""
             storage.nav_results = storage.nav_results or {}
+            storage.walk_dir = nil
             script.on_event(defines.events.on_script_path_request_finished, function(event)
                 if event.path and #event.path > 0 then
                     storage.nav_results[event.id] = {status = "ok", path = event.path, tick = game.tick}
@@ -309,6 +331,7 @@ internal sealed class PathfindingService(RconClient rcon)
                     storage.nav_results[event.id] = {status = "no_path", tick = game.tick}
                 end
             end)
+            {{FactorioService.LuaOnTickHandler}}
             rcon.print('ok')
             """, cancellationToken);
 
@@ -404,6 +427,7 @@ internal sealed class PathfindingService(RconClient rcon)
     {
         _lastDirection = null;
         await rcon.ExecuteLuaAsync("""
+            storage.walk_dir = nil
             game.connected_players[1].walking_state = {walking = false, direction = defines.direction.north}
             rcon.print('ok')
             """, cancellationToken);
@@ -413,7 +437,7 @@ internal sealed class PathfindingService(RconClient rcon)
     {
         _lastDirection = direction;
         await rcon.ExecuteLuaAsync(string.Create(CultureInfo.InvariantCulture, $$"""
-            game.connected_players[1].walking_state = {walking = true, direction = {{direction}}}
+            storage.walk_dir = {{direction}}
             rcon.print('ok')
             """), cancellationToken);
     }
