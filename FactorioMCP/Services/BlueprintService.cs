@@ -194,4 +194,66 @@ internal sealed class BlueprintService(RconClient rcon)
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
+
+    /// <summary>
+    /// Validate ghost entity placements in an area. Checks each ghost for placement
+    /// issues such as blocked positions and inserters pointing at nothing useful.
+    /// Returns a JSON report of all issues found so the caller can fix its plan
+    /// before committing real entities.
+    /// </summary>
+    public Task<string> ValidateGhostPlacementsAsync(
+        double radius = 50,
+        double? centerX = null,
+        double? centerY = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(radius, 0);
+
+        var posExpr = centerX.HasValue && centerY.HasValue
+            ? string.Create(CultureInfo.InvariantCulture, $"{{x={centerX.Value},y={centerY.Value}}}")
+            : "player.position";
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{FactorioService.LuaJsonEscape}}
+            local player = game.connected_players[1]
+            local surface = player.surface
+            local center = {{posExpr}}
+            local ghosts = surface.find_entities_filtered{type="entity-ghost", position=center, radius={{radius}}}
+            local issues = {}
+            local valid = 0
+            for _, ghost in ipairs(ghosts) do
+                local dominated_issues = {}
+                local gx = string.format("%.1f", ghost.position.x)
+                local gy = string.format("%.1f", ghost.position.y)
+                local gname = ghost.ghost_name
+                if not surface.can_place_entity{name=gname, position=ghost.position, direction=ghost.direction, force=player.force} then
+                    dominated_issues[#dominated_issues+1] = '{"ghost_name":"'..esc(gname)..'","x":'..gx..',"y":'..gy..',"issue":"placement_blocked","message":"Position is blocked by another entity"}'
+                end
+                if ghost.ghost_prototype.type == "inserter" then
+                    local pickup_pos = ghost.pickup_position
+                    local drop_pos = ghost.drop_position
+                    local pickup_ents = surface.find_entities_filtered{position=pickup_pos, radius=0.5, limit=1}
+                    local pickup_ghosts = surface.find_entities_filtered{type="entity-ghost", position=pickup_pos, radius=0.5, limit=1}
+                    if #pickup_ents == 0 and #pickup_ghosts == 0 then
+                        dominated_issues[#dominated_issues+1] = '{"ghost_name":"'..esc(gname)..'","x":'..gx..',"y":'..gy..',"issue":"no_pickup_target","message":"Inserter has nothing to pick up from at pickup position ('..string.format("%.1f", pickup_pos.x)..', '..string.format("%.1f", pickup_pos.y)..')"}'
+                    end
+                    local drop_ents = surface.find_entities_filtered{position=drop_pos, radius=0.5, limit=1}
+                    local drop_ghosts = surface.find_entities_filtered{type="entity-ghost", position=drop_pos, radius=0.5, limit=1}
+                    if #drop_ents == 0 and #drop_ghosts == 0 then
+                        dominated_issues[#dominated_issues+1] = '{"ghost_name":"'..esc(gname)..'","x":'..gx..',"y":'..gy..',"issue":"no_drop_target","message":"Inserter has nothing to drop into at drop position ('..string.format("%.1f", drop_pos.x)..', '..string.format("%.1f", drop_pos.y)..')"}'
+                    end
+                end
+                if #dominated_issues == 0 then
+                    valid = valid + 1
+                else
+                    for _, iss in ipairs(dominated_issues) do
+                        issues[#issues+1] = iss
+                    end
+                end
+            end
+            rcon.print('{"total_ghosts":'..#ghosts..',"valid":'..valid..',"issues":['..table.concat(issues, ",")..']}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
 }

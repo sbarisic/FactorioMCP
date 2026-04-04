@@ -475,4 +475,141 @@ public class BlueprintServiceTests
         Assert.Equal(5, _rcon.AllCommands.Count);
         Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command", cmd));
     }
+
+    // ── ValidateGhostPlacementsAsync ──────────────────────────────────
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_SendsSilentCommand()
+    {
+        await _service.ValidateGhostPlacementsAsync();
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_FindsEntityGhosts()
+    {
+        await _service.ValidateGhostPlacementsAsync();
+
+        Assert.Contains("type=\"entity-ghost\"", _rcon.LastCommand!);
+        Assert.Contains("find_entities_filtered", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_UsesPlayerPositionByDefault()
+    {
+        await _service.ValidateGhostPlacementsAsync();
+
+        Assert.Contains("player.position", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_UsesCustomCenter()
+    {
+        await _service.ValidateGhostPlacementsAsync(centerX: 100, centerY: 200);
+
+        Assert.Contains("{x=100,y=200}", _rcon.LastCommand!);
+        Assert.DoesNotContain("player.position", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_FallsBackToPlayerPositionWithPartialCenter()
+    {
+        await _service.ValidateGhostPlacementsAsync(centerX: 100);
+
+        Assert.Contains("player.position", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_UsesDefaultRadius()
+    {
+        await _service.ValidateGhostPlacementsAsync();
+
+        Assert.Contains("radius=50", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_UsesCustomRadius()
+    {
+        await _service.ValidateGhostPlacementsAsync(radius: 100);
+
+        Assert.Contains("radius=100", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_ChecksCanPlaceEntity()
+    {
+        await _service.ValidateGhostPlacementsAsync();
+
+        Assert.Contains("can_place_entity", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_ChecksPlacementBlocked()
+    {
+        await _service.ValidateGhostPlacementsAsync();
+
+        Assert.Contains("placement_blocked", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_ChecksInserterType()
+    {
+        await _service.ValidateGhostPlacementsAsync();
+
+        Assert.Contains("ghost_prototype", _rcon.LastCommand!);
+        Assert.Contains("\"inserter\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_ChecksPickupPosition()
+    {
+        await _service.ValidateGhostPlacementsAsync();
+
+        Assert.Contains("pickup_position", _rcon.LastCommand!);
+        Assert.Contains("no_pickup_target", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_ChecksDropPosition()
+    {
+        await _service.ValidateGhostPlacementsAsync();
+
+        Assert.Contains("drop_position", _rcon.LastCommand!);
+        Assert.Contains("no_drop_target", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_OutputsJsonWithTotalAndValid()
+    {
+        await _service.ValidateGhostPlacementsAsync();
+
+        Assert.Contains("rcon.print(", _rcon.LastCommand!);
+        Assert.Contains("\"total_ghosts\"", _rcon.LastCommand!);
+        Assert.Contains("\"valid\"", _rcon.LastCommand!);
+        Assert.Contains("\"issues\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_UsesEscFunction()
+    {
+        await _service.ValidateGhostPlacementsAsync();
+
+        Assert.Contains("esc(", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_ThrowsOnZeroRadius()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.ValidateGhostPlacementsAsync(radius: 0));
+    }
+
+    [Fact]
+    public async Task ValidateGhostPlacementsAsync_ThrowsOnNegativeRadius()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.ValidateGhostPlacementsAsync(radius: -5));
+    }
 }

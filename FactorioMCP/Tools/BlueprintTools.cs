@@ -114,4 +114,23 @@ internal sealed class BlueprintTools(BlueprintService blueprints, GameCommandQue
             ct => blueprints.RevokeGhostEntityAsync(x, y, radius, ct),
             cancellationToken);
     }
+
+    [McpServerTool, Description(
+        "Validate ghost entity placements in an area. " +
+        "Checks each ghost for placement issues: blocked positions and " +
+        "inserters pointing at nothing useful (no pickup or drop target). " +
+        "Use this after placing ghosts to verify the plan before committing real entities.")]
+    public Task<string> ValidateGhostPlacements(
+        [Description("Search radius in tiles. Default 50.")]
+        double radius = 50,
+        [Description("Optional X coordinate of scan center. If omitted, uses player position.")]
+        double? centerX = null,
+        [Description("Optional Y coordinate of scan center. If omitted, uses player position.")]
+        double? centerY = null,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(ValidateGhostPlacements),
+            ct => blueprints.ValidateGhostPlacementsAsync(radius, centerX, centerY, ct),
+            cancellationToken);
+    }
 }
