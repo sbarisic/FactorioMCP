@@ -356,20 +356,89 @@ public class VisionServiceTests
     }
 
     [Fact]
-    public void OptimizeImage_SmallImage_ReturnsPngUnchanged()
+    public void OptimizeImage_AlwaysReturnsJpeg()
     {
-        var small = CreateTestPng(100, 100);
+        var png = CreateTestPng(100, 100);
 
-        var (data, mimeType) = VisionService.OptimizeImage(small);
+        var (data, mimeType) = VisionService.OptimizeImage(png);
 
-        Assert.Equal(small, data);
-        Assert.Equal("image/png", mimeType);
+        Assert.Equal("image/jpeg", mimeType);
+        // Verify JPEG magic bytes (FFD8)
+        Assert.True(data.Length >= 2);
+        Assert.Equal(0xFF, data[0]);
+        Assert.Equal(0xD8, data[1]);
     }
 
     [Fact]
-    public void OptimizeImage_LargeImage_ReducesSizeBelowLimit()
+    public void OptimizeImage_SmallImage_DoesNotResize()
     {
-        // Create a large PNG (random pixels compress poorly)
+        // Image smaller than MaxDimension should keep its dimensions
+        var png = CreateTestPng(100, 80);
+
+        var (data, _) = VisionService.OptimizeImage(png);
+
+        using var result = Image.Load(data);
+        Assert.Equal(100, result.Width);
+        Assert.Equal(80, result.Height);
+    }
+
+    [Fact]
+    public void OptimizeImage_LargeImage_DownscalesToMaxDimension()
+    {
+        var png = CreateTestPng(1920, 1080);
+
+        var (data, mimeType) = VisionService.OptimizeImage(png);
+
+        Assert.Equal("image/jpeg", mimeType);
+        using var result = Image.Load(data);
+        // Longest side (1920) should be scaled to MaxDimension (1024)
+        Assert.Equal(VisionService.MaxDimension, result.Width);
+        // Height should be proportionally scaled: 1080 * (1024/1920) ≈ 576
+        Assert.True(result.Height <= VisionService.MaxDimension);
+        Assert.True(result.Height > 0);
+    }
+
+    [Fact]
+    public void OptimizeImage_TallImage_DownscalesByHeight()
+    {
+        // Tall image where height is the longest side
+        var png = CreateTestPng(600, 2000);
+
+        var (data, _) = VisionService.OptimizeImage(png);
+
+        using var result = Image.Load(data);
+        Assert.Equal(VisionService.MaxDimension, result.Height);
+        Assert.True(result.Width < VisionService.MaxDimension);
+    }
+
+    [Fact]
+    public void OptimizeImage_CustomMaxDimension_RespectsLimit()
+    {
+        var png = CreateTestPng(500, 300);
+
+        var (data, _) = VisionService.OptimizeImage(png, maxDimension: 200);
+
+        using var result = Image.Load(data);
+        Assert.Equal(200, result.Width);
+        Assert.True(result.Height <= 200);
+    }
+
+    [Fact]
+    public void OptimizeImage_ImageExactlyAtMaxDimension_DoesNotResize()
+    {
+        var png = CreateTestPng(VisionService.MaxDimension, 500);
+
+        var (data, _) = VisionService.OptimizeImage(png);
+
+        using var result = Image.Load(data);
+        Assert.Equal(VisionService.MaxDimension, result.Width);
+        Assert.Equal(500, result.Height);
+    }
+
+    [Fact]
+    public void OptimizeImage_LargeImage_OutputSmallerThanInput()
+    {
+        // Create a large PNG with random-ish data
         using var image = new Image<Rgba32>(1920, 1080);
         var rng = new Random(42);
         for (int y = 0; y < image.Height; y++)
@@ -380,59 +449,9 @@ public class VisionServiceTests
         image.SaveAsPng(ms);
         var largeBytes = ms.ToArray();
 
-        Assert.True(largeBytes.Length > VisionService.MaxImageSizeBytes,
-            $"Test image should exceed max size but was {largeBytes.Length} bytes");
+        var (data, _) = VisionService.OptimizeImage(largeBytes);
 
-        var (data, mimeType) = VisionService.OptimizeImage(largeBytes);
-
-        Assert.True(data.Length <= VisionService.MaxImageSizeBytes,
-            $"Optimized image should be at most {VisionService.MaxImageSizeBytes} bytes but was {data.Length}");
-        Assert.Equal("image/jpeg", mimeType);
-    }
-
-    [Fact]
-    public void OptimizeImage_LargeImage_ReturnsJpeg()
-    {
-        // Create a PNG that exceeds the limit with noisy data
-        using var image = new Image<Rgba32>(1920, 1080);
-        var rng = new Random(123);
-        for (int y = 0; y < image.Height; y++)
-            for (int x = 0; x < image.Width; x++)
-                image[x, y] = new Rgba32((byte)rng.Next(256), (byte)rng.Next(256), (byte)rng.Next(256));
-
-        using var ms = new MemoryStream();
-        image.SaveAsPng(ms);
-        var largeBytes = ms.ToArray();
-
-        var (data, mimeType) = VisionService.OptimizeImage(largeBytes);
-
-        Assert.Equal("image/jpeg", mimeType);
-        // Verify it's valid JPEG (starts with FFD8)
-        Assert.True(data.Length >= 2);
-        Assert.Equal(0xFF, data[0]);
-        Assert.Equal(0xD8, data[1]);
-    }
-
-    [Fact]
-    public void OptimizeImage_CustomMaxSize_RespectsLimit()
-    {
-        var png = CreateTestPng(200, 200);
-        // Use a very small max to force optimization
-        var maxSize = 100;
-
-        var (data, mimeType) = VisionService.OptimizeImage(png, maxSize);
-
-        Assert.Equal("image/jpeg", mimeType);
-    }
-
-    [Fact]
-    public void OptimizeImage_ImageExactlyAtLimit_ReturnsPng()
-    {
-        var small = CreateTestPng(10, 10);
-        // Set max to exactly the image size
-        var (data, mimeType) = VisionService.OptimizeImage(small, small.Length);
-
-        Assert.Equal(small, data);
-        Assert.Equal("image/png", mimeType);
+        Assert.True(data.Length < largeBytes.Length,
+            $"Optimized image ({data.Length} bytes) should be smaller than original ({largeBytes.Length} bytes)");
     }
 }

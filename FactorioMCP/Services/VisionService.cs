@@ -26,6 +26,18 @@ internal sealed class VisionService(RconClient rcon)
     internal const int MaxImageSizeBytes = 1_048_576;
 
     /// <summary>
+    /// Maximum pixel dimension (width or height) for images sent to the LLM.
+    /// Keeping images at or below this size dramatically reduces the token count
+    /// that vision models must process, which is the main source of latency.
+    /// </summary>
+    internal const int MaxDimension = 1024;
+
+    /// <summary>
+    /// JPEG encoding quality used when optimizing images for the LLM.
+    /// </summary>
+    private const int JpegQuality = 80;
+
+    /// <summary>
     /// The local filesystem directory that maps to Factorio's <c>script-output</c>.
     /// Defaults to <c>%APPDATA%/Factorio/script-output</c>.
     /// </summary>
@@ -270,46 +282,33 @@ internal sealed class VisionService(RconClient rcon)
     }
 
     /// <summary>
-    /// Optimize image bytes if they exceed <see cref="MaxImageSizeBytes"/>.
-    /// Converts to JPEG and progressively downscales until the image fits within the limit.
+    /// Optimize image for LLM consumption by downscaling to <see cref="MaxDimension"/> pixels
+    /// on the longest side and encoding as JPEG. This reduces both the base64 payload size
+    /// and the token count that vision models must process, which is the main source of latency
+    /// after the screenshot is returned.
     /// </summary>
-    /// <param name="imageBytes">Raw image bytes (typically PNG).</param>
-    /// <param name="maxSizeBytes">Maximum allowed size in bytes.</param>
+    /// <param name="imageBytes">Raw image bytes (typically PNG from Factorio).</param>
+    /// <param name="maxDimension">Maximum pixel dimension on the longest side.</param>
     /// <returns>
-    /// A tuple of (optimized image bytes, MIME type). If the image was already small enough,
-    /// returns the original bytes with <c>"image/png"</c>. Otherwise returns JPEG-encoded
-    /// bytes with <c>"image/jpeg"</c>.
+    /// A tuple of (optimized image bytes, MIME type). If the image already fits within
+    /// <paramref name="maxDimension"/>, it is JPEG-encoded without resizing. Otherwise it is
+    /// downscaled proportionally first.
     /// </returns>
-    internal static (byte[] Data, string MimeType) OptimizeImage(byte[] imageBytes, int maxSizeBytes = MaxImageSizeBytes)
+    internal static (byte[] Data, string MimeType) OptimizeImage(byte[] imageBytes, int maxDimension = MaxDimension)
     {
-        if (imageBytes.Length <= maxSizeBytes)
-            return (imageBytes, "image/png");
-
         using var image = Image.Load(imageBytes);
 
-        // Try JPEG encoding at quality 85 first (no resize)
-        var quality = 85;
-        var result = EncodeJpeg(image, quality);
-        if (result.Length <= maxSizeBytes)
-            return (result, "image/jpeg");
+        var longestSide = Math.Max(image.Width, image.Height);
 
-        // Progressively downscale until the image fits
-        var scale = 0.75;
-        while (scale >= 0.2)
+        if (longestSide > maxDimension)
         {
+            var scale = (double)maxDimension / longestSide;
             var newWidth = Math.Max(1, (int)(image.Width * scale));
             var newHeight = Math.Max(1, (int)(image.Height * scale));
-
-            using var resized = image.Clone(ctx => ctx.Resize(newWidth, newHeight));
-            result = EncodeJpeg(resized, quality);
-            if (result.Length <= maxSizeBytes)
-                return (result, "image/jpeg");
-
-            scale -= 0.15;
+            image.Mutate(ctx => ctx.Resize(newWidth, newHeight));
         }
 
-        // Last resort: smallest scale already tried, return whatever we have
-        return (result, "image/jpeg");
+        return (EncodeJpeg(image, JpegQuality), "image/jpeg");
     }
 
     private static byte[] EncodeJpeg(Image image, int quality)
