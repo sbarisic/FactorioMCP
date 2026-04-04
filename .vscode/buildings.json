@@ -190,5 +190,13 @@
     "direction": "south",
     "label": null,
     "placed_at": "2026-04-02T20:39:48.1464486Z"
+  },
+  {
+    "entity_name": "stone-furnace",
+    "x": 30,
+    "y": -72,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-04T23:05:08.3925825Z"
   }
 ]

@@ -91,20 +91,20 @@ RCON connection settings are read from environment variables:
 ### High Priority
 
 - [ ] **Ghost Placement Validation** — LLM places ghost entities first, C# validates placement (prototype, orientation, connectivity). Returns corrective errors like "Inserter at {10,11} is pointing at a wall, not the Assembler" to create a feedback loop before committing real entities. **(CPX 3)**
+- [ ] **Utility Tools** — `GetReachableEntities(type, max_distance)`: filter entities by reach distance. `CountItemInWorld(item)`: count item across all containers, not just player inventory. `EstimateTravelTime(x, y)`: estimate walk time to a position. **(CPX 2)**
+- [ ] **Inventory Intelligence** — `EnsureItem(item, count)`: auto-crafts or gathers if the player doesn't have enough. `GetInventorySummary`: returns condensed key-value inventory (fewer tokens than full inventory dump). **(CPX 2)**
+- [ ] **Collision Slot Query** — `get_available_slots(x, y)`: return a list of adjacent tiles around an entity that aren't blocked by pipes or buildings (collision masking). **(CPX 2)**
 
 
 ### Medium Priority
 
+- [ ] **Smart Entity Placement** — `PlaceEntitySmart(entity, near)` e.g. place a stone-furnace near iron-ore. Backend picks best available position automatically. **(CPX 2)**
 - [ ] **Pickup Items** — `pickup_items(radius)`: simulate holding the 'F' key to collect items dropped on the ground within a radius. **(CPX 1)**
-- [ ] **Utility Tools** — `GetReachableEntities(type, max_distance)`: filter entities by reach distance. `CountItemInWorld(item)`: count item across all containers, not just player inventory. `EstimateTravelTime(x, y)`: estimate walk time to a position. **(CPX 2)**
-- [ ] **Inventory Intelligence** — `EnsureItem(item, count)`: auto-crafts or gathers if the player doesn't have enough. `GetInventorySummary`: returns condensed key-value inventory (fewer tokens than full inventory dump). **(CPX 2)**
 - [ ] **Factory Analysis Tools** — `GetProductionStatus`: what's being produced, bottlenecks, idle machines. `FindUnpoweredEntities`: list entities without power. `FindIdleMachines`: list machines not working. `FindMissingInputs(x, y)`: returns which input items an assembler/furnace is missing. Essential for AI to understand and debug factory state. **(CPX 3)**
+- [ ] **Craft & Factory Planning** — `PlanCraft(item, count)`: returns full recipe tree with required intermediates and raw materials. `PlanFactory(goal)`: given a high-level goal like "automate iron plates", return rough ordered steps. Reduces LLM hallucinated plans. **(CPX 3)**
 
 ### Low Priority
 
-- [ ] **Smart Entity Placement** — `PlaceEntitySmart(entity, near)` e.g. place a stone-furnace near iron-ore. Backend picks best available position automatically. **(CPX 2)**
-- [ ] **Collision Slot Query** — `get_available_slots(x, y)`: return a list of adjacent tiles around an entity that aren't blocked by pipes or buildings (collision masking). **(CPX 2)**
-- [ ] **Craft & Factory Planning** — `PlanCraft(item, count)`: returns full recipe tree with required intermediates and raw materials. `PlanFactory(goal)`: given a high-level goal like "automate iron plates", return rough ordered steps. Reduces LLM hallucinated plans. **(CPX 3)**
 - [ ] **Power Network Topology** — Trace how electricity flows through the physical network from producers (boilers, solar panels) through electric poles to consumers. Map the pole connectivity graph and show which entities are powered by which network segment. Complements existing `GetElectricNetwork` (aggregate stats) and `InspectEntityPower` (per-entity) with topological awareness for planning expansions and diagnosing coverage gaps. **(CPX 3)**
 - [ ] **Logistics Tools** — Manage logistic robots, request items from logistic network, inspect logistic zones. See [`LuaEntity`](LUA_API.md#world--entities) and [`LuaForce`](LUA_API.md#research--recipes). **(CPX 3)**
 - [ ] **Combat Tools** — Attack entities, manage turrets, check enemy positions, defensive operations. See [`LuaEntity`](LUA_API.md#world--entities) and [`LuaSurface`](LUA_API.md#world--entities). **(CPX 3)**
