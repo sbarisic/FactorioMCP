@@ -530,4 +530,174 @@ public partial class FactorioServiceTests
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => _service.FindBestResourcePatchAsync("iron-ore", 0));
     }
+
+    // ── PlaceInserter ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task PlaceInserterAsync_SendsCorrectInserterName()
+    {
+        await _service.PlaceInserterAsync("burner-inserter", 5.0, -2.0, "north", true);
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+        Assert.Contains("\"burner-inserter\"", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task PlaceInserterAsync_FindsTargetEntity()
+    {
+        await _service.PlaceInserterAsync("inserter", 5.0, -2.0, "south", true);
+
+        Assert.Contains("find_entities_filtered", _rcon.LastCommand!);
+        Assert.Contains("no_target_entity", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceInserterAsync_UsesBoundingBox()
+    {
+        await _service.PlaceInserterAsync("inserter", 0, 0, "east", false);
+
+        Assert.Contains("bounding_box", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceInserterAsync_ChecksProximity()
+    {
+        await _service.PlaceInserterAsync("inserter", 0, 0, "west", true);
+
+        Assert.Contains("build_distance", _rcon.LastCommand!);
+        Assert.Contains("out_of_range", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceInserterAsync_ChecksCanPlace()
+    {
+        await _service.PlaceInserterAsync("inserter", 0, 0, "north", true);
+
+        Assert.Contains("can_place_entity", _rcon.LastCommand!);
+        Assert.Contains("invalid_position", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceInserterAsync_ChecksInventory()
+    {
+        await _service.PlaceInserterAsync("fast-inserter", 0, 0, "north", true);
+
+        Assert.Contains("get_item_count", _rcon.LastCommand!);
+        Assert.Contains("missing_item", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceInserterAsync_OutputsFlowDirection()
+    {
+        await _service.PlaceInserterAsync("inserter", 0, 0, "north", true);
+
+        Assert.Contains("\"flow\":", _rcon.LastCommand!);
+        Assert.Contains("inbound", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceInserterAsync_OutboundFlow()
+    {
+        await _service.PlaceInserterAsync("inserter", 0, 0, "south", false);
+
+        Assert.Contains("\"flow\":", _rcon.LastCommand!);
+        Assert.Contains("outbound", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceInserterAsync_HandlesInvalidSide()
+    {
+        await _service.PlaceInserterAsync("inserter", 0, 0, "diagonal", true);
+
+        Assert.Contains("invalid_side", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceInserterAsync_ThrowsOnNullInserterName()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => _service.PlaceInserterAsync(null!, 0, 0, "north", true));
+    }
+
+    [Fact]
+    public async Task PlaceInserterAsync_ThrowsOnNullSide()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => _service.PlaceInserterAsync("inserter", 0, 0, null!, true));
+    }
+
+    // ── InsertBetween ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task InsertBetweenAsync_SendsCorrectInserterName()
+    {
+        await _service.InsertBetweenAsync("burner-inserter", 0, 0, 2, 0);
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+        Assert.Contains("\"burner-inserter\"", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task InsertBetweenAsync_FindsBothEntities()
+    {
+        await _service.InsertBetweenAsync("inserter", 0, 0, 2, 0);
+
+        Assert.Contains("no_source_entity", _rcon.LastCommand!);
+        Assert.Contains("no_dest_entity", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InsertBetweenAsync_CalculatesMidpoint()
+    {
+        await _service.InsertBetweenAsync("inserter", 0, 0, 2, 0);
+
+        // Script calculates midpoint between source and destination
+        Assert.Contains("(sx + dx) / 2", _rcon.LastCommand!);
+        Assert.Contains("(sy + dy) / 2", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InsertBetweenAsync_ChecksProximity()
+    {
+        await _service.InsertBetweenAsync("inserter", 0, 0, 2, 0);
+
+        Assert.Contains("build_distance", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InsertBetweenAsync_ChecksCanPlace()
+    {
+        await _service.InsertBetweenAsync("inserter", 0, 0, 2, 0);
+
+        Assert.Contains("can_place_entity", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InsertBetweenAsync_OutputsSourceAndDest()
+    {
+        await _service.InsertBetweenAsync("inserter", 0, 0, 2, 0);
+
+        Assert.Contains("\"source\":\"", _rcon.LastCommand!);
+        Assert.Contains("\"dest\":\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task InsertBetweenAsync_ThrowsOnNullInserterName()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => _service.InsertBetweenAsync(null!, 0, 0, 2, 0));
+    }
+
+    [Fact]
+    public async Task InsertBetweenAsync_FormatsDecimalsWithInvariantCulture()
+    {
+        await _service.InsertBetweenAsync("inserter", 1.5, -3.75, 3.5, -1.25);
+
+        Assert.Contains("1.5", _rcon.LastCommand!);
+        Assert.Contains("-3.75", _rcon.LastCommand!);
+        Assert.Contains("3.5", _rcon.LastCommand!);
+        Assert.Contains("-1.25", _rcon.LastCommand!);
+    }
 }

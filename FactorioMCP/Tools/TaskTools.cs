@@ -15,14 +15,11 @@ namespace FactorioMCP.Tools;
 [McpServerToolType]
 internal sealed class TaskTools(
     FactorioService factorio,
+    PathfindingService pathfinding,
     MiningService mining,
     BuildingMemoryService buildingMemory,
     GameCommandQueue queue)
 {
-    /// <summary>
-    /// Interval between position polls during walking. Exposed for test overrides.
-    /// </summary>
-    internal TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(0.5);
 
     [McpServerTool, Description(
         "Find a resource patch, walk to it, and mine a specified number of units — all in one call. " +
@@ -61,9 +58,10 @@ internal sealed class TaskTools(
 
             // Step 2: Walk to the patch center
             var walkTimeout = Math.Max(RemainingSeconds(deadline), 1);
-            var walk = await WalkToTargetAsync(patchX, patchY, 3.0, walkTimeout, ct);
+            var walkJson = await pathfinding.WalkToAsync(patchX, patchY, 3.0, walkTimeout, ct);
+            var walk = ParseWalkResult(walkJson);
 
-            if (walk.Status == "stuck" || walk.Status == "timeout")
+            if (walk.Status is "stuck" or "timeout" or "no_path")
             {
                 return FormatGatherResult(resource, count, 0, patchX, patchY, walk, "walk_failed");
             }
@@ -141,15 +139,16 @@ internal sealed class TaskTools(
         return queue.ExecuteAsync(nameof(RefuelEntity), async ct =>
         {
             // Step 1: Check if we need to walk to the entity
-            var posJson = await factorio.GetPlayerPositionAsync(ct);
+            var posJson = await pathfinding.GetPlayerPositionAsync(ct);
             var (px, py) = ParsePosition(posJson);
             var dist = Distance(px, py, x, y);
 
             WalkResult? walk = null;
             if (dist > 2.0) // Beyond typical reach distance threshold
             {
-                walk = await WalkToTargetAsync(x, y, 2.0, walkTimeoutSeconds, ct);
-                if (walk.Value.Status is "stuck" or "timeout")
+                var walkJson = await pathfinding.WalkToAsync(x, y, 2.0, walkTimeoutSeconds, ct);
+                walk = ParseWalkResult(walkJson);
+                if (walk.Value.Status is "stuck" or "timeout" or "no_path")
                 {
                     return FormatRefuelResult(x, y, fuelItem, count, 0, walk.Value, "walk_failed");
                 }
@@ -230,9 +229,10 @@ internal sealed class TaskTools(
 
             // Step 2: Walk to the furnace
             var walkTimeout = Math.Max(RemainingSeconds(deadline), 1);
-            var walk = await WalkToTargetAsync(targetX, targetY, 2.0, walkTimeout, ct);
+            var walkJson = await pathfinding.WalkToAsync(targetX, targetY, 2.0, walkTimeout, ct);
+            var walk = ParseWalkResult(walkJson);
 
-            if (walk.Status is "stuck" or "timeout")
+            if (walk.Status is "stuck" or "timeout" or "no_path")
             {
                 return FormatSmeltResult(ore, count, outputItem, furnaceName,
                     targetX, targetY, walk, 0, 0, 0, "walk_failed");
@@ -275,7 +275,7 @@ internal sealed class TaskTools(
     private async Task<(bool found, double x, double y, string name)> FindFurnaceAsync(CancellationToken ct)
     {
         // Try building memory first — search each known furnace type
-        var posJson = await factorio.GetPlayerPositionAsync(ct);
+        var posJson = await pathfinding.GetPlayerPositionAsync(ct);
         var (px, py) = ParsePosition(posJson);
 
         TrackedBuilding? closest = null;
@@ -400,133 +400,22 @@ internal sealed class TaskTools(
         return 0;
     }
 
-    // ── Walk Logic ──────────────────────────────────────────────────
-
-    private async Task<WalkResult> WalkToTargetAsync(
-        double targetX, double targetY, double tolerance, double timeoutSeconds, CancellationToken ct)
-    {
-        var pollInterval = PollInterval;
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(Math.Max(timeoutSeconds, 0.5));
-
-        var posJson = await factorio.GetPlayerPositionAsync(ct);
-        var (px, py) = ParsePosition(posJson);
-        var dist = Distance(px, py, targetX, targetY);
-
-        if (dist <= tolerance)
-            return new WalkResult("arrived", px, py, dist);
-
-        var direction = MovementTools.CalculateDirection(px, py, targetX, targetY);
-        await factorio.WalkAsync(direction, ct);
-
-        double prevX = px, prevY = py;
-        int stuckPolls = 0;
-        const int stuckThreshold = 4;
-        const int maxStuckPolls = 12;
-        const double minMovement = 0.15;
-        int detourSide = 0;
-        int detourPolls = 0;
-        const int detourLength = 6;
-
-        try
-        {
-            while (DateTime.UtcNow < deadline)
-            {
-                ct.ThrowIfCancellationRequested();
-                await Task.Delay(pollInterval, ct);
-
-                posJson = await factorio.GetPlayerPositionAsync(ct);
-                (px, py) = ParsePosition(posJson);
-                dist = Distance(px, py, targetX, targetY);
-
-                if (dist <= tolerance)
-                {
-                    await factorio.StopWalkingAsync(ct);
-                    return new WalkResult("arrived", px, py, dist);
-                }
-
-                var pollMovement = Distance(px, py, prevX, prevY);
-                var isMoving = pollMovement >= minMovement;
-
-                if (detourSide > 0)
-                {
-                    detourPolls++;
-                    if (detourPolls >= detourLength)
-                    {
-                        detourSide = 0;
-                        detourPolls = 0;
-                        direction = MovementTools.CalculateDirection(px, py, targetX, targetY);
-                        await factorio.WalkAsync(direction, ct);
-                    }
-                    else if (!isMoving)
-                    {
-                        stuckPolls++;
-                        if (stuckPolls >= maxStuckPolls)
-                        {
-                            await factorio.StopWalkingAsync(ct);
-                            return new WalkResult("stuck", px, py, dist);
-                        }
-                        detourSide = detourSide == 1 ? 2 : 1;
-                        detourPolls = 0;
-                        var detourDir = MovementTools.GetPerpendicularDirection(
-                            MovementTools.CalculateDirection(px, py, targetX, targetY), detourSide);
-                        direction = detourDir;
-                        await factorio.WalkAsync(direction, ct);
-                    }
-                }
-                else
-                {
-                    if (isMoving)
-                    {
-                        stuckPolls = 0;
-
-                        var newDirection = MovementTools.CalculateDirection(px, py, targetX, targetY);
-                        if (newDirection != direction)
-                        {
-                            direction = newDirection;
-                            await factorio.WalkAsync(direction, ct);
-                        }
-                    }
-                    else
-                    {
-                        stuckPolls++;
-                        if (stuckPolls >= maxStuckPolls)
-                        {
-                            await factorio.StopWalkingAsync(ct);
-                            return new WalkResult("stuck", px, py, dist);
-                        }
-
-                        if (stuckPolls >= stuckThreshold)
-                        {
-                            detourSide = 1;
-                            detourPolls = 0;
-                            var detourDir = MovementTools.GetPerpendicularDirection(direction, detourSide);
-                            direction = detourDir;
-                            await factorio.WalkAsync(direction, ct);
-                        }
-                    }
-                }
-
-                prevX = px;
-                prevY = py;
-            }
-        }
-        catch
-        {
-            try { await factorio.StopWalkingAsync(CancellationToken.None); } catch { }
-            throw;
-        }
-
-        // Timeout
-        await factorio.StopWalkingAsync(ct);
-        posJson = await factorio.GetPlayerPositionAsync(ct);
-        (px, py) = ParsePosition(posJson);
-        dist = Distance(px, py, targetX, targetY);
-        return new WalkResult("timeout", px, py, dist);
-    }
-
     // ── Helpers ──────────────────────────────────────────────────────
 
     private readonly record struct WalkResult(string Status, double X, double Y, double RemainingDistance);
+
+    private static WalkResult ParseWalkResult(string walkResultJson)
+    {
+        using var doc = JsonDocument.Parse(walkResultJson);
+        var root = doc.RootElement;
+        var status = root.GetProperty("status").GetString() ?? "unknown";
+        var x = root.GetProperty("x").GetDouble();
+        var y = root.GetProperty("y").GetDouble();
+        var dist = root.TryGetProperty("distance", out var distProp)
+            ? distProp.GetDouble()
+            : 0;
+        return new WalkResult(status, x, y, dist);
+    }
 
     private static (double x, double y) ParsePosition(string json)
     {

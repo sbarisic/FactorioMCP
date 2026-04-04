@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FactorioMCP.Models;
+using FactorioMCP.Rcon;
 using Microsoft.Extensions.Configuration;
 
 namespace FactorioMCP.Services;
@@ -32,17 +34,20 @@ internal sealed class BuildingMemoryService
     };
 
     private readonly string _filePath;
+    private readonly RconClient? _rcon;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private List<TrackedBuilding>? _buildings;
 
-    public BuildingMemoryService(IConfiguration configuration)
+    public BuildingMemoryService(IConfiguration configuration, RconClient rcon)
     {
         _filePath = configuration["FACTORIO_BUILDINGS_FILE"] ?? "buildings.json";
+        _rcon = rcon;
     }
 
-    internal BuildingMemoryService(string filePath)
+    internal BuildingMemoryService(string filePath, RconClient? rcon = null)
     {
         _filePath = filePath;
+        _rcon = rcon;
     }
 
     /// <summary>
@@ -450,6 +455,123 @@ internal sealed class BuildingMemoryService
         {
             _lock.Release();
         }
+    }
+
+    /// <summary>
+    /// Validates all tracked buildings against the game world via RCON.
+    /// Sends a single batched Lua script that checks each tracked position for the expected entity.
+    /// Removes any buildings that no longer exist in the world.
+    /// </summary>
+    public async Task<string> ValidateBuildingMemoryAsync(CancellationToken cancellationToken = default)
+    {
+        if (_rcon is null)
+        {
+            return Respond(new
+            {
+                Status = "error",
+                Error = "no_rcon",
+                Message = "RCON client not available for world validation"
+            });
+        }
+
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            var buildings = await EnsureLoadedAsync(cancellationToken);
+
+            if (buildings.Count == 0)
+            {
+                return Respond(new
+                {
+                    Status = "ok",
+                    Validated = 0,
+                    Removed = 0,
+                    Remaining = 0
+                });
+            }
+
+            // Build a single Lua script that checks all positions in one RCON call
+            var lua = BuildValidationLua(buildings);
+            var response = await _rcon.ExecuteLuaAsync(lua, cancellationToken);
+
+            // Parse the response: comma-separated 1/0 values for each building
+            var results = ParseValidationResponse(response, buildings.Count);
+
+            // Remove buildings that are no longer in the world (result = 0)
+            var removedCount = 0;
+            for (var i = buildings.Count - 1; i >= 0; i--)
+            {
+                if (!results[i])
+                {
+                    buildings.RemoveAt(i);
+                    removedCount++;
+                }
+            }
+
+            if (removedCount > 0)
+                await PersistAsync(cancellationToken);
+
+            return Respond(new
+            {
+                Status = "ok",
+                Validated = results.Length,
+                Removed = removedCount,
+                Remaining = buildings.Count
+            });
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Builds a Lua script that checks all tracked building positions in a single call.
+    /// Returns a comma-separated string of 1 (exists) or 0 (missing) for each building.
+    /// </summary>
+    internal static string BuildValidationLua(List<TrackedBuilding> buildings)
+    {
+        // Build position/name pairs as Lua table entries
+        var entries = new System.Text.StringBuilder();
+        entries.Append("local checks = {");
+        for (var i = 0; i < buildings.Count; i++)
+        {
+            if (i > 0) entries.Append(',');
+            var b = buildings[i];
+            entries.Append(string.Create(CultureInfo.InvariantCulture,
+                $"{{x={b.X},y={b.Y},name=\"{b.EntityName}\"}}"));
+        }
+        entries.Append('}');
+
+        return $$"""
+            {{entries}}
+            local surface = game.connected_players[1].surface
+            local results = {}
+            for _, c in ipairs(checks) do
+                local found = surface.find_entities_filtered{position={c.x, c.y}, radius=0.5, name=c.name, limit=1}
+                results[#results+1] = #found > 0 and "1" or "0"
+            end
+            rcon.print(table.concat(results, ","))
+            """;
+    }
+
+    /// <summary>
+    /// Parses the comma-separated validation response into a boolean array.
+    /// </summary>
+    internal static bool[] ParseValidationResponse(string response, int expectedCount)
+    {
+        if (string.IsNullOrWhiteSpace(response))
+            return new bool[expectedCount]; // All false = remove all
+
+        var parts = response.Split(',');
+        var results = new bool[expectedCount];
+
+        for (var i = 0; i < expectedCount && i < parts.Length; i++)
+        {
+            results[i] = parts[i].Trim() == "1";
+        }
+
+        return results;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────

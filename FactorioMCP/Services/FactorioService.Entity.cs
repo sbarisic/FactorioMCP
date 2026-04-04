@@ -579,4 +579,236 @@ internal sealed partial class FactorioService
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
+
+    /// <summary>
+    /// Place an inserter adjacent to a target entity on a specified side with a specified flow direction.
+    /// Calculates the correct inserter position and facing based on the target entity's bounding box.
+    /// For inbound: inserter drops INTO the target. For outbound: inserter picks FROM the target.
+    /// </summary>
+    public Task<string> PlaceInserterAsync(
+        string inserterName,
+        double targetX,
+        double targetY,
+        string side,
+        bool inbound,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(inserterName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(side);
+
+        // inbound = inserter drops into target (faces toward target)
+        // outbound = inserter picks from target (faces away from target)
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local surface = player.surface
+            local target_entities = surface.find_entities_filtered{position={{{targetX}}, {{targetY}}}, radius=1}
+            -- Prioritize non-resource entities
+            table.sort(target_entities, function(a, b)
+                local a_res = a.type == "resource" and 1 or 0
+                local b_res = b.type == "resource" and 1 or 0
+                return a_res < b_res
+            end)
+            local target = nil
+            for _, e in pairs(target_entities) do
+                if e.type ~= "resource" then target = e break end
+            end
+            if not target then
+                rcon.print('{"success":false,"error":"no_target_entity","x":{{targetX}},"y":{{targetY}}}')
+                return
+            end
+
+            -- Get target entity bounding box to calculate edge positions
+            local bb = target.bounding_box
+            local cx, cy = target.position.x, target.position.y
+
+            -- Calculate inserter position based on side (just outside the entity bounding box)
+            local side = "{{side}}"
+            local inserter_x, inserter_y
+            if side == "north" then
+                inserter_x = math.floor(cx) + 0.5
+                inserter_y = math.floor(bb.left_top.y) - 0.5
+            elseif side == "south" then
+                inserter_x = math.floor(cx) + 0.5
+                inserter_y = math.floor(bb.right_bottom.y) + 0.5
+            elseif side == "east" then
+                inserter_x = math.floor(bb.right_bottom.x) + 0.5
+                inserter_y = math.floor(cy) + 0.5
+            elseif side == "west" then
+                inserter_x = math.floor(bb.left_top.x) - 0.5
+                inserter_y = math.floor(cy) + 0.5
+            else
+                rcon.print('{"success":false,"error":"invalid_side","side":"'..side..'","valid_sides":"north, south, east, west"}')
+                return
+            end
+
+            -- Snap to tile center
+            inserter_x = math.floor(inserter_x) + 0.5
+            inserter_y = math.floor(inserter_y) + 0.5
+
+            -- Calculate inserter direction
+            -- inbound = drop INTO target = face toward target
+            -- outbound = pick FROM target = face away from target
+            local inbound = {{(inbound ? "true" : "false")}}
+            local dir
+            if side == "north" then
+                dir = inbound and defines.direction.south or defines.direction.north
+            elseif side == "south" then
+                dir = inbound and defines.direction.north or defines.direction.south
+            elseif side == "east" then
+                dir = inbound and defines.direction.west or defines.direction.east
+            elseif side == "west" then
+                dir = inbound and defines.direction.east or defines.direction.west
+            end
+
+            -- Check distance
+            local player_pos = player.position
+            local dx = inserter_x - player_pos.x
+            local dy = inserter_y - player_pos.y
+            local distance = math.sqrt(dx*dx + dy*dy)
+            if distance > player.build_distance then
+                rcon.print('{"success":false,"error":"out_of_range","distance":'..string.format("%.1f", distance)..',"limit":'..player.build_distance..'}')
+                return
+            end
+
+            -- Check placement validity
+            if not surface.can_place_entity{name="{{inserterName}}", position={inserter_x, inserter_y}, force=player.force, direction=dir} then
+                rcon.print('{"success":false,"error":"invalid_position","inserter":"{{inserterName}}","x":'..inserter_x..',"y":'..inserter_y..'}')
+                return
+            end
+
+            -- Check inventory
+            if player.get_item_count("{{inserterName}}") < 1 then
+                rcon.print('{"success":false,"error":"missing_item","item":"{{inserterName}}"}')
+                return
+            end
+
+            -- Place the inserter
+            player.remove_item{name="{{inserterName}}", count=1}
+            surface.create_entity{name="{{inserterName}}", position={inserter_x, inserter_y}, force=player.force, player=player, direction=dir}
+
+            local dir_names = {}
+            for k, v in pairs(defines.direction) do dir_names[v] = k end
+            local dir_name = dir_names[dir] or "unknown"
+
+            rcon.print('{"success":true,"inserter":"{{inserterName}}","x":'..inserter_x..',"y":'..inserter_y..
+                ',"direction":"'..dir_name..'"'..
+                ',"target":"'..target.name..'"'..
+                ',"side":"'..side..'"'..
+                ',"flow":"'..(inbound and "inbound" or "outbound")..'"'..
+                '}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Automatically place an inserter between two adjacent entities.
+    /// Detects the gap, determines correct position and orientation so items flow from source to destination.
+    /// </summary>
+    public Task<string> InsertBetweenAsync(
+        string inserterName,
+        double sourceX,
+        double sourceY,
+        double destX,
+        double destY,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(inserterName);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local surface = player.surface
+
+            -- Find source entity
+            local src_entities = surface.find_entities_filtered{position={{{sourceX}}, {{sourceY}}}, radius=1}
+            table.sort(src_entities, function(a, b)
+                local a_res = a.type == "resource" and 1 or 0
+                local b_res = b.type == "resource" and 1 or 0
+                return a_res < b_res
+            end)
+            local source = nil
+            for _, e in pairs(src_entities) do
+                if e.type ~= "resource" then source = e break end
+            end
+            if not source then
+                rcon.print('{"success":false,"error":"no_source_entity","x":{{sourceX}},"y":{{sourceY}}}')
+                return
+            end
+
+            -- Find destination entity
+            local dst_entities = surface.find_entities_filtered{position={{{destX}}, {{destY}}}, radius=1}
+            table.sort(dst_entities, function(a, b)
+                local a_res = a.type == "resource" and 1 or 0
+                local b_res = b.type == "resource" and 1 or 0
+                return a_res < b_res
+            end)
+            local dest = nil
+            for _, e in pairs(dst_entities) do
+                if e.type ~= "resource" then dest = e break end
+            end
+            if not dest then
+                rcon.print('{"success":false,"error":"no_dest_entity","x":{{destX}},"y":{{destY}}}')
+                return
+            end
+
+            -- Calculate midpoint between entities for inserter placement
+            local sx, sy = source.position.x, source.position.y
+            local dx, dy = dest.position.x, dest.position.y
+            local mid_x = (sx + dx) / 2
+            local mid_y = (sy + dy) / 2
+
+            -- Snap to tile center
+            local inserter_x = math.floor(mid_x) + 0.5
+            local inserter_y = math.floor(mid_y) + 0.5
+
+            -- Determine direction: inserter faces toward destination (drop side)
+            local diff_x = dx - sx
+            local diff_y = dy - sy
+            local dir
+            if math.abs(diff_x) > math.abs(diff_y) then
+                dir = diff_x > 0 and defines.direction.east or defines.direction.west
+            else
+                dir = diff_y > 0 and defines.direction.south or defines.direction.north
+            end
+
+            -- Check distance
+            local player_pos = player.position
+            local pdx = inserter_x - player_pos.x
+            local pdy = inserter_y - player_pos.y
+            local distance = math.sqrt(pdx*pdx + pdy*pdy)
+            if distance > player.build_distance then
+                rcon.print('{"success":false,"error":"out_of_range","distance":'..string.format("%.1f", distance)..',"limit":'..player.build_distance..'}')
+                return
+            end
+
+            -- Check placement validity
+            if not surface.can_place_entity{name="{{inserterName}}", position={inserter_x, inserter_y}, force=player.force, direction=dir} then
+                rcon.print('{"success":false,"error":"invalid_position","inserter":"{{inserterName}}","x":'..inserter_x..',"y":'..inserter_y..
+                    ',"message":"Cannot place inserter at midpoint. Entities may not be adjacent or the position is blocked."}')
+                return
+            end
+
+            -- Check inventory
+            if player.get_item_count("{{inserterName}}") < 1 then
+                rcon.print('{"success":false,"error":"missing_item","item":"{{inserterName}}"}')
+                return
+            end
+
+            -- Place the inserter
+            player.remove_item{name="{{inserterName}}", count=1}
+            surface.create_entity{name="{{inserterName}}", position={inserter_x, inserter_y}, force=player.force, player=player, direction=dir}
+
+            local dir_names = {}
+            for k, v in pairs(defines.direction) do dir_names[v] = k end
+            local dir_name = dir_names[dir] or "unknown"
+
+            rcon.print('{"success":true,"inserter":"{{inserterName}}","x":'..inserter_x..',"y":'..inserter_y..
+                ',"direction":"'..dir_name..'"'..
+                ',"source":"'..source.name..'","source_x":'..sx..',"source_y":'..sy..
+                ',"dest":"'..dest.name..'","dest_x":'..dx..',"dest_y":'..dy..
+                '}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
 }

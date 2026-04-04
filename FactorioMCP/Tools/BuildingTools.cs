@@ -80,4 +80,14 @@ internal sealed class BuildingTools(BuildingMemoryService buildings)
     {
         return buildings.ClearAllBuildingsAsync(cancellationToken);
     }
+
+    [McpServerTool, Description(
+        "Validate all tracked buildings against the actual game world. " +
+        "Checks each tracked building position via RCON to see if the entity still exists. " +
+        "Removes any buildings from memory that were destroyed, manually removed, or otherwise missing. " +
+        "Call this periodically or when building memory seems out of sync with the game world.")]
+    public Task<string> ValidateBuildingMemory(CancellationToken cancellationToken = default)
+    {
+        return buildings.ValidateBuildingMemoryAsync(cancellationToken);
+    }
 }

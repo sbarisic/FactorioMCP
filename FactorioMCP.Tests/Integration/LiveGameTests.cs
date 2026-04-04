@@ -20,6 +20,7 @@ public sealed class LiveGameTests : IAsyncLifetime
     private readonly ITestOutputHelper _output;
     private readonly RconClient _rcon = new();
     private FactorioService _service = null!;
+    private PathfindingService _pathfinding = null!;
 
     public LiveGameTests(ITestOutputHelper output)
     {
@@ -29,6 +30,7 @@ public sealed class LiveGameTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _service = new FactorioService(_rcon);
+        _pathfinding = new PathfindingService(_rcon);
         await _rcon.ConnectAndAuthenticateAsync("127.0.0.1", 27015, "mypassword");
         _output.WriteLine("✅ RCON connected and authenticated");
     }
@@ -228,14 +230,19 @@ public sealed class LiveGameTests : IAsyncLifetime
         string[] directions = ["south", "east", "north", "west"];
         bool moved = false;
 
+        // Direction offsets: how far to walk in each direction
+        var dirOffsets = new Dictionary<string, (double dx, double dy)>
+        {
+            ["south"] = (0, 10), ["east"] = (10, 0),
+            ["north"] = (0, -10), ["west"] = (-10, 0)
+        };
+
         foreach (var dir in directions)
         {
-            // Walk for 2 seconds (enough for stuck detection + detour)
-            var walkResult = await _service.WalkAsync(dir);
-            LogResult($"Walk({dir})", walkResult);
-            await Task.Delay(2000);
-            var stopResult = await _service.StopWalkingAsync();
-            LogResult("StopWalking", stopResult);
+            // Walk 10 tiles in the given direction using A* pathfinder
+            var (dx, dy) = dirOffsets[dir];
+            var walkResult = await _pathfinding.WalkToAsync(startX + dx, startY + dy, 2.0, 3.0);
+            LogResult($"WalkTo({dir})", walkResult);
 
             var endResult = await _service.GetPlayerPositionAsync();
             var endPos = Parse(endResult);
@@ -297,9 +304,9 @@ public sealed class LiveGameTests : IAsyncLifetime
         if (target is null)
         {
             _output.WriteLine("⚠️ No mineable resource found within 15 tiles — walking to find one");
-            await _service.WalkAsync("north");
-            await Task.Delay(2000);
-            await _service.StopWalkingAsync();
+            var posJson = await _pathfinding.GetPlayerPositionAsync();
+            var (ppx, ppy) = PathfindingService.ParsePosition(posJson);
+            await _pathfinding.WalkToAsync(ppx, ppy - 10, 2.0, 5.0);
 
             entitiesResult = await _service.GetNearbyEntitiesAsync(15);
             entities = Parse(entitiesResult).GetProperty("entities");
@@ -329,16 +336,8 @@ public sealed class LiveGameTests : IAsyncLifetime
             }
 
             _output.WriteLine($"  → Out of reach ({dist.GetProperty("distance")}), walking closer (attempt {attempt + 1}/5)...");
-            var posResult = await _service.GetPlayerPositionAsync();
-            var pos = Parse(posResult);
-            var px = pos.GetProperty("x").GetDouble();
-            var py = pos.GetProperty("y").GetDouble();
-
-            var dir = GetDirection(px, py, tx, ty);
-            _output.WriteLine($"  → Walking {dir} to get closer");
-            await _service.WalkAsync(dir);
-            await Task.Delay(1500);
-            await _service.StopWalkingAsync();
+            _output.WriteLine($"  → Walking toward ({tx}, {ty}) to get closer");
+            await _pathfinding.WalkToAsync(tx, ty, 3.0, 5.0);
         }
 
         // Final reach check
@@ -579,18 +578,4 @@ public sealed class LiveGameTests : IAsyncLifetime
         _output.WriteLine("\n═══ INSERTER DIRECTION VERIFICATION COMPLETE ═══");
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────
-
-    private static string GetDirection(double fromX, double fromY, double toX, double toY)
-    {
-        var dx = toX - fromX;
-        var dy = toY - fromY;
-
-        // Factorio: +Y is south, -Y is north
-        return (Math.Abs(dx) > Math.Abs(dy) * 2) ? (dx > 0 ? "east" : "west") :
-               (Math.Abs(dy) > Math.Abs(dx) * 2) ? (dy > 0 ? "south" : "north") :
-               (dx > 0 && dy > 0) ? "southeast" :
-               (dx > 0 && dy < 0) ? "northeast" :
-               (dx < 0 && dy > 0) ? "southwest" : "northwest";
     }
-}

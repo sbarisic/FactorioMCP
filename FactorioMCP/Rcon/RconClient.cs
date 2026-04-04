@@ -26,6 +26,14 @@ internal class RconClient : IAsyncDisposable, IDisposable
     private const int MaxReconnectAttempts = 3;
     private static readonly TimeSpan InitialBackoff = TimeSpan.FromSeconds(1);
 
+    /// <summary>
+    /// Number of consecutive "nothing" responses before forcing a reconnect.
+    /// Factorio RCON returns "nothing" when the connection is in a stale state
+    /// (e.g. after game pause/unpause or packet ID desync that doesn't throw).
+    /// </summary>
+    private const int MaxConsecutiveNothingResponses = 3;
+    private int _consecutiveNothingCount;
+
     public RconClient(ILogger<RconClient>? logger = null)
     {
         _logger = logger ?? NullLogger<RconClient>.Instance;
@@ -64,6 +72,7 @@ internal class RconClient : IAsyncDisposable, IDisposable
     /// <summary>
     /// Execute a raw command string on the server and return the response body.
     /// Automatically attempts reconnection on connection failure.
+    /// Also detects stale connections that return "nothing" repeatedly and forces reconnect.
     /// </summary>
     public virtual async Task<string> ExecuteAsync(string command, CancellationToken cancellationToken = default)
     {
@@ -79,12 +88,34 @@ internal class RconClient : IAsyncDisposable, IDisposable
 
             try
             {
-                return await ExecuteCoreAsync(command, cancellationToken).ConfigureAwait(false);
+                var result = await ExecuteCoreAsync(command, cancellationToken).ConfigureAwait(false);
+
+                // Detect stale connection: "nothing" responses indicate the RCON connection is in a bad state
+                if (string.Equals(result, "nothing", StringComparison.OrdinalIgnoreCase))
+                {
+                    _consecutiveNothingCount++;
+                    if (_consecutiveNothingCount >= MaxConsecutiveNothingResponses)
+                    {
+                        _logger.LogWarning(
+                            "RCON returned 'nothing' {Count} times consecutively. Forcing reconnect to recover stale connection",
+                            _consecutiveNothingCount);
+                        _consecutiveNothingCount = 0;
+                        await ReconnectWithBackoffAsync(cancellationToken).ConfigureAwait(false);
+                        return await ExecuteCoreAsync(command, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+                else
+                {
+                    _consecutiveNothingCount = 0;
+                }
+
+                return result;
             }
             catch (Exception ex) when (IsConnectionException(ex))
             {
                 // Connection lost — attempt reconnection then retry the command
                 _logger.LogWarning(ex, "RCON connection lost during command execution. Attempting reconnection");
+                _consecutiveNothingCount = 0;
                 await ReconnectWithBackoffAsync(cancellationToken).ConfigureAwait(false);
                 return await ExecuteCoreAsync(command, cancellationToken).ConfigureAwait(false);
             }
@@ -105,7 +136,36 @@ internal class RconClient : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
+    /// Force a full RCON reconnect. Useful for recovering from persistent stale connections
+    /// where all commands return "nothing" but no exception is thrown.
+    /// </summary>
+    public async Task ForceReconnectAsync(CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_host is null || _password is null)
+            {
+                throw new InvalidOperationException("Not connected. Call ConnectAndAuthenticateAsync first.");
+            }
+
+            _logger.LogInformation("Forcing RCON reconnect to {Host}:{Port}", _host, _port);
+            _consecutiveNothingCount = 0;
+            await ConnectCoreAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("RCON forced reconnect successful");
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>
     /// Create a fresh TCP connection and authenticate with stored credentials.
+    /// Per the Source RCON spec, the server may send two packets in response to
+    /// auth: an empty <c>SERVERDATA_RESPONSE_VALUE</c> followed by the
+    /// <c>SERVERDATA_AUTH_RESPONSE</c>. We drain packets until we find one whose
+    /// ID is <c>-1</c> (auth failure) or matches our auth ID (success).
     /// </summary>
     private async Task ConnectCoreAsync(CancellationToken cancellationToken)
     {
@@ -117,17 +177,36 @@ internal class RconClient : IAsyncDisposable, IDisposable
 
         var authId = Interlocked.Increment(ref _nextRequestId);
         await SendPacketAsync(authId, RconPacketType.Auth, _password!, cancellationToken).ConfigureAwait(false);
-        var response = await ReadPacketAsync(cancellationToken).ConfigureAwait(false);
 
-        if (response.Id == -1)
+        // Read up to 2 packets to handle servers that send an extra ResponseValue before AuthResponse
+        for (var i = 0; i < 2; i++)
         {
-            throw new InvalidOperationException("RCON authentication failed. Check the password.");
+            var response = await ReadPacketAsync(cancellationToken).ConfigureAwait(false);
+
+            if (response.Id == -1)
+            {
+                throw new InvalidOperationException("RCON authentication failed. Check the password.");
+            }
+
+            if (response.Id == authId)
+            {
+                return; // Auth succeeded
+            }
+
+            // Response ID doesn't match — likely the empty ResponseValue packet; read another
+            _logger.LogDebug("Auth: skipping stale response with ID {Id}, expecting {Expected}", response.Id, authId);
         }
+
+        // If we get here, neither packet matched — something is very wrong
+        throw new InvalidOperationException("RCON authentication failed. No matching auth response received.");
     }
 
     /// <summary>
     /// Send a command and read the response on an already-established connection.
     /// Factorio returns the complete response in a single packet.
+    /// Validates that the response packet ID matches the request ID. If there is
+    /// a mismatch (stale packet from auth or a previous command), drains up to
+    /// <see cref="MaxDrainAttempts"/> packets looking for the correct one.
     /// </summary>
     private async Task<string> ExecuteCoreAsync(string command, CancellationToken cancellationToken)
     {
@@ -135,10 +214,25 @@ internal class RconClient : IAsyncDisposable, IDisposable
 
         await SendPacketAsync(commandId, RconPacketType.ExecCommand, command, cancellationToken).ConfigureAwait(false);
 
-        var packet = await ReadPacketAsync(cancellationToken).ConfigureAwait(false);
+        // Read response, draining any stale packets with mismatched IDs
+        for (var attempt = 0; attempt < MaxDrainAttempts; attempt++)
+        {
+            var packet = await ReadPacketAsync(cancellationToken).ConfigureAwait(false);
+            if (packet.Id == commandId)
+            {
+                return packet.Body;
+            }
 
-        return packet.Body;
+            _logger.LogWarning(
+                "RCON response ID mismatch: expected {Expected}, got {Actual} (body: \"{Body}\"). Draining stale packet",
+                commandId, packet.Id, packet.Body.Length > 80 ? packet.Body[..80] + "..." : packet.Body);
+        }
+
+        _logger.LogError("RCON failed to find matching response after draining {Max} stale packets", MaxDrainAttempts);
+        throw new IOException($"RCON response ID mismatch persisted after draining {MaxDrainAttempts} packets. Connection may be corrupt.");
     }
+
+    private const int MaxDrainAttempts = 5;
 
     /// <summary>
     /// Attempt to reconnect with exponential backoff, up to <see cref="MaxReconnectAttempts"/> times.

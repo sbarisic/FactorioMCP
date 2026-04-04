@@ -7,12 +7,9 @@ namespace FactorioMCP.Tests.Tools;
 
 public class NavigationToolsTests
 {
-    private static NavigationTools CreateTools(FactorioService factorio, BuildingMemoryService buildingMemory, GameCommandQueue queue)
+    private static NavigationTools CreateTools(FactorioService factorio, PathfindingService pathfinding, BuildingMemoryService buildingMemory, GameCommandQueue queue)
     {
-        return new NavigationTools(factorio, buildingMemory, queue)
-        {
-            PollInterval = TimeSpan.FromMilliseconds(10)
-        };
+        return new NavigationTools(factorio, pathfinding, buildingMemory, queue);
     }
 
     // ── MoveToEntity — Target found and arrived ─────────────────────
@@ -23,19 +20,20 @@ public class NavigationToolsTests
         var rcon = new ScriptedRconClient([
             // 1. FindNearestEntity → found entity at (20, 0)
             """{"success":true,"entity":"stone-furnace","type":"furnace","x":20,"y":0,"distance":20.0,"total_found":3}""",
-            // 2. GetPlayerPosition (walk init)
+            // 2. PathfindingService.GetPlayerPosition (walk init)
             """{"x":0,"y":0}""",
-            // 3. WalkAsync east
-            """{"status":"walking","direction":"east","x":0,"y":0}""",
-            // 4. GetPlayerPosition (poll — arrived)
-            """{"x":19.5,"y":0}""",
-            // 5. StopWalking
-            """{"status":"stopped","x":19.5,"y":0}"""
+            // 3. RequestPathAsync
+            """{"success":true,"request_id":1,"x":0,"y":0}""",
+            // 4. GetNavigationStatusAsync (poll — arrived)
+            """{"status":"arrived","waypoint":5,"total_waypoints":5,"x":19.5,"y":0}""",
+            // 5. CleanupAsync
+            """ok"""
         ]);
         var factorio = new FactorioService(rcon);
+        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var buildingMemory = CreateBuildingMemory();
         var queue = new GameCommandQueue();
-        var tools = CreateTools(factorio, buildingMemory, queue);
+        var tools = CreateTools(factorio, pathfinding, buildingMemory, queue);
 
         var result = await tools.MoveToEntity("stone-furnace", tolerance: 2.0);
 
@@ -51,13 +49,14 @@ public class NavigationToolsTests
         var rcon = new ScriptedRconClient([
             // 1. FindNearestEntity → found entity at (1, 0)
             """{"success":true,"entity":"iron-chest","type":"container","x":1,"y":0,"distance":1.0,"total_found":1}""",
-            // 2. GetPlayerPosition → already within tolerance
+            // 2. PathfindingService.GetPlayerPosition → already within tolerance
             """{"x":0.5,"y":0}"""
         ]);
         var factorio = new FactorioService(rcon);
+        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var buildingMemory = CreateBuildingMemory();
         var queue = new GameCommandQueue();
-        var tools = CreateTools(factorio, buildingMemory, queue);
+        var tools = CreateTools(factorio, pathfinding, buildingMemory, queue);
 
         var result = await tools.MoveToEntity("iron-chest", tolerance: 2.0);
 
@@ -75,9 +74,10 @@ public class NavigationToolsTests
             """{"success":false,"error":"not_found","filter":"nuclear-reactor","radius":100}"""
         ]);
         var factorio = new FactorioService(rcon);
+        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var buildingMemory = CreateBuildingMemory();
         var queue = new GameCommandQueue();
-        var tools = CreateTools(factorio, buildingMemory, queue);
+        var tools = CreateTools(factorio, pathfinding, buildingMemory, queue);
 
         var result = await tools.MoveToEntity("nuclear-reactor");
 
@@ -92,26 +92,23 @@ public class NavigationToolsTests
     [Fact]
     public async Task MoveToEntity_GetsStuck_ReturnsStuck()
     {
-        var responses = new List<string>
-        {
+        var rcon = new ScriptedRconClient([
             // 1. FindNearestEntity
             """{"success":true,"entity":"stone-furnace","type":"furnace","x":50,"y":0,"distance":50.0,"total_found":1}""",
             // 2. GetPlayerPosition (walk init)
             """{"x":0,"y":0}""",
-            // 3. WalkAsync
-            """{"status":"walking","direction":"east","x":0,"y":0}"""
-        };
-        // 6 stuck polls
-        for (int i = 0; i < 7; i++)
-            responses.Add("""{"x":0.01,"y":0}""");
-        // StopWalking
-        responses.Add("""{"status":"stopped","x":0.01,"y":0}""");
-
-        var rcon = new ScriptedRconClient(responses.ToArray());
+            // 3. RequestPathAsync
+            """{"success":true,"request_id":1,"x":0,"y":0}""",
+            // 4. GetNavigationStatusAsync (poll — stuck)
+            """{"status":"stuck","waypoint":2,"total_waypoints":10,"x":1,"y":0}""",
+            // 5. CleanupAsync
+            """ok"""
+        ]);
         var factorio = new FactorioService(rcon);
+        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var buildingMemory = CreateBuildingMemory();
         var queue = new GameCommandQueue();
-        var tools = CreateTools(factorio, buildingMemory, queue);
+        var tools = CreateTools(factorio, pathfinding, buildingMemory, queue);
 
         var result = await tools.MoveToEntity("stone-furnace", tolerance: 2.0);
 
@@ -129,17 +126,18 @@ public class NavigationToolsTests
             """{"success":true,"resource":"iron-ore","best_patch":{"center_x":30.0,"center_y":10.0,"count":50,"total_amount":10000,"distance":31.6},"total_entities":50,"total_patches":2,"alternatives":[]}""",
             // 2. GetPlayerPosition (walk init)
             """{"x":0,"y":0}""",
-            // 3. WalkAsync
-            """{"status":"walking","direction":"east","x":0,"y":0}""",
-            // 4. GetPlayerPosition (poll — arrived)
-            """{"x":28,"y":9}""",
-            // 5. StopWalking
-            """{"status":"stopped","x":28,"y":9}"""
+            // 3. RequestPathAsync
+            """{"success":true,"request_id":1,"x":0,"y":0}""",
+            // 4. GetNavigationStatusAsync (poll — arrived)
+            """{"status":"arrived","waypoint":8,"total_waypoints":8,"x":28,"y":9}""",
+            // 5. CleanupAsync
+            """ok"""
         ]);
         var factorio = new FactorioService(rcon);
+        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var buildingMemory = CreateBuildingMemory();
         var queue = new GameCommandQueue();
-        var tools = CreateTools(factorio, buildingMemory, queue);
+        var tools = CreateTools(factorio, pathfinding, buildingMemory, queue);
 
         var result = await tools.MoveToResource("iron-ore", tolerance: 5.0);
 
@@ -159,9 +157,10 @@ public class NavigationToolsTests
             """{"success":false,"error":"not_found","resource":"uranium-ore","radius":200}"""
         ]);
         var factorio = new FactorioService(rcon);
+        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var buildingMemory = CreateBuildingMemory();
         var queue = new GameCommandQueue();
-        var tools = CreateTools(factorio, buildingMemory, queue);
+        var tools = CreateTools(factorio, pathfinding, buildingMemory, queue);
 
         var result = await tools.MoveToResource("uranium-ore");
 
@@ -176,23 +175,24 @@ public class NavigationToolsTests
     public async Task MoveToBuilding_FindsByLabel_AndArrives()
     {
         var rcon = new ScriptedRconClient([
-            // 1. GetPlayerPosition (for building search)
+            // 1. GetPlayerPosition (for building search — via FactorioService)
             """{"x":0,"y":0}""",
-            // 2. GetPlayerPosition (walk init)
+            // 2. PathfindingService.GetPlayerPosition (walk init)
             """{"x":0,"y":0}""",
-            // 3. WalkAsync
-            """{"status":"walking","direction":"east","x":0,"y":0}""",
-            // 4. GetPlayerPosition (poll — arrived)
-            """{"x":14,"y":0}""",
-            // 5. StopWalking
-            """{"status":"stopped","x":14,"y":0}"""
+            // 3. RequestPathAsync
+            """{"success":true,"request_id":1,"x":0,"y":0}""",
+            // 4. GetNavigationStatusAsync (poll — arrived)
+            """{"status":"arrived","waypoint":3,"total_waypoints":3,"x":14,"y":0}""",
+            // 5. CleanupAsync
+            """ok"""
         ]);
         var factorio = new FactorioService(rcon);
+        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var buildingMemory = CreateBuildingMemory();
         await buildingMemory.TrackBuildingAsync("stone-furnace", 15, 0);
         await buildingMemory.UpdateBuildingLabelAsync(15, 0, "main smelter");
         var queue = new GameCommandQueue();
-        var tools = CreateTools(factorio, buildingMemory, queue);
+        var tools = CreateTools(factorio, pathfinding, buildingMemory, queue);
 
         var result = await tools.MoveToBuilding("main smelter", tolerance: 2.0);
 
@@ -211,20 +211,21 @@ public class NavigationToolsTests
         var rcon = new ScriptedRconClient([
             // 1. GetPlayerPosition (for building search)
             """{"x":0,"y":0}""",
-            // 2. GetPlayerPosition (walk init)
+            // 2. PathfindingService.GetPlayerPosition (walk init)
             """{"x":0,"y":0}""",
-            // 3. WalkAsync
-            """{"status":"walking","direction":"south","x":0,"y":0}""",
-            // 4. GetPlayerPosition (poll — arrived)
-            """{"x":0,"y":9}""",
-            // 5. StopWalking
-            """{"status":"stopped","x":0,"y":9}"""
+            // 3. RequestPathAsync
+            """{"success":true,"request_id":1,"x":0,"y":0}""",
+            // 4. GetNavigationStatusAsync (poll — arrived)
+            """{"status":"arrived","waypoint":2,"total_waypoints":2,"x":0,"y":9}""",
+            // 5. CleanupAsync
+            """ok"""
         ]);
         var factorio = new FactorioService(rcon);
+        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var buildingMemory = CreateBuildingMemory();
         await buildingMemory.TrackBuildingAsync("wooden-chest", 0, 10);
         var queue = new GameCommandQueue();
-        var tools = CreateTools(factorio, buildingMemory, queue);
+        var tools = CreateTools(factorio, pathfinding, buildingMemory, queue);
 
         var result = await tools.MoveToBuilding("wooden-chest", tolerance: 2.0);
 
@@ -244,9 +245,10 @@ public class NavigationToolsTests
             """{"x":0,"y":0}"""
         ]);
         var factorio = new FactorioService(rcon);
+        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var buildingMemory = CreateBuildingMemory();
         var queue = new GameCommandQueue();
-        var tools = CreateTools(factorio, buildingMemory, queue);
+        var tools = CreateTools(factorio, pathfinding, buildingMemory, queue);
 
         var result = await tools.MoveToBuilding("nonexistent");
 
@@ -263,23 +265,24 @@ public class NavigationToolsTests
         var rcon = new ScriptedRconClient([
             // 1. GetPlayerPosition (for building search)
             """{"x":0,"y":0}""",
-            // 2. GetPlayerPosition (walk init)
+            // 2. PathfindingService.GetPlayerPosition (walk init)
             """{"x":0,"y":0}""",
-            // 3. WalkAsync
-            """{"status":"walking","direction":"east","x":0,"y":0}""",
-            // 4. GetPlayerPosition (poll — arrived)
-            """{"x":4,"y":0}""",
-            // 5. StopWalking
-            """{"status":"stopped","x":4,"y":0}"""
+            // 3. RequestPathAsync
+            """{"success":true,"request_id":1,"x":0,"y":0}""",
+            // 4. GetNavigationStatusAsync (poll — arrived)
+            """{"status":"arrived","waypoint":1,"total_waypoints":1,"x":4,"y":0}""",
+            // 5. CleanupAsync
+            """ok"""
         ]);
         var factorio = new FactorioService(rcon);
+        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var buildingMemory = CreateBuildingMemory();
         // Track two buildings — one further away with matching label, one closer without label
         await buildingMemory.TrackBuildingAsync("stone-furnace", 5, 0);
         await buildingMemory.UpdateBuildingLabelAsync(5, 0, "iron smelter");
         await buildingMemory.TrackBuildingAsync("stone-furnace", 100, 0); // farther, no label
         var queue = new GameCommandQueue();
-        var tools = CreateTools(factorio, buildingMemory, queue);
+        var tools = CreateTools(factorio, pathfinding, buildingMemory, queue);
 
         var result = await tools.MoveToBuilding("iron smelter", tolerance: 2.0);
 
@@ -296,15 +299,16 @@ public class NavigationToolsTests
         var rcon = new ScriptedRconClient([
             // 1. GetPlayerPosition (for building search)
             """{"x":0,"y":0}""",
-            // 2. GetPlayerPosition (walk init — already near)
+            // 2. PathfindingService.GetPlayerPosition (walk init — already near)
             """{"x":0,"y":0}"""
         ]);
         var factorio = new FactorioService(rcon);
+        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var buildingMemory = CreateBuildingMemory();
         await buildingMemory.TrackBuildingAsync("stone-furnace", 1, 0);
         await buildingMemory.UpdateBuildingLabelAsync(1, 0, "Main Smelter");
         var queue = new GameCommandQueue();
-        var tools = CreateTools(factorio, buildingMemory, queue);
+        var tools = CreateTools(factorio, pathfinding, buildingMemory, queue);
 
         var result = await tools.MoveToBuilding("main smelter", tolerance: 2.0);
 
@@ -322,9 +326,10 @@ public class NavigationToolsTests
             """{"x":4.5,"y":2.8}"""
         ]);
         var factorio = new FactorioService(rcon);
+        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
         var buildingMemory = CreateBuildingMemory();
         var queue = new GameCommandQueue();
-        var tools = CreateTools(factorio, buildingMemory, queue);
+        var tools = CreateTools(factorio, pathfinding, buildingMemory, queue);
 
         var result = await tools.MoveToEntity("stone-furnace", tolerance: 2.0);
 

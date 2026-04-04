@@ -1,3 +1,4 @@
+using FactorioMCP.Rcon;
 using FactorioMCP.Services;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
@@ -5,11 +6,11 @@ using System.ComponentModel;
 namespace FactorioMCP.Tools;
 
 /// <summary>
-/// MCP tool for executing arbitrary Lua code on the Factorio instance via RCON.
-/// Intended for advanced operations not covered by specific tools.
+/// MCP tools for executing arbitrary Lua code on the Factorio instance via RCON
+/// and managing the RCON connection.
 /// </summary>
 [McpServerToolType]
-internal sealed class LuaTools(FactorioService factorio, GameCommandQueue queue)
+internal sealed class LuaTools(FactorioService factorio, RconClient rcon, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Execute arbitrary Lua code on the Factorio game instance via RCON. " +
@@ -26,5 +27,16 @@ internal sealed class LuaTools(FactorioService factorio, GameCommandQueue queue)
         CancellationToken cancellationToken = default)
     {
         return queue.ExecuteAsync(nameof(ExecuteLua), ct => factorio.ExecuteRawLuaAsync(luaCode, ct), cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Force a full RCON reconnection to the Factorio server. " +
+        "Use this when all commands are returning 'nothing' or the connection seems stale. " +
+        "The server automatically detects and reconnects after 3 consecutive 'nothing' responses, " +
+        "but this tool allows manual recovery if needed.")]
+    public async Task<string> ReconnectRcon(CancellationToken cancellationToken = default)
+    {
+        await rcon.ForceReconnectAsync(cancellationToken);
+        return """{"status":"reconnected"}""";
     }
 }

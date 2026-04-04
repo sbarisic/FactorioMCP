@@ -159,6 +159,90 @@ internal sealed class EntityTools(FactorioService factorio, MiningService mining
         }, cancellationToken);
     }
 
+    [McpServerTool, Description(
+        "Place an inserter adjacent to a target entity on a specific side with automatic direction calculation. " +
+        "Specify the target entity position, which side to place the inserter on (north/south/east/west), " +
+        "and whether the inserter should move items INTO the target (inbound) or OUT OF the target (outbound). " +
+        "The tool calculates the correct inserter tile position using the target's bounding box and sets " +
+        "the inserter direction automatically. No geometry math needed — just say where and which way items flow.")]
+    public Task<string> PlaceInserter(
+        [Description("Name of the inserter to place (e.g. 'burner-inserter', 'inserter', 'fast-inserter', 'long-handed-inserter')")]
+        string inserterName,
+        [Description("X coordinate of the TARGET entity (not the inserter position)")]
+        double targetX,
+        [Description("Y coordinate of the TARGET entity (not the inserter position)")]
+        double targetY,
+        [Description("Which side of the target entity to place the inserter on: north, south, east, west")]
+        string side,
+        [Description("If true (inbound), the inserter drops items INTO the target. " +
+                     "If false (outbound), the inserter picks items FROM the target. " +
+                     "Example: inbound=true on a furnace means the inserter feeds ore into it.")]
+        bool inbound = true,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(PlaceInserter), async ct =>
+        {
+            var result = await factorio.PlaceInserterAsync(inserterName, targetX, targetY, side, inbound, ct);
+
+            if (IsSuccessResponse(result))
+            {
+                // Parse the placed position from the response to track it
+                try
+                {
+                    using var doc = JsonDocument.Parse(result);
+                    var root = doc.RootElement;
+                    var ix = root.GetProperty("x").GetDouble();
+                    var iy = root.GetProperty("y").GetDouble();
+                    var dir = root.GetProperty("direction").GetString() ?? "north";
+                    await buildingMemory.TrackBuildingAsync(inserterName, ix, iy, dir, ct);
+                }
+                catch (JsonException) { }
+            }
+
+            return result;
+        }, cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Automatically place an inserter between two adjacent entities to move items from source to destination. " +
+        "The tool finds both entities, calculates the midpoint for inserter placement, and orients the inserter " +
+        "so items flow from source to destination. Both entities must be adjacent (1 tile gap between them). " +
+        "This is the easiest way to set up item transfer — no need to calculate positions or directions manually.")]
+    public Task<string> InsertBetween(
+        [Description("Name of the inserter to place (e.g. 'burner-inserter', 'inserter', 'fast-inserter')")]
+        string inserterName,
+        [Description("X coordinate of the SOURCE entity (where items come FROM)")]
+        double sourceX,
+        [Description("Y coordinate of the SOURCE entity")]
+        double sourceY,
+        [Description("X coordinate of the DESTINATION entity (where items go TO)")]
+        double destX,
+        [Description("Y coordinate of the DESTINATION entity")]
+        double destY,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(InsertBetween), async ct =>
+        {
+            var result = await factorio.InsertBetweenAsync(inserterName, sourceX, sourceY, destX, destY, ct);
+
+            if (IsSuccessResponse(result))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(result);
+                    var root = doc.RootElement;
+                    var ix = root.GetProperty("x").GetDouble();
+                    var iy = root.GetProperty("y").GetDouble();
+                    var dir = root.GetProperty("direction").GetString() ?? "north";
+                    await buildingMemory.TrackBuildingAsync(inserterName, ix, iy, dir, ct);
+                }
+                catch (JsonException) { }
+            }
+
+            return result;
+        }, cancellationToken);
+    }
+
     private static bool IsSuccessResponse(string json)
     {
         try

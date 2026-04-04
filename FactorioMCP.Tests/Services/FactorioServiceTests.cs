@@ -71,8 +71,6 @@ public partial class FactorioServiceTests
     [Fact]
     public async Task AllCommands_UseSilentCommandPrefix()
     {
-        await _service.WalkAsync("north");
-        await _service.StopWalkingAsync();
         await _service.GetPlayerPositionAsync();
         await _service.GetInventoryAsync();
         await _service.CraftAsync("iron-plate", 1);
@@ -104,7 +102,7 @@ public partial class FactorioServiceTests
         await _service.FindBestResourcePatchAsync("iron-ore");
         await _service.RotateEntityAsync(0, 0);
 
-        Assert.Equal(32, _rcon.AllCommands.Count);
+        Assert.Equal(30, _rcon.AllCommands.Count);
         Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command ", cmd));
     }
 }

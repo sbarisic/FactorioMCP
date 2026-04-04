@@ -48,7 +48,7 @@ internal sealed class MiningService(RconClient rcon)
             -- Store exact entity position for the on_tick handler
             local epos = {e.position.x, e.position.y}
             storage.mine_state = {position = epos}
-            {{FactorioService.InstallOnTickHandler}}
+            {{PathfindingService.InstallOnTickHandler}}
             -- Select the entity and start mining immediately
             player.update_selected_entity(epos)
             player.mining_state = {mining = true, position = epos}
@@ -106,7 +106,7 @@ internal sealed class MiningService(RconClient rcon)
             local player = game.connected_players[1]
             storage.mine_state = nil
             player.mining_state = {mining = false}
-            {{FactorioService.RemoveOnTickIfIdle}}
+            {{PathfindingService.RemoveOnTickIfIdle}}
             rcon.print('{"success":true,"status":"mining_stopped"}')
             """;
 

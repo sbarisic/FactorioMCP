@@ -89,6 +89,7 @@ RCON connection settings are read from environment variables:
 
 ### High Priority
 
+- [ ] **Vision Screenshot** — `take_screenshot()`: return a base64 screenshot image for vision models to identify bottlenecks or plan layouts. Overlay entity bounds, directional indicators (inserter drop/pickup positions as absolute coordinates), and metadata as a "Map Legend" to give the image depth/context. **(CPX 3)**
 - [ ] **Smart Inserter Placement** — `place_inserter(target_x, target_y, side, direction)`: accept a target entity and a side (top/bottom/left/right) plus direction (inbound/outbound). C# backend calculates the exact tile offset based on entity size. Also `insert_between(source_pos, destination_pos)` to auto-place an inserter in the 1-tile gap between two entities with correct orientation. **(CPX 3)**
 - [ ] **Ghost Placement Validation** — LLM places ghost entities first, C# validates placement (prototype, orientation, connectivity). Returns corrective errors like "Inserter at {10,11} is pointing at a wall, not the Assembler" to create a feedback loop before committing real entities. **(CPX 3)**
 
@@ -98,7 +99,6 @@ RCON connection settings are read from environment variables:
 - [ ] **Factory Analysis Tools** — `GetProductionStatus`: what's being produced, bottlenecks, idle machines. `FindUnpoweredEntities`: list entities without power. `FindIdleMachines`: list machines not working. `FindMissingInputs(x, y)`: returns which input items an assembler/furnace is missing. Essential for AI to understand and debug factory state. **(CPX 3)**
 - [ ] **Logistics Flow Tracking** — Given a specific entity, trace the full tree of linked entities through belts and inserters, including flow direction. Track miner output positions and directions as flow starting points. Record which entity outputs to which, enabling the AI to understand how items move through the factory, plan logistics, debug crafting chains, and ensure belts feed into chests so items don't pile up. Create MCP tools to query and visualize the item flow graph. **(CPX 4)**
 - [ ] **Craft & Factory Planning** — `PlanCraft(item, count)`: returns full recipe tree with required intermediates and raw materials. `PlanFactory(goal)`: given a high-level goal like "automate iron plates", return rough ordered steps. Reduces LLM hallucinated plans. **(CPX 3)**
-- [ ] **Vision Screenshot** — `take_screenshot()`: return a base64 screenshot image for vision models to identify bottlenecks or plan layouts. Overlay entity bounds, directional indicators (inserter drop/pickup positions as absolute coordinates), and metadata as a "Map Legend" to give the image depth/context. **(CPX 3)**
 - [ ] **Power Network Topology** — Trace how electricity flows through the physical network from producers (boilers, solar panels) through electric poles to consumers. Map the pole connectivity graph and show which entities are powered by which network segment. Complements existing `GetElectricNetwork` (aggregate stats) and `InspectEntityPower` (per-entity) with topological awareness for planning expansions and diagnosing coverage gaps. **(CPX 3)**
 - [ ] **Inventory Intelligence** — `EnsureItem(item, count)`: auto-crafts or gathers if the player doesn't have enough. `GetInventorySummary`: returns condensed key-value inventory (fewer tokens than full inventory dump). **(CPX 2)**
 
@@ -181,8 +181,7 @@ RCON connection settings are read from environment variables:
 
 ### Active Bugs
 
-- [ ] **Stale Building Memory After Manual Removal** — Building memory tracks entities placed by the AI but has no way to detect when entities are removed outside the MCP tools (e.g. manually by a player, destroyed by enemies, or removed by other mods). `GetAllBuildings`/`GetClosestBuildingOfType`/`GetBuildingsNear` return phantom entries for entities that no longer exist in the world, causing `InspectEntity` and `MoveToBuilding` to walk to empty positions. Needs a validation/reconciliation mechanism — either periodic world verification (scan tracked positions for actual entities), on-demand validation before returning results, or a `ValidateBuildingMemory` tool that prunes stale entries. **(CPX 3)**
-- [ ] **RCON First-Call Returns `"nothing"` After Server Restart** — Intermittently, the first RCON command after MCP server restart returns the literal string `"nothing"` instead of expected JSON output from `rcon.print()`. Subsequent identical calls succeed immediately. Observed with `GetPlayerPosition` but may affect any first command. `GetGameTick` called in parallel at the same time succeeded, suggesting it's timing-related rather than a connection issue. Possibly caused by `InitializeChatListenerAsync` (the startup Lua command) interfering with subsequent response reads, or a warm-up delay in the RCON connection. **(CPX 2)**
+*No active bugs*
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 

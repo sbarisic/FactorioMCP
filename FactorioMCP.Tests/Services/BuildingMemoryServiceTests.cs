@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FactorioMCP.Models;
 using FactorioMCP.Services;
 using Xunit;
 
@@ -8,6 +9,9 @@ public class BuildingMemoryServiceTests
 {
     private static BuildingMemoryService CreateService() =>
         new(Path.Combine(Path.GetTempPath(), $"buildings-{Guid.NewGuid():N}.json"));
+
+    private static BuildingMemoryService CreateServiceWithRcon(ScriptedRconClient rcon) =>
+        new(Path.Combine(Path.GetTempPath(), $"buildings-{Guid.NewGuid():N}.json"), rcon);
 
     private static JsonElement Parse(string json)
     {
@@ -622,5 +626,240 @@ public class BuildingMemoryServiceTests
         var result = await service.FindClosestBuildingAsync("stone-furnace", 0, 0);
 
         Assert.Null(result);
+    }
+
+    // ── ValidateBuildingMemory ───────────────────────────────────────
+
+    [Fact]
+    public async Task ValidateBuildingMemoryAsync_ReturnsErrorWhenNoRcon()
+    {
+        var service = CreateService(); // No RCON client
+
+        var result = Parse(await service.ValidateBuildingMemoryAsync());
+
+        Assert.Equal("error", result.GetProperty("status").GetString());
+        Assert.Equal("no_rcon", result.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task ValidateBuildingMemoryAsync_ReturnsOkForEmptyMemory()
+    {
+        var rcon = new ScriptedRconClient([""]); // Won't be called
+        var service = CreateServiceWithRcon(rcon);
+
+        var result = Parse(await service.ValidateBuildingMemoryAsync());
+
+        Assert.Equal("ok", result.GetProperty("status").GetString());
+        Assert.Equal(0, result.GetProperty("validated").GetInt32());
+        Assert.Equal(0, result.GetProperty("removed").GetInt32());
+        Assert.Equal(0, result.GetProperty("remaining").GetInt32());
+        Assert.Empty(rcon.AllCommands); // No RCON call made
+    }
+
+    [Fact]
+    public async Task ValidateBuildingMemoryAsync_KeepsAllWhenAllExist()
+    {
+        var rcon = new ScriptedRconClient(["1,1,1"]);
+        var service = CreateServiceWithRcon(rcon);
+        await service.TrackBuildingAsync("stone-furnace", 0, 0);
+        await service.TrackBuildingAsync("transport-belt", 5, 0);
+        await service.TrackBuildingAsync("inserter", 10, 0);
+
+        var result = Parse(await service.ValidateBuildingMemoryAsync());
+
+        Assert.Equal("ok", result.GetProperty("status").GetString());
+        Assert.Equal(3, result.GetProperty("validated").GetInt32());
+        Assert.Equal(0, result.GetProperty("removed").GetInt32());
+        Assert.Equal(3, result.GetProperty("remaining").GetInt32());
+    }
+
+    [Fact]
+    public async Task ValidateBuildingMemoryAsync_RemovesMissingBuildings()
+    {
+        // First building exists, second missing, third exists
+        var rcon = new ScriptedRconClient(["1,0,1"]);
+        var service = CreateServiceWithRcon(rcon);
+        await service.TrackBuildingAsync("stone-furnace", 0, 0);
+        await service.TrackBuildingAsync("transport-belt", 5, 0); // This one is "missing"
+        await service.TrackBuildingAsync("inserter", 10, 0);
+
+        var result = Parse(await service.ValidateBuildingMemoryAsync());
+
+        Assert.Equal("ok", result.GetProperty("status").GetString());
+        Assert.Equal(3, result.GetProperty("validated").GetInt32());
+        Assert.Equal(1, result.GetProperty("removed").GetInt32());
+        Assert.Equal(2, result.GetProperty("remaining").GetInt32());
+
+        // Verify the missing building was actually removed from memory
+        var all = Parse(await service.GetAllBuildingsAsync());
+        Assert.Equal(2, all.GetProperty("count").GetInt32());
+        var buildings = all.GetProperty("buildings");
+        Assert.Equal("stone-furnace", buildings[0].GetProperty("entity_name").GetString());
+        Assert.Equal("inserter", buildings[1].GetProperty("entity_name").GetString());
+    }
+
+    [Fact]
+    public async Task ValidateBuildingMemoryAsync_RemovesAllWhenAllMissing()
+    {
+        var rcon = new ScriptedRconClient(["0,0"]);
+        var service = CreateServiceWithRcon(rcon);
+        await service.TrackBuildingAsync("stone-furnace", 0, 0);
+        await service.TrackBuildingAsync("transport-belt", 5, 0);
+
+        var result = Parse(await service.ValidateBuildingMemoryAsync());
+
+        Assert.Equal("ok", result.GetProperty("status").GetString());
+        Assert.Equal(2, result.GetProperty("validated").GetInt32());
+        Assert.Equal(2, result.GetProperty("removed").GetInt32());
+        Assert.Equal(0, result.GetProperty("remaining").GetInt32());
+    }
+
+    [Fact]
+    public async Task ValidateBuildingMemoryAsync_HandlesEmptyRconResponse()
+    {
+        // Empty response = treat all as missing
+        var rcon = new ScriptedRconClient([""]);
+        var service = CreateServiceWithRcon(rcon);
+        await service.TrackBuildingAsync("stone-furnace", 0, 0);
+
+        var result = Parse(await service.ValidateBuildingMemoryAsync());
+
+        Assert.Equal(1, result.GetProperty("removed").GetInt32());
+        Assert.Equal(0, result.GetProperty("remaining").GetInt32());
+    }
+
+    [Fact]
+    public async Task ValidateBuildingMemoryAsync_SendsSingleRconCall()
+    {
+        var rcon = new ScriptedRconClient(["1,1"]);
+        var service = CreateServiceWithRcon(rcon);
+        await service.TrackBuildingAsync("stone-furnace", 0, 0);
+        await service.TrackBuildingAsync("transport-belt", 5, 0);
+
+        await service.ValidateBuildingMemoryAsync();
+
+        // TrackBuildingAsync doesn't call RCON, so only the validation call should be present
+        Assert.Single(rcon.AllCommands);
+        // Verify the Lua script contains both building positions
+        var luaCommand = rcon.AllCommands[0];
+        Assert.Contains("stone-furnace", luaCommand);
+        Assert.Contains("transport-belt", luaCommand);
+        Assert.Contains("find_entities_filtered", luaCommand);
+    }
+
+    [Fact]
+    public async Task ValidateBuildingMemoryAsync_PersistsAfterRemoval()
+    {
+        var filePath = Path.Combine(Path.GetTempPath(), $"buildings-{Guid.NewGuid():N}.json");
+
+        var rcon = new ScriptedRconClient(["1,0"]); // Second building missing
+        var service1 = new BuildingMemoryService(filePath, rcon);
+        await service1.TrackBuildingAsync("stone-furnace", 0, 0);
+        await service1.TrackBuildingAsync("transport-belt", 5, 0);
+        await service1.ValidateBuildingMemoryAsync();
+
+        // New instance should only have the surviving building
+        var service2 = new BuildingMemoryService(filePath);
+        var result = Parse(await service2.GetAllBuildingsAsync());
+        Assert.Equal(1, result.GetProperty("count").GetInt32());
+        Assert.Equal("stone-furnace",
+            result.GetProperty("buildings")[0].GetProperty("entity_name").GetString());
+    }
+
+    // ── BuildValidationLua ──────────────────────────────────────────
+
+    [Fact]
+    public void BuildValidationLua_GeneratesCorrectScript()
+    {
+        var buildings = new List<TrackedBuilding>
+        {
+            new() { EntityName = "stone-furnace", X = 5, Y = -3 },
+            new() { EntityName = "transport-belt", X = 10.5, Y = 0 }
+        };
+
+        var lua = BuildingMemoryService.BuildValidationLua(buildings);
+
+        Assert.Contains("stone-furnace", lua);
+        Assert.Contains("transport-belt", lua);
+        Assert.Contains("x=5", lua);
+        Assert.Contains("y=-3", lua);
+        Assert.Contains("find_entities_filtered", lua);
+        Assert.Contains("table.concat(results", lua);
+    }
+
+    [Fact]
+    public void BuildValidationLua_HandlesSingleBuilding()
+    {
+        var buildings = new List<TrackedBuilding>
+        {
+            new() { EntityName = "inserter", X = 0, Y = 0 }
+        };
+
+        var lua = BuildingMemoryService.BuildValidationLua(buildings);
+
+        Assert.Contains("inserter", lua);
+        Assert.DoesNotContain(",{", lua); // Only one entry, no comma separator between entries
+    }
+
+    // ── ParseValidationResponse ─────────────────────────────────────
+
+    [Fact]
+    public void ParseValidationResponse_ParsesAllPresent()
+    {
+        var results = BuildingMemoryService.ParseValidationResponse("1,1,1", 3);
+
+        Assert.Equal(3, results.Length);
+        Assert.All(results, r => Assert.True(r));
+    }
+
+    [Fact]
+    public void ParseValidationResponse_ParsesAllMissing()
+    {
+        var results = BuildingMemoryService.ParseValidationResponse("0,0,0", 3);
+
+        Assert.Equal(3, results.Length);
+        Assert.All(results, r => Assert.False(r));
+    }
+
+    [Fact]
+    public void ParseValidationResponse_ParsesMixed()
+    {
+        var results = BuildingMemoryService.ParseValidationResponse("1,0,1,0", 4);
+
+        Assert.True(results[0]);
+        Assert.False(results[1]);
+        Assert.True(results[2]);
+        Assert.False(results[3]);
+    }
+
+    [Fact]
+    public void ParseValidationResponse_HandlesEmptyResponse()
+    {
+        var results = BuildingMemoryService.ParseValidationResponse("", 3);
+
+        Assert.Equal(3, results.Length);
+        Assert.All(results, r => Assert.False(r));
+    }
+
+    [Fact]
+    public void ParseValidationResponse_HandlesWhitespaceInResponse()
+    {
+        var results = BuildingMemoryService.ParseValidationResponse(" 1 , 0 , 1 ", 3);
+
+        Assert.True(results[0]);
+        Assert.False(results[1]);
+        Assert.True(results[2]);
+    }
+
+    [Fact]
+    public void ParseValidationResponse_HandlesShorterResponse()
+    {
+        // If RCON returns fewer values than expected, missing values are false
+        var results = BuildingMemoryService.ParseValidationResponse("1", 3);
+
+        Assert.Equal(3, results.Length);
+        Assert.True(results[0]);
+        Assert.False(results[1]);
+        Assert.False(results[2]);
     }
 }

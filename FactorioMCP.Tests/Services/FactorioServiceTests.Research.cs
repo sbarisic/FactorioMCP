@@ -340,7 +340,7 @@ public partial class FactorioServiceTests
         await _service.GetTechnologyDetailsAsync("automation");
 
         Assert.Contains("tech.prototype.effects", _rcon.LastCommand!);
-        Assert.Contains("\"effects\":["
+        Assert.Contains("\"effects\":[", _rcon.LastCommand!);
         Assert.Contains("unlock-recipe", _rcon.LastCommand!);
     }
 

@@ -12,12 +12,14 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.Services
     .AddSingleton<RconClient>()
     .AddSingleton<FactorioService>()
+    .AddSingleton<PathfindingService>()
     .AddSingleton<EnergyService>()
     .AddSingleton<BlueprintService>()
     .AddSingleton<GoalPlannerService>()
     .AddSingleton<BuildingMemoryService>()
     .AddSingleton<BeltPlannerService>()
     .AddSingleton<MiningService>()
+    .AddSingleton<VisionService>()
     .AddSingleton<GameCommandQueue>()
     .AddHostedService<RconConnectionService>()
     .AddMcpServer(options =>

@@ -13,6 +13,7 @@ public class McpToolIntegrationTests
 {
     private readonly CapturingRconClient _rcon = new();
     private readonly FactorioService _factorio;
+    private readonly PathfindingService _pathfinding;
     private readonly EnergyService _energy;
     private readonly BlueprintService _blueprints;
     private readonly GoalPlannerService _goals;
@@ -23,6 +24,7 @@ public class McpToolIntegrationTests
     public McpToolIntegrationTests()
     {
         _factorio = new FactorioService(_rcon);
+        _pathfinding = new PathfindingService(_rcon);
         _energy = new EnergyService(_rcon);
         _blueprints = new BlueprintService(_rcon);
         _mining = new MiningService(_rcon);
@@ -41,6 +43,7 @@ public class McpToolIntegrationTests
         var services = new ServiceCollection();
         services.AddSingleton<RconClient, CapturingRconClient>();
         services.AddSingleton<FactorioService>();
+        services.AddSingleton<PathfindingService>();
         services.AddSingleton<EnergyService>();
         services.AddSingleton<BlueprintService>();
         services.AddSingleton<MiningService>();
@@ -158,7 +161,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task MovementTools_GetPlayerPosition_DelegatesToFactorioService()
     {
-        var tools = new MovementTools(_factorio, _queue);
+        var tools = new MovementTools(_pathfinding, _queue);
 
         await tools.GetPlayerPosition();
 
@@ -169,7 +172,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task MovementTools_StopWalking_DelegatesToFactorioService()
     {
-        var tools = new MovementTools(_factorio, _queue);
+        var tools = new MovementTools(_pathfinding, _queue);
 
         var result = await tools.StopWalking();
 
@@ -502,7 +505,7 @@ public class McpToolIntegrationTests
     [Fact]
     public async Task LuaTools_ExecuteLua_DelegatesToFactorioService()
     {
-        var tools = new LuaTools(_factorio, _queue);
+        var tools = new LuaTools(_factorio, _rcon, _queue);
 
         await tools.ExecuteLua("rcon.print('hello')");
 
