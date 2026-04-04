@@ -497,6 +497,16 @@ internal sealed class BuildingMemoryService
             // Parse the response: comma-separated 1/0 values for each building
             var results = ParseValidationResponse(response, buildings.Count);
 
+            if (results is null)
+            {
+                return Respond(new
+                {
+                    Status = "error",
+                    Error = "invalid_response",
+                    Message = "RCON returned unexpected format — buildings not modified"
+                });
+            }
+
             // Remove buildings that are no longer in the world (result = 0)
             var removedCount = 0;
             for (var i = buildings.Count - 1; i >= 0; i--)
@@ -557,18 +567,26 @@ internal sealed class BuildingMemoryService
 
     /// <summary>
     /// Parses the comma-separated validation response into a boolean array.
+    /// Returns null if the response is empty, malformed, or contains values other than "0" or "1"
+    /// to prevent data loss on RCON/Lua errors.
     /// </summary>
-    internal static bool[] ParseValidationResponse(string response, int expectedCount)
+    internal static bool[]? ParseValidationResponse(string response, int expectedCount)
     {
         if (string.IsNullOrWhiteSpace(response))
-            return new bool[expectedCount]; // All false = remove all
+            return null;
 
         var parts = response.Split(',');
         var results = new bool[expectedCount];
 
         for (var i = 0; i < expectedCount && i < parts.Length; i++)
         {
-            results[i] = parts[i].Trim() == "1";
+            var trimmed = parts[i].Trim();
+            if (trimmed == "1")
+                results[i] = true;
+            else if (trimmed == "0")
+                results[i] = false;
+            else
+                return null; // Invalid format — do not trust results
         }
 
         return results;

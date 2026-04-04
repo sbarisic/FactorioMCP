@@ -717,15 +717,15 @@ public class BuildingMemoryServiceTests
     [Fact]
     public async Task ValidateBuildingMemoryAsync_HandlesEmptyRconResponse()
     {
-        // Empty response = treat all as missing
+        // Empty response = invalid format, return error instead of deleting buildings
         var rcon = new ScriptedRconClient([""]);
         var service = CreateServiceWithRcon(rcon);
         await service.TrackBuildingAsync("stone-furnace", 0, 0);
 
         var result = Parse(await service.ValidateBuildingMemoryAsync());
 
-        Assert.Equal(1, result.GetProperty("removed").GetInt32());
-        Assert.Equal(0, result.GetProperty("remaining").GetInt32());
+        Assert.Equal("error", result.GetProperty("status").GetString());
+        Assert.Equal("invalid_response", result.GetProperty("error").GetString());
     }
 
     [Fact]
@@ -837,8 +837,7 @@ public class BuildingMemoryServiceTests
     {
         var results = BuildingMemoryService.ParseValidationResponse("", 3);
 
-        Assert.Equal(3, results.Length);
-        Assert.All(results, r => Assert.False(r));
+        Assert.Null(results);
     }
 
     [Fact]

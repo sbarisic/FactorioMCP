@@ -7,25 +7,25 @@ game.players: [player count: 1
 ]
 connected_players: [connected: Cartman300
 ]
-game.players[1]: [player[1]: Cartman300 at 10.859375,5.94140625
+game.players[1]: [player[1]: Cartman300 at 29.84375,-13.69921875
 ]
 game version: [version: 2.0.76
 ]
 
 ═══ SERVICE METHOD RESULTS ═══
-GetPlayerPosition: [{"x":10.859375,"y":5.94140625}
+GetPlayerPosition: [{"x":29.84375,"y":-13.69921875}
 ]
-GetInventory: [{"items":[{"name":"steel-chest","count":1},{"name":"transport-belt","count":19},{"name":"express-transport-belt","count":26},{"name":"express-underground-belt","count":12},{"name":"express-splitter","count":6},{"name":"express-loader","count":6},{"name":"burner-inserter","count":3},{"name":"small-electric-pole","count":54},{"name":"substation","count":10},{"name":"burner-mining-drill","count":7},{"name":"steam-turbine-miner","count":25},{"name":"wood","count":49},{"name":"coal","count":10},{"name":"stone","count":233},{"name":"iron-ore","count":8},{"name":"iron-plate","count":8},{"name":"iron-gear-wheel","count":28},{"name":"pistol","count":1},{"name":"firearm-magazine","count":10},{"name":"boiler","count":1},{"name":"steam-engine","count":14},{"name":"pipe","count":38},{"name":"pipe-to-ground","count":36},{"name":"electric-energy-interface","count":10},{"name":"heat-interface","count":10},{"name":"infinity-chest","count":10},{"name":"infinity-pipe","count":10}],"total_slots":90,"free_slots":57}
+GetInventory: [{"items":[{"name":"steel-chest","count":1},{"name":"transport-belt","count":19},{"name":"express-transport-belt","count":26},{"name":"express-underground-belt","count":12},{"name":"express-splitter","count":6},{"name":"express-loader","count":6},{"name":"burner-inserter","count":3},{"name":"small-electric-pole","count":54},{"name":"substation","count":10},{"name":"burner-mining-drill","count":7},{"name":"steam-turbine-miner","count":25},{"name":"stone-furnace","count":1},{"name":"wood","count":53},{"name":"coal","count":10},{"name":"stone","count":233},{"name":"iron-ore","count":8},{"name":"iron-plate","count":8},{"name":"iron-gear-wheel","count":29},{"name":"pistol","count":1},{"name":"firearm-magazine","count":10},{"name":"boiler","count":1},{"name":"steam-engine","count":14},{"name":"pipe","count":38},{"name":"pipe-to-ground","count":36},{"name":"electric-energy-interface","count":10},{"name":"heat-interface","count":10},{"name":"infinity-chest","count":10},{"name":"infinity-pipe","count":10}],"total_slots":90,"free_slots":56}
 ]
-GetNearbyEntities: [{"entities":[{"name":"character","x":10.859375,"y":5.94140625,"direction":"northwest"}]}
+GetNearbyEntities: [{"entities":[{"name":"pipe-to-ground","x":29.5,"y":-23.5,"direction":"north"},{"name":"medium-rock","x":22.75,"y":-20.5,"direction":"north"},{"name":"small-electric-pole","x":32.5,"y":-20.5,"direction":"north"},{"name":"tree-grassland-l","x":24.125,"y":-18.625,"direction":"north"},{"name":"steam-engine","x":34.5,"y":-18.5,"direction":"north"},{"name":"steam-engine","x":37.5,"y":-18.5,"direction":"north"},{"name":"character","x":29.84375,"y":-13.69921875,"direction":"west"},{"name":"pipe-to-ground","x":29.5,"y":-11.5,"direction":"south"},{"name":"pipe-to-ground","x":29.5,"y":-10.5,"direction":"north"}]}
 ]
 GetResearchStatus: [{"researching":false}
 ]
-GetGameTick: [{"tick":2932367}
+GetGameTick: [{"tick":3036029}
 ]
 GetCraftingQueue: [{"queue":[]}
 ]
-CheckDistance(0,0): [{"distance":12.4,"build_in_range":true,"build_limit":28,"reach_in_range":true,"reach_limit":28}
+CheckDistance(0,0): [{"distance":32.8,"build_in_range":false,"build_limit":28,"reach_in_range":false,"reach_limit":28}
 ]
 
 ═══ DIAGNOSTICS COMPLETE ═══

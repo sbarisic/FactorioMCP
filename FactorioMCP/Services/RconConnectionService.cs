@@ -23,7 +23,7 @@ internal sealed class RconConnectionService(
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         var host = configuration["FACTORIO_RCON_HOST"] ?? "127.0.0.1";
-        var port = int.Parse(configuration["FACTORIO_RCON_PORT"] ?? "27015");
+        var port = int.TryParse(configuration["FACTORIO_RCON_PORT"], out var p) ? p : 27015;
         var password = configuration["FACTORIO_RCON_PASSWORD"] ?? "mypassword";
 
         var delay = InitialBackoff;

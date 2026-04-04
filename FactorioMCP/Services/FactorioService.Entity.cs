@@ -41,7 +41,12 @@ internal sealed partial class FactorioService
                 return
             end
             player.remove_item{name=name, count=1}
-            surface.create_entity{name=name, position=pos, force=player.force, player=player, direction=dir}
+            local placed = surface.create_entity{name=name, position=pos, force=player.force, player=player, direction=dir}
+            if not placed then
+                player.insert{name=name, count=1}
+                rcon.print('{"success":false,"error":"placement_failed","entity":"'..name..'","x":'..pos[1]..',"y":'..pos[2]..'}')
+                return
+            end
             rcon.print('{"success":true,"entity":"'..name..'","x":'..pos[1]..',"y":'..pos[2]..'}')
             """);
 
@@ -144,6 +149,8 @@ internal sealed partial class FactorioService
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
+    /// <summary>
+    /// Insert items from the player's inventory into a nearby entity's inventory.
     /// Supports specifying the target inventory slot (fuel, input, output, etc.).
     /// Validates proximity before interacting.
     /// </summary>
