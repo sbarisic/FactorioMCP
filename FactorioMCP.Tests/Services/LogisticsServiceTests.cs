@@ -127,7 +127,7 @@ public class LogisticsServiceTests
     }
 
     [Fact]
-    public async Task GetRobotStatusAsync_QueryiesLogisticRobots()
+    public async Task GetRobotStatusAsync_QueriesLogisticRobots()
     {
         await _service.GetRobotStatusAsync();
 

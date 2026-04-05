@@ -52,9 +52,9 @@ internal sealed class TrainTools(TrainService trains, GameCommandQueue queue)
         [Description("Numeric train ID")]
         uint trainId,
         [Description("True to switch to manual control, false to resume automatic schedule")]
-        bool manual,
+        bool manualMode,
         CancellationToken cancellationToken = default)
     {
-        return queue.ExecuteAsync(nameof(SetTrainMode), ct => trains.SetTrainModeAsync(trainId, manual, ct), cancellationToken);
+        return queue.ExecuteAsync(nameof(SetTrainMode), ct => trains.SetTrainModeAsync(trainId, manualMode, ct), cancellationToken);
     }
 }

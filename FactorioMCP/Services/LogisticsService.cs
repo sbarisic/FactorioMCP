@@ -5,8 +5,8 @@ namespace FactorioMCP.Services;
 
 /// <summary>
 /// Service for querying the logistic robot network: network statistics, robot status,
-/// and item inventory. Uses <c>LuaLogisticNetwork</c> accessed via <c>LuaForce.logistic_networks</c>
-/// and <c>LuaSurface.find_logistic_network_by_position</c>.
+/// and item inventory. Uses <c>LuaSurface.find_logistic_network_by_position</c>
+/// to locate the network covering the player's position.
 /// </summary>
 internal sealed class LogisticsService(RconClient rcon)
 {
