@@ -161,7 +161,8 @@ internal sealed class BatchTools(
                     if (walkStatus is "stuck" or "timeout" or "no_path")
                     {
                         failed++;
-                        results.Add($$"""{"x":{{target.X}},"y":{{target.Y}},"success":false,"error":"walk_failed","walk_status":"{{walkStatus}}"}""");
+                        results.Add(string.Create(CultureInfo.InvariantCulture,
+                            $"{{\"x\":{target.X},\"y\":{target.Y},\"success\":false,\"error\":\"walk_failed\",\"walk_status\":\"{walkStatus}\"}}"));
                         return FormatBatchResult(results, succeeded, failed, refuelTargets.Count, "failed");
                     }
                 }

@@ -18,12 +18,12 @@ internal sealed partial class FactorioService
             local entities = player.surface.find_entities_filtered{
                 position=player.position, radius={{radius}}
             }
+            local status_names = {}
+            for k, v in pairs(defines.entity_status) do status_names[v] = k end
             local parts = {}
             for _, e in pairs(entities) do
                 if e.status == defines.entity_status.no_power
                     or e.status == defines.entity_status.low_power then
-                    local status_names = {}
-                    for k, v in pairs(defines.entity_status) do status_names[v] = k end
                     local status_name = status_names[e.status] or tostring(e.status)
                     parts[#parts+1] = '{"name":"'..esc(e.name)..'","type":"'..esc(e.type)..'","status":"'..status_name..'","x":'..string.format("%.1f", e.position.x)..',"y":'..string.format("%.1f", e.position.y)..'}'
                 end
