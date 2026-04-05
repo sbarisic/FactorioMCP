@@ -171,6 +171,7 @@ RCON connection settings are read from environment variables:
 
 ### Active Bugs
 
+- [ ] **`PlaceEntitySmartAsync` ignores entity grid alignment — places entities at wrong position** — The spiral search uses integer offsets (`for ox = -dist, dist`), so it only tests integer-coordinate positions (e.g., 41, -60). For entities with odd tile dimensions (3×3 like `electric-mining-drill`, 1×1 like belts), Factorio expects half-integer center positions (e.g., 41.5, -60.5). When `can_place_entity` receives integer coords, Factorio snaps internally, causing the placed entity to be offset from the intended position. **Example**: Requesting placement near (41, -60) results in drill at (41.5, -59.5) instead of (41.5, -60.5) — output lands 1 tile off the target belt. **Fix**: Query the entity prototype's `tile_width`/`tile_height` to determine grid alignment (odd → half-integer, even → integer), snap the search center to the nearest grid-aligned position, and search with grid-aligned offsets. See `FactorioService.Entity.cs:888-911`. **(CPX 2)**
 - [ ] **`sort_entities` doesn't sort by distance — entity operations target wrong entity** — ✅ **FIXED** — `LuaEntitySort` now accepts `(t, qx, qy)` and sorts non-resource entities by distance from query position. All 12 call sites updated. Move to DONE.md on next cleanup.
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
