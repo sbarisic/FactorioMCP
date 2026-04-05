@@ -107,8 +107,10 @@ public partial class FactorioServiceTests
         await _service.FindIdleMachinesAsync();
         await _service.FindMissingInputsAsync(0, 0);
         await _service.PlanCraftAsync("iron-gear-wheel");
+        await _service.GetEntityPrototypeAsync("stone-furnace");
+        await _service.GetAreaOccupancyAsync(0, 0, 5, 5);
 
-        Assert.Equal(36, _rcon.AllCommands.Count);
+        Assert.Equal(38, _rcon.AllCommands.Count);
         Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command ", cmd));
     }
 }

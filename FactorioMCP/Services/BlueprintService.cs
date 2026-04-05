@@ -47,6 +47,60 @@ internal sealed class BlueprintService(RconClient rcon)
     }
 
     /// <summary>
+    /// Place multiple ghost entities in a single RCON call. Accepts a JSON array of
+    /// placement entries: <c>[{"name":"entity-name","x":0,"y":0,"direction":"north"}, ...]</c>.
+    /// Uses a Lua <c>for</c> loop over entries to minimize round-trips.
+    /// Returns placed/skipped counts and per-entry errors.
+    /// </summary>
+    public Task<string> PlaceGhostBatchAsync(string placementsJson, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(placementsJson);
+
+        var escaped = placementsJson.Replace("\\", "\\\\").Replace("'", "\\'");
+
+        var lua = $$"""
+            local player = game.connected_players[1]
+            local surface = player.surface
+            local force = player.force
+            local ok, entries = pcall(helpers.json_to_table, '{{escaped}}')
+            if not ok or type(entries) ~= "table" then
+                rcon.print('{"success":false,"error":"invalid_json"}')
+                return
+            end
+            local dir_map = {}
+            for k, v in pairs(defines.direction) do dir_map[k] = v end
+            local placed = 0
+            local skipped = 0
+            local errors = {}
+            for i, e in ipairs(entries) do
+                local name = e.name
+                local x = tonumber(e.x)
+                local y = tonumber(e.y)
+                local dir_str = e.direction or "north"
+                local dir = dir_map[dir_str] or defines.direction.north
+                if not name or not x or not y then
+                    skipped = skipped + 1
+                    errors[#errors+1] = '{"index":'..i..',"error":"missing_fields"}'
+                elseif not surface.can_place_entity{name="entity-ghost", position={x, y}, force=force, direction=dir, inner_name=name} then
+                    skipped = skipped + 1
+                    errors[#errors+1] = '{"index":'..i..',"name":"'..name..'","x":'..x..',"y":'..y..',"error":"invalid_position"}'
+                else
+                    local ghost = surface.create_entity{name="entity-ghost", inner_name=name, position={x, y}, force=force, direction=dir}
+                    if ghost then
+                        placed = placed + 1
+                    else
+                        skipped = skipped + 1
+                        errors[#errors+1] = '{"index":'..i..',"name":"'..name..'","x":'..x..',"y":'..y..',"error":"create_failed"}'
+                    end
+                end
+            end
+            rcon.print('{"success":true,"placed":'..placed..',"skipped":'..skipped..',"total":'..#entries..',"errors":['..table.concat(errors, ",")..']}')
+            """;
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
     /// Build a blueprint string at the given position. Imports the blueprint string into
     /// the player's cursor stack, builds it, then clears the cursor.
     /// Uses <c>import_stack</c> + <c>build_from_cursor</c> for RCON-compatible placement.
@@ -112,9 +166,12 @@ internal sealed class BlueprintService(RconClient rcon)
             local surface = player.surface
             local center = {{posExpr}}
             local ghosts = surface.find_entities_filtered{type="entity-ghost", position=center, radius={{radius}}}
+            local dir_names = {}
+            for k, v in pairs(defines.direction) do dir_names[v] = k end
             local parts = {}
             for _, g in ipairs(ghosts) do
-                parts[#parts+1] = '{"ghost_name":"'..g.ghost_name..'","x":'..string.format("%.1f", g.position.x)..',"y":'..string.format("%.1f", g.position.y)..',"direction":"'..(g.direction or 0)..'"}'
+                local dn = dir_names[g.direction] or "north"
+                parts[#parts+1] = '{"ghost_name":"'..g.ghost_name..'","x":'..string.format("%.1f", g.position.x)..',"y":'..string.format("%.1f", g.position.y)..',"direction":"'..dn..'"}'
             end
             rcon.print('{"ghosts":['..table.concat(parts, ",")..'],"count":'..#ghosts..',"center_x":'..string.format("%.1f", center.x)..',"center_y":'..string.format("%.1f", center.y)..',"radius":'..({{radius}})..'}')
             """);

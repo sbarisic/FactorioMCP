@@ -56,4 +56,35 @@ internal sealed class WorldTools(FactorioService factorio, GameCommandQueue queu
     {
         return queue.ExecuteAsync(nameof(ScanResources), ct => factorio.ScanResourcesAsync(radius, centerX, centerY, ct), cancellationToken);
     }
+
+    [McpServerTool, Description(
+        "Query an entity prototype's properties: tile dimensions (tile_width, tile_height), " +
+        "max_health, type, and optional crafting_speed, mining_speed, energy_usage, collision_box. " +
+        "Use this before layout planning to learn how much space an entity occupies.")]
+    public Task<string> GetEntityPrototype(
+        [Description("Entity prototype name (e.g. 'stone-furnace', 'assembling-machine-1', 'transport-belt')")]
+        string entityName,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(GetEntityPrototype), ct => factorio.GetEntityPrototypeAsync(entityName, ct), cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Get per-tile occupancy information for a rectangular area. " +
+        "Returns a grid of tiles indicating whether each is blocked by an entity (with entity name) or water. " +
+        "Essential for layout planning — use this to find clear space before placing entities. " +
+        "Maximum area is 10,000 tiles (e.g. 100×100).")]
+    public Task<string> GetAreaOccupancy(
+        [Description("Left X coordinate of the area")]
+        double x1,
+        [Description("Top Y coordinate of the area")]
+        double y1,
+        [Description("Right X coordinate of the area")]
+        double x2,
+        [Description("Bottom Y coordinate of the area")]
+        double y2,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(GetAreaOccupancy), ct => factorio.GetAreaOccupancyAsync(x1, y1, x2, y2, ct), cancellationToken);
+    }
 }
