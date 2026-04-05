@@ -47,9 +47,27 @@ internal sealed class FlowService(RconClient rcon)
             local inserters = surface.find_entities_filtered{type="inserter", position=pos, radius={{radius}}}
             for _, ins in pairs(inserters) do
                 if ins.valid then
+                    local src_ent = nil
+                    -- Primary: check pickup_target (precise, works when inserter is active)
                     local ok_p, src = pcall(function() return ins.pickup_target end)
                     if ok_p and src and src.valid then
-                        add_edge(src, ins, "inserter_pickup")
+                        src_ent = src
+                    end
+                    -- Fallback: find entity at pickup_position
+                    if not src_ent then
+                        local ok_pp, ppos = pcall(function() return ins.pickup_position end)
+                        if ok_pp and ppos then
+                            local candidates = surface.find_entities_filtered{position=ppos, radius=1.0, limit=5}
+                            for _, c in pairs(candidates) do
+                                if c.valid and c ~= ins and c.type ~= "resource" and c.type ~= "item-entity" then
+                                    src_ent = c
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    if src_ent then
+                        add_edge(src_ent, ins, "inserter_pickup")
                     end
                     local ok_d, dpos = pcall(function() return ins.drop_position end)
                     if ok_d and dpos then
@@ -177,11 +195,33 @@ internal sealed class FlowService(RconClient rcon)
             local function get_inserter_targets(e)
                 local out_ents = {}
                 local out_kinds = {}
+                local ekey = entity_key(e)
                 local nearby = surface.find_entities_filtered{type="inserter", position=e.position, radius=3}
                 for _, ins in pairs(nearby) do
                     if ins.valid then
+                        local matches = false
+                        -- Primary: check pickup_target (precise, works when inserter is active)
                         local ok_p, src = pcall(function() return ins.pickup_target end)
-                        if ok_p and src and src.valid and entity_key(src) == entity_key(e) then
+                        if ok_p and src and src.valid and entity_key(src) == ekey then
+                            matches = true
+                        end
+                        -- Fallback: check pickup_position inside entity bounding box
+                        -- (handles idle machines where pickup_target is nil)
+                        if not matches then
+                            local ok_pp, ppos = pcall(function() return ins.pickup_position end)
+                            if ok_pp and ppos then
+                                local ok_bb, bb = pcall(function() return e.bounding_box end)
+                                if ok_bb and bb then
+                                    local lt = bb.left_top
+                                    local rb = bb.right_bottom
+                                    if ppos.x >= lt.x - 0.1 and ppos.x <= rb.x + 0.1 and
+                                       ppos.y >= lt.y - 0.1 and ppos.y <= rb.y + 0.1 then
+                                        matches = true
+                                    end
+                                end
+                            end
+                        end
+                        if matches then
                             local ok_d, dpos = pcall(function() return ins.drop_position end)
                             if ok_d and dpos then
                                 local targets = surface.find_entities_filtered{position=dpos, radius=1.5, limit=5}
@@ -219,6 +259,34 @@ internal sealed class FlowService(RconClient rcon)
                     out_ents[#out_ents+1] = ins_ents[i]
                     out_kinds[#out_kinds+1] = ins_kinds[i]
                 end
+                -- Underground belt pair: follow input to output via neighbours
+                if e.type == "underground-belt" then
+                    local ok_btg, btg = pcall(function() return e.belt_to_ground_type end)
+                    if ok_btg and btg == "input" then
+                        local ok_pair, paired = pcall(function() return e.neighbours end)
+                        if ok_pair and paired and type(paired) ~= "number" then
+                            local pent = nil
+                            if paired.valid then
+                                pent = paired
+                            elseif type(paired) == "table" then
+                                for _, p in pairs(paired) do
+                                    if type(p) ~= "number" and p.valid then pent = p break end
+                                end
+                            end
+                            if pent then
+                                local pk = entity_key(pent)
+                                local already = false
+                                for j = 1, #out_ents do
+                                    if entity_key(out_ents[j]) == pk then already = true break end
+                                end
+                                if not already then
+                                    out_ents[#out_ents+1] = pent
+                                    out_kinds[#out_kinds+1] = "underground_pair"
+                                end
+                            end
+                        end
+                    end
+                end
                 -- Mining drill drop output
                 if e.type == "mining-drill" then
                     local ok_d, dpos = pcall(function() return e.drop_position end)
@@ -237,6 +305,13 @@ internal sealed class FlowService(RconClient rcon)
             end
             local function node_json(e, d, extra)
                 local s = '{"name":"'..esc(e.name)..'","type":"'..esc(e.type)..'","x":'..string.format("%.1f",e.position.x)..',"y":'..string.format("%.1f",e.position.y)..',"depth":'..d
+                -- Add recipe info for machines (assemblers and furnaces)
+                if e.type == "assembling-machine" or e.type == "furnace" then
+                    local ok_r, recipe = pcall(function() return e.get_recipe() end)
+                    if ok_r and recipe then
+                        s = s..',"recipe":"'..esc(recipe.name)..'"'
+                    end
+                end
                 if extra then s = s..extra end
                 return s..'}'
             end
@@ -270,6 +345,13 @@ internal sealed class FlowService(RconClient rcon)
                             edges[#edges+1] = edge_json(cur_ent, out_e, "belt_segment", ',"belt_length":'..belt_len)
                             -- Continue BFS from the end of the belt segment (same depth — belts are free)
                             bfs_entities[#bfs_entities+1] = last_belt
+                            bfs_depths[#bfs_depths+1] = cur_depth
+                        elseif kind == "underground_pair" and not visited[key] then
+                            -- Underground belt traversal: free depth like belt segments
+                            visited[key] = true
+                            nodes[#nodes+1] = node_json(out_e, cur_depth, nil)
+                            edges[#edges+1] = edge_json(cur_ent, out_e, "underground_pair", nil)
+                            bfs_entities[#bfs_entities+1] = out_e
                             bfs_depths[#bfs_depths+1] = cur_depth
                         elseif not visited[key] then
                             visited[key] = true
@@ -417,8 +499,22 @@ internal sealed class FlowService(RconClient rcon)
             for _, ins in pairs(inserters) do
                 if ins.valid then
                     local src, dst
+                    -- Primary: check pickup_target
                     local ok_p, pickup = pcall(function() return ins.pickup_target end)
                     if ok_p and pickup and pickup.valid then src = pickup end
+                    -- Fallback: find entity at pickup_position
+                    if not src then
+                        local ok_pp, ppos = pcall(function() return ins.pickup_position end)
+                        if ok_pp and ppos then
+                            local candidates = surface.find_entities_filtered{position=ppos, radius=1.0, limit=5}
+                            for _, c in pairs(candidates) do
+                                if c.valid and c ~= ins and c.type ~= "resource" and c.type ~= "item-entity" then
+                                    src = c
+                                    break
+                                end
+                            end
+                        end
+                    end
                     local ok_d, dpos = pcall(function() return ins.drop_position end)
                     if ok_d and dpos then
                         local targets = surface.find_entities_filtered{position=dpos, radius=1.5, limit=5}

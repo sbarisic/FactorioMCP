@@ -118,5 +118,157 @@
     "direction": "west",
     "label": null,
     "placed_at": "2026-04-05T15:38:39.9725055Z"
+  },
+  {
+    "entity_name": "assembling-machine-2",
+    "x": -43,
+    "y": 9,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:07:40.3738286Z"
+  },
+  {
+    "entity_name": "assembling-machine-2",
+    "x": -37,
+    "y": 9,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:07:58.8891647Z"
+  },
+  {
+    "entity_name": "steel-chest",
+    "x": -46,
+    "y": 9,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:08:08.3887832Z"
+  },
+  {
+    "entity_name": "inserter",
+    "x": -44.5,
+    "y": 9.5,
+    "direction": "west",
+    "label": null,
+    "placed_at": "2026-04-05T18:08:12.9225166Z"
+  },
+  {
+    "entity_name": "steel-chest",
+    "x": -43,
+    "y": 6,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:08:43.2890283Z"
+  },
+  {
+    "entity_name": "inserter",
+    "x": -42.5,
+    "y": 7.5,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:08:43.3225401Z"
+  },
+  {
+    "entity_name": "steel-chest",
+    "x": -37,
+    "y": 6,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:08:51.0908409Z"
+  },
+  {
+    "entity_name": "inserter",
+    "x": -36.5,
+    "y": 7.5,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:08:51.1404525Z"
+  },
+  {
+    "entity_name": "inserter",
+    "x": -41,
+    "y": 9,
+    "direction": "west",
+    "label": null,
+    "placed_at": "2026-04-05T18:09:14.6067489Z"
+  },
+  {
+    "entity_name": "transport-belt",
+    "x": -40,
+    "y": 9,
+    "direction": "east",
+    "label": null,
+    "placed_at": "2026-04-05T18:09:39.8051419Z"
+  },
+  {
+    "entity_name": "fast-inserter",
+    "x": -39,
+    "y": 9,
+    "direction": "west",
+    "label": null,
+    "placed_at": "2026-04-05T18:09:50.1227866Z"
+  },
+  {
+    "entity_name": "fast-inserter",
+    "x": -35,
+    "y": 9,
+    "direction": "west",
+    "label": null,
+    "placed_at": "2026-04-05T18:09:57.4060108Z"
+  },
+  {
+    "entity_name": "iron-chest",
+    "x": -34,
+    "y": 9,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:10:17.3553001Z"
+  },
+  {
+    "entity_name": "small-electric-pole",
+    "x": -43,
+    "y": 12,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:10:21.0219566Z"
+  },
+  {
+    "entity_name": "small-electric-pole",
+    "x": -37,
+    "y": 12,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:10:21.0556688Z"
+  },
+  {
+    "entity_name": "small-electric-pole",
+    "x": -40,
+    "y": 7,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:10:40.523813Z"
+  },
+  {
+    "entity_name": "small-electric-pole",
+    "x": -36,
+    "y": 7,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:10:45.5902431Z"
+  },
+  {
+    "entity_name": "small-electric-pole",
+    "x": -35,
+    "y": 11,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:10:45.6054283Z"
+  },
+  {
+    "entity_name": "small-electric-pole",
+    "x": -45,
+    "y": 7,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T18:10:48.9901795Z"
   }
 ]

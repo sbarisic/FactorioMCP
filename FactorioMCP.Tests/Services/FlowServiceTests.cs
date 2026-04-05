@@ -110,6 +110,15 @@ public class FlowServiceTests
         Assert.Contains("game.connected_players[1]", _rcon.LastCommand!);
     }
 
+    [Fact]
+    public async Task GetFlowGraphAsync_FallsBackToPickupPosition()
+    {
+        await _service.GetFlowGraphAsync();
+
+        // Should have pickup_position fallback for idle inserters
+        Assert.Contains("pickup_position", _rcon.LastCommand!);
+    }
+
     // ── TraceItemFlowAsync ───────────────────────────────────────────
 
     [Fact]
@@ -198,6 +207,35 @@ public class FlowServiceTests
         Assert.Contains("belt_segment", _rcon.LastCommand!);
         Assert.Contains("belt_length", _rcon.LastCommand!);
         Assert.Contains("follow_belt_chain", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task TraceItemFlowAsync_FallsBackToPickupPosition()
+    {
+        await _service.TraceItemFlowAsync(0, 0);
+
+        // Should have pickup_position fallback for idle machines
+        Assert.Contains("pickup_position", _rcon.LastCommand!);
+        Assert.Contains("bounding_box", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task TraceItemFlowAsync_TraversesUndergroundBeltPairs()
+    {
+        await _service.TraceItemFlowAsync(0, 0);
+
+        Assert.Contains("underground_pair", _rcon.LastCommand!);
+        Assert.Contains("belt_to_ground_type", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task TraceItemFlowAsync_IncludesMachineRecipeInfo()
+    {
+        await _service.TraceItemFlowAsync(0, 0);
+
+        Assert.Contains("get_recipe", _rcon.LastCommand!);
+        Assert.Contains("assembling-machine", _rcon.LastCommand!);
+        Assert.Contains("furnace", _rcon.LastCommand!);
     }
 
     // ── PreviewBeltPlacementAsync ─────────────────────────────────────
@@ -333,6 +371,15 @@ public class FlowServiceTests
     {
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => _service.GetFlowSummaryAsync(0));
+    }
+
+    [Fact]
+    public async Task GetFlowSummaryAsync_FallsBackToPickupPosition()
+    {
+        await _service.GetFlowSummaryAsync();
+
+        // Should have pickup_position fallback for idle inserters
+        Assert.Contains("pickup_position", _rcon.LastCommand!);
     }
 
     [Fact]
