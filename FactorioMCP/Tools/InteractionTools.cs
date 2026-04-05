@@ -64,4 +64,18 @@ internal sealed class InteractionTools(FactorioService factorio, GameCommandQueu
     {
         return queue.ExecuteAsync(nameof(InspectEntity), ct => factorio.InspectEntityAsync(x, y, ct), cancellationToken);
     }
+
+    [McpServerTool, Description(
+        "Pick up items dropped on the ground near the player — like holding 'F' in-game. " +
+        "Finds item-on-ground entities within the specified radius and inserts them into the player's inventory. " +
+        "Returns a summary of what was picked up.")]
+    public Task<string> PickupItems(
+        [Description("Search radius in tiles (default 10)")]
+        double radius = 10,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(PickupItems),
+            ct => factorio.PickupItemsAsync(radius, ct),
+            cancellationToken);
+    }
 }

@@ -566,7 +566,7 @@ internal sealed partial class FactorioService
     /// Scans outward in a spiral-like pattern checking for tile regions free of entities
     /// and non-water tiles. Returns the first suitable area found.
     /// </summary>
-    public Task<string> FindBuildableAreaAsync(int width, int height, double searchRadius = 50, double? centerX = null, double? centerY = null, CancellationToken cancellationToken = default)
+    public Task<string> FindBuildableAreaAsync(int width, int height, double searchRadius = 50, double? centerX = null, double? centerY = null, bool allowOrePatches = false, CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
@@ -575,6 +575,12 @@ internal sealed partial class FactorioService
         var posExpr = centerX.HasValue && centerY.HasValue
             ? string.Create(CultureInfo.InvariantCulture, $"{{x={centerX.Value},y={centerY.Value}}}")
             : "player.position";
+
+        // When allowOrePatches is true (for drills), exclude resources and character from blocking
+        // When false (default), only exclude character — ore patches count as blocking
+        var blockingFilter = allowOrePatches
+            ? """type={"resource", "character"}, invert=true"""
+            : """type={"character"}, invert=true""";
 
         var lua = string.Create(CultureInfo.InvariantCulture, $$"""
             local player = game.connected_players[1]
@@ -602,11 +608,10 @@ internal sealed partial class FactorioService
                                 name={"water", "deepwater", "water-green", "water-mud", "water-shallow"}
                             }
                             if #tiles == 0 then
-                                -- Check for blocking entities (non-resource)
+                                -- Check for blocking entities
                                 local blocking = surface.find_entities_filtered{
                                     area={{"{"}}{ax, ay}, {ax+w, ay+h}{{"}"}},
-                                    type={"resource", "character"},
-                                    invert=true
+                                    {{blockingFilter}}
                                 }
                                 if #blocking == 0 then
                                     local d = math.sqrt((ax + w/2 - cx)^2 + (ay + h/2 - cy)^2)
@@ -626,6 +631,164 @@ internal sealed partial class FactorioService
             else
                 rcon.print('{"success":false,"error":"no_area_found","width":'..w..',"height":'..h..',"search_radius":'..search_r..'}')
             end
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Get entities within the player's reach distance, optionally filtered by entity type/name.
+    /// If maxDistance is not specified, uses the player's reach_distance.
+    /// </summary>
+    public Task<string> GetReachableEntitiesAsync(string? type = null, double? maxDistance = null, CancellationToken cancellationToken = default)
+    {
+        if (maxDistance.HasValue)
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxDistance.Value);
+
+        var escapedType = type?.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        var filterExpr = escapedType is not null
+            ? string.Create(CultureInfo.InvariantCulture, $"name=\"{escapedType}\"")
+            : "";
+
+        var radiusExpr = maxDistance.HasValue
+            ? string.Create(CultureInfo.InvariantCulture, $"{maxDistance.Value}")
+            : "radius";
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            local player = game.connected_players[1]
+            local radius = player.reach_distance
+            local entities = player.surface.find_entities_filtered{
+                position=player.position, radius={{radiusExpr}}{{(escapedType is not null ? $", {filterExpr}" : "")}}
+            }
+            local parts = {}
+            for _, e in pairs(entities) do
+                if e ~= player.character then
+                    local dx = e.position.x - player.position.x
+                    local dy = e.position.y - player.position.y
+                    local dist = math.sqrt(dx*dx + dy*dy)
+                    parts[#parts+1] = '{"name":"'..esc(e.name)..'","type":"'..esc(e.type)..'","x":'..string.format("%.1f", e.position.x)..',"y":'..string.format("%.1f", e.position.y)..',"distance":'..string.format("%.1f", dist)..'}'
+                end
+            end
+            rcon.print('{"reach_distance":'..radius..',"search_radius":'..{{radiusExpr}}..',"count":'..#parts..',"entities":['..table.concat(parts, ",")..']}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Count an item across all nearby containers (chests, furnaces, assemblers) and player inventory.
+    /// </summary>
+    public Task<string> CountItemInWorldAsync(string itemName, double radius = 50, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemName);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+
+        var escapedItemName = itemName.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            local player = game.connected_players[1]
+            local item = "{{escapedItemName}}"
+            local player_count = player.get_item_count(item)
+            local container_total = 0
+            local containers = {}
+            local inv_types = {
+                {defines.inventory.chest, "chest"},
+                {defines.inventory.furnace_source, "furnace_source"},
+                {defines.inventory.furnace_result, "furnace_result"},
+                {defines.inventory.assembling_machine_input, "assembling_machine_input"},
+                {defines.inventory.assembling_machine_output, "assembling_machine_output"}
+            }
+            local entities = player.surface.find_entities_filtered{
+                position=player.position, radius={{radius}}
+            }
+            for _, e in pairs(entities) do
+                if e ~= player.character then
+                    local entity_count = 0
+                    for _, inv_pair in pairs(inv_types) do
+                        local inv = e.get_inventory(inv_pair[1])
+                        if inv then
+                            entity_count = entity_count + inv.get_item_count(item)
+                        end
+                    end
+                    if entity_count > 0 then
+                        container_total = container_total + entity_count
+                        containers[#containers+1] = '{"name":"'..esc(e.name)..'","x":'..string.format("%.1f", e.position.x)..',"y":'..string.format("%.1f", e.position.y)..',"count":'..entity_count..'}'
+                    end
+                end
+            end
+            local total = player_count + container_total
+            rcon.print('{"item":"'..esc(item)..'","total":'..total..',"player_count":'..player_count..',"container_count":'..container_total..',"search_radius":{{radius}},"containers":['..table.concat(containers, ",")..']}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Estimate walk time to a position based on straight-line distance and player speed.
+    /// </summary>
+    public Task<string> EstimateTravelTimeAsync(double x, double y, CancellationToken cancellationToken = default)
+    {
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local px = player.position.x
+            local py = player.position.y
+            local tx = {{x}}
+            local ty = {{y}}
+            local dx = tx - px
+            local dy = ty - py
+            local distance = math.sqrt(dx*dx + dy*dy)
+            local speed = player.character_running_speed
+            local tiles_per_second = speed * 60
+            local seconds = 0
+            if tiles_per_second > 0 then
+                seconds = distance / tiles_per_second
+            end
+            rcon.print('{"distance":'..string.format("%.1f", distance)..',"estimated_seconds":'..string.format("%.1f", seconds)..',"tiles_per_second":'..string.format("%.1f", tiles_per_second)..',"player_x":'..string.format("%.1f", px)..',"player_y":'..string.format("%.1f", py)..',"target_x":'..string.format("%.1f", tx)..',"target_y":'..string.format("%.1f", ty)..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Pick up items dropped on the ground within the specified radius of the player.
+    /// Finds "item-entity" type entities and inserts them into the player's inventory.
+    /// </summary>
+    public Task<string> PickupItemsAsync(double radius = 10, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            local player = game.connected_players[1]
+            local items = player.surface.find_entities_filtered{
+                position=player.position, radius={{radius}}, type="item-entity"
+            }
+            local picked = 0
+            local summary = {}
+            for _, item in pairs(items) do
+                local stack = item.stack
+                if stack and stack.valid_for_read then
+                    local name = stack.name
+                    local count = stack.count
+                    local inserted = player.insert{name=name, count=count}
+                    if inserted > 0 then
+                        picked = picked + inserted
+                        summary[name] = (summary[name] or 0) + inserted
+                        if inserted >= count then
+                            item.destroy()
+                        else
+                            stack.count = count - inserted
+                        end
+                    end
+                end
+            end
+            local parts = {}
+            for name, count in pairs(summary) do
+                parts[#parts+1] = '{"name":"'..esc(name)..'","count":'..count..'}'
+            end
+            rcon.print('{"success":true,"picked_up":'..picked..',"ground_items_found":'..#items..',"items":['..table.concat(parts, ",")..']}')
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);

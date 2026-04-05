@@ -256,6 +256,62 @@ internal sealed class EntityTools(FactorioService factorio, MiningService mining
         }
     }
 
+    [McpServerTool, Description(
+        "Get available adjacent tile slots around an entity at the given position. " +
+        "Checks each tile on the perimeter of the entity's bounding box for collision, " +
+        "reporting which slots are free for placing inserters, belts, or other buildings. " +
+        "Each slot includes its coordinates, which side of the entity it is on (north/south/east/west), " +
+        "and whether it is blocked by another entity.")]
+    public Task<string> GetAvailableSlots(
+        [Description("X coordinate of the target entity")]
+        double x,
+        [Description("Y coordinate of the target entity")]
+        double y,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(GetAvailableSlots), ct => factorio.GetAvailableSlotsAsync(x, y, ct), cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Automatically place an entity near a target position. Searches outward in a spiral " +
+        "from the given coordinates for the nearest valid placement position using can_place_entity. " +
+        "Validates inventory and build distance. " +
+        "Use this instead of PlaceEntity when you want the backend to pick the best spot — " +
+        "e.g. place a stone-furnace near an ore patch, or a drill near iron-ore.")]
+    public Task<string> PlaceEntitySmart(
+        [Description("Entity/item name to place (e.g. 'stone-furnace', 'burner-mining-drill', 'transport-belt')")]
+        string entityName,
+        [Description("X coordinate to place near")]
+        double nearX,
+        [Description("Y coordinate to place near")]
+        double nearY,
+        [Description("Direction the entity faces: north, south, east, west")]
+        string direction = "north",
+        [Description("How far from the target to search in tiles (default 10)")]
+        double searchRadius = 10,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(PlaceEntitySmart), async ct =>
+        {
+            var result = await factorio.PlaceEntitySmartAsync(entityName, nearX, nearY, direction, searchRadius, ct);
+
+            if (IsSuccessResponse(result))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(result);
+                    var root = doc.RootElement;
+                    var px = root.GetProperty("x").GetDouble();
+                    var py = root.GetProperty("y").GetDouble();
+                    await buildingMemory.TrackBuildingAsync(entityName, px, py, direction, ct);
+                }
+                catch (JsonException) { }
+            }
+
+            return result;
+        }, cancellationToken);
+    }
+
     private static bool IsSuccessResponse(string json, out string? newDirection)
     {
         newDirection = null;

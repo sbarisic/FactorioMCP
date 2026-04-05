@@ -57,4 +57,23 @@ internal sealed class RecipeTools(FactorioService factorio, GameCommandQueue que
     {
         return queue.ExecuteAsync(nameof(CheckCraftFeasibility), ct => factorio.CheckCraftFeasibilityAsync(recipe, count, ct), cancellationToken);
     }
+
+    [McpServerTool, Description(
+        "Plan a full crafting chain for an item. Recursively expands the recipe tree " +
+        "showing all intermediates and raw materials needed with exact quantities. " +
+        "Uses actual Factorio recipe data — no guessing. " +
+        "Returns: recipe_tree (full hierarchy), raw_materials (flat list of raw resources needed), " +
+        "and the player's current stock of the target item. " +
+        "Use this before embarking on a crafting goal to understand the full supply chain.")]
+    public Task<string> PlanCraft(
+        [Description("Item name to plan crafting for (e.g. 'electronic-circuit', 'automation-science-pack')")]
+        string item,
+        [Description("Number of items to craft (default 1)")]
+        int count = 1,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(PlanCraft),
+            ct => factorio.PlanCraftAsync(item, count, ct),
+            cancellationToken);
+    }
 }

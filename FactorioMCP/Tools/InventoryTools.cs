@@ -81,4 +81,25 @@ internal sealed class InventoryTools(FactorioService factorio, GameCommandQueue 
     {
         return queue.ExecuteAsync(nameof(GetEntityInventory), ct => factorio.GetEntityInventoryAsync(x, y, inventoryType, ct), cancellationToken);
     }
+
+    [McpServerTool, Description(
+        "Get a condensed inventory summary as item-name:count pairs. " +
+        "Much more compact than GetInventory — use this when you just need to know what the player has.")]
+    public Task<string> GetInventorySummary(CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(GetInventorySummary), factorio.GetInventorySummaryAsync, cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Check if the player has enough of an item. If not, reports whether the item can be crafted " +
+        "and what ingredients are missing. Does NOT auto-craft — returns actionable info only.")]
+    public Task<string> EnsureItem(
+        [Description("Item name to check (e.g. 'iron-plate', 'electronic-circuit')")]
+        string itemName,
+        [Description("Required quantity of the item")]
+        int count,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(EnsureItem), ct => factorio.CheckEnsureItemAsync(itemName, count, ct), cancellationToken);
+    }
 }

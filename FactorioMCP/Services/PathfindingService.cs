@@ -177,7 +177,7 @@ internal sealed class PathfindingService(RconClient rcon)
 
                 // Steer toward the endpoint of the current segment
                 var (wpx, wpy) = waypoints[segIndex + 1];
-                var direction = CalculateDirection(px, py, wpx, wpy);
+                var direction = CalculateDirection(px, py, wpx, wpy, _lastDirection);
                 if (_lastDirection != direction)
                     await SetWalkingDirectionAsync(direction, cancellationToken);
 
@@ -281,20 +281,46 @@ internal sealed class PathfindingService(RconClient rcon)
     }
 
     /// <summary>
-    /// Calculate Factorio 2 direction (0-15, even values for 8 cardinals) using
-    /// component-based selection to avoid oscillation at sector boundaries.
+    /// Calculate Factorio 2 direction (0-15, even values for 8 cardinals+diagonals) with optional
+    /// hysteresis to prevent oscillation at sector boundaries during straight-line movement.
     /// Factorio 2 uses 16 directions: 0=N 2=NE 4=E 6=SE 8=S 10=SW 12=W 14=NW
     /// (odd values are intermediate directions like NNE=1, ENE=3, etc.)
+    ///
+    /// When <paramref name="previousDirection"/> is provided, a dead zone (~7.5°) around each
+    /// sector boundary prevents direction changes from small lateral drift. The direction only
+    /// switches when the angle moves clearly past the boundary.
     /// </summary>
-    internal static int CalculateDirection(double fromX, double fromY, double toX, double toY)
+    internal static int CalculateDirection(double fromX, double fromY, double toX, double toY, int? previousDirection = null)
     {
         var dx = toX - fromX;
         var dy = toY - fromY;
         var adx = Math.Abs(dx);
         var ady = Math.Abs(dy);
 
-        const double threshold = 2.414; // tan(67.5°) - use cardinal if one axis dominates
+        const double threshold = 2.414; // tan(67.5°) — standard sector boundary
 
+        var newDirection = ComputeOctant(dx, dy, adx, ady, threshold);
+
+        if (previousDirection is not { } prev || newDirection == prev)
+            return newDirection;
+
+        // Apply hysteresis: require the angle to move further past the boundary before switching.
+        // Cardinal directions (N/E/S/W) use a relaxed threshold making it harder to leave cardinal.
+        // Diagonal directions (NE/SE/SW/NW) use a strict threshold making it harder to leave diagonal.
+        var hysteresisThreshold = prev % 4 == 0
+            ? 1.732  // tan(60°) — ~7.5° dead zone keeping cardinal
+            : 3.732; // tan(75°) — ~7.5° dead zone keeping diagonal
+
+        var hysteresisDirection = ComputeOctant(dx, dy, adx, ady, hysteresisThreshold);
+        return hysteresisDirection == prev ? prev : newDirection;
+    }
+
+    /// <summary>
+    /// Map a direction vector to one of 8 octant directions using the given cardinal/diagonal threshold.
+    /// Higher threshold = narrower cardinal zones (harder to be cardinal, easier to be diagonal).
+    /// </summary>
+    private static int ComputeOctant(double dx, double dy, double adx, double ady, double threshold)
+    {
         if (ady > adx * threshold)
             return dy < 0 ? 0 : 8; // North or South
 
