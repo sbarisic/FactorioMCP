@@ -52,7 +52,8 @@ internal sealed class PerceptionTools(FactorioService factorio, GameCommandQueue
     [McpServerTool, Description(
         "Find a flat, empty rectangular area suitable for building. " +
         "Searches outward from the player (or given center) for a region free of structures and water. " +
-        "Resource entities (ores) are ignored — only buildings and water block placement. " +
+        "By default, ore patches block placement to avoid wasting ore — " +
+        "set allowOrePatches=true only when placing mining drills. " +
         "Returns the top-left corner, center, and distance of the closest suitable area. " +
         "Use this before laying out a factory section to find where to build.")]
     public Task<string> FindBuildableArea(
@@ -66,10 +67,12 @@ internal sealed class PerceptionTools(FactorioService factorio, GameCommandQueue
         double? centerX = null,
         [Description("Optional Y coordinate to search from (omit to use player position)")]
         double? centerY = null,
+        [Description("If true, allow building on ore patches (use for mining drills). Default false — avoids wasting ore.")]
+        bool allowOrePatches = false,
         CancellationToken cancellationToken = default)
     {
         return queue.ExecuteAsync(nameof(FindBuildableArea),
-            ct => factorio.FindBuildableAreaAsync(width, height, searchRadius, centerX, centerY, ct),
+            ct => factorio.FindBuildableAreaAsync(width, height, searchRadius, centerX, centerY, allowOrePatches, ct),
             cancellationToken);
     }
 }

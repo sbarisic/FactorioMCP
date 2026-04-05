@@ -107,8 +107,14 @@ public partial class FactorioServiceTests
         await _service.GetInventorySummaryAsync();
         await _service.CheckEnsureItemAsync("iron-plate", 5);
         await _service.GetAvailableSlotsAsync(0, 0);
+        await _service.PickupItemsAsync();
+        await _service.PlaceEntitySmartAsync("stone-furnace", 0, 0);
+        await _service.FindUnpoweredEntitiesAsync();
+        await _service.FindIdleMachinesAsync();
+        await _service.FindMissingInputsAsync(0, 0);
+        await _service.PlanCraftAsync("iron-gear-wheel");
 
-        Assert.Equal(36, _rcon.AllCommands.Count);
+        Assert.Equal(42, _rcon.AllCommands.Count);
         Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command ", cmd));
     }
 }

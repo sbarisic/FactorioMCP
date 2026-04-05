@@ -848,4 +848,76 @@ internal sealed partial class FactorioService
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
+
+    /// <summary>
+    /// Automatically find a valid position near a target and place an entity there.
+    /// Searches outward in a spiral pattern using <c>can_place_entity</c> to find the
+    /// closest buildable spot. Validates inventory and proximity before placing.
+    /// </summary>
+    public Task<string> PlaceEntitySmartAsync(
+        string entityName,
+        double nearX,
+        double nearY,
+        string direction = "north",
+        double searchRadius = 10,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(entityName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(direction);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(searchRadius);
+
+        var escapedName = entityName.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            local player = game.connected_players[1]
+            local surface = player.surface
+            local name = "{{escapedName}}"
+            local dir = defines.direction.{{direction}}
+            local near_x = {{nearX}}
+            local near_y = {{nearY}}
+            local search_r = {{searchRadius}}
+            if player.get_item_count(name) < 1 then
+                rcon.print('{"success":false,"error":"missing_item","entity":"'..name..'"}')
+                return
+            end
+            -- Spiral search for a valid placement position
+            local best = nil
+            for dist = 0, search_r do
+                for ox = -dist, dist do
+                    for oy = -dist, dist do
+                        if math.abs(ox) == dist or math.abs(oy) == dist or dist == 0 then
+                            local px = near_x + ox
+                            local py = near_y + oy
+                            if surface.can_place_entity{name=name, position={px, py}, force=player.force, direction=dir} then
+                                local player_pos = player.position
+                                local ddx = px - player_pos.x
+                                local ddy = py - player_pos.y
+                                local pdist = math.sqrt(ddx*ddx + ddy*ddy)
+                                if pdist <= player.build_distance then
+                                    best = {x=px, y=py, distance=math.abs(ox)+math.abs(oy)}
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    if best then break end
+                end
+                if best then break end
+            end
+            if not best then
+                rcon.print('{"success":false,"error":"no_valid_position","entity":"'..name..'","near_x":'..near_x..',"near_y":'..near_y..',"search_radius":'..search_r..'}')
+                return
+            end
+            player.remove_item{name=name, count=1}
+            local placed = surface.create_entity{name=name, position={best.x, best.y}, force=player.force, player=player, direction=dir}
+            if not placed then
+                player.insert{name=name, count=1}
+                rcon.print('{"success":false,"error":"placement_failed","entity":"'..name..'","x":'..best.x..',"y":'..best.y..'}')
+                return
+            end
+            rcon.print('{"success":true,"entity":"'..name..'","x":'..placed.position.x..',"y":'..placed.position.y..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
 }
