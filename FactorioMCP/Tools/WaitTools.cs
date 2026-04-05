@@ -92,14 +92,6 @@ internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue
     }
 
     [McpServerTool, Description(
-        "Get the current game tick. Factorio runs at 60 ticks per second at normal speed. " +
-        "Useful for measuring elapsed time between operations.")]
-    public Task<string> GetGameTick(CancellationToken cancellationToken = default)
-    {
-        return queue.ExecuteAsync(nameof(GetGameTick), factorio.GetGameTickAsync, cancellationToken);
-    }
-
-    [McpServerTool, Description(
         "Wait until the player's inventory contains at least the specified count of an item. " +
         "Use this after starting crafting or mining to reactively wait for items to appear " +
         "instead of polling GetInventory repeatedly.")]

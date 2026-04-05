@@ -27,18 +27,6 @@ public partial class FactorioServiceTests
         Assert.Contains("defines.inventory.chest", countCmd);
         Assert.Contains("defines.inventory.furnace_source", countCmd);
         Assert.Contains("\"total\":", countCmd);
-
-        // EstimateTravelTimeAsync
-        await _service.EstimateTravelTimeAsync(1.5, -3.75);
-        var travelCmd = _rcon.LastCommand!;
-        Assert.StartsWith("/silent-command", travelCmd);
-        Assert.Contains("player.position", travelCmd);
-        Assert.Contains("character_running_speed", travelCmd);
-        Assert.Contains("math.sqrt", travelCmd);
-        Assert.Contains("1.5", travelCmd);
-        Assert.Contains("-3.75", travelCmd);
-        Assert.Contains("\"distance\":", travelCmd);
-        Assert.Contains("\"estimated_seconds\":", travelCmd);
     }
 
     [Fact]

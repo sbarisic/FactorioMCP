@@ -128,31 +128,5 @@ internal sealed class BeltPlannerService
         });
     }
 
-    /// <summary>
-    /// Returns a description of belt direction mechanics.
-    /// </summary>
-    public static string GetBeltDirectionHelp()
-    {
-        return JsonSerializer.Serialize(new
-        {
-            directions = new[]
-            {
-                new { direction = "north", items_flow = "upward (decreasing Y)", from = "south side", to = "north side" },
-                new { direction = "south", items_flow = "downward (increasing Y)", from = "north side", to = "south side" },
-                new { direction = "east", items_flow = "rightward (increasing X)", from = "west side", to = "east side" },
-                new { direction = "west", items_flow = "leftward (decreasing X)", from = "east side", to = "west side" }
-            },
-            tips = new[]
-            {
-                "Belt direction = the direction items FLOW (the way the arrows point)",
-                "Place belts from source to destination — each tile faces the flow direction",
-                "At corners/turns, the belt at the turn point faces the NEW direction",
-                "Belts have two lanes (left and right side) — items stay on their lane",
-                "Use PlanBeltRoute to calculate exact positions and directions for a belt path",
-                "Underground belts skip tiles — place entry facing flow direction, exit facing same direction"
-            }
-        });
-    }
-
     private record BeltStep(int x, int y, string direction);
 }

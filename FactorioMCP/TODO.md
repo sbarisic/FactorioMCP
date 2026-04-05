@@ -54,6 +54,7 @@ FactorioMCP.Tests → FactorioMCP
 | Goal Planner | ✅ Functional | AI goal tracking with state machine lifecycle, ordered steps, suspend/resume, and JSON file persistence |
 | Building Memory | ✅ Functional | Tracks placed buildings with spatial queries, auto-tracking on place/mine, labels, and JSON file persistence |
 | Vision Service | ✅ Functional | Annotated screenshots with entity bounding box overlays, inserter direction arrows, numbered labels, and structured map legends for vision-model analysis |
+| Flow Service | ✅ Functional | Item flow tracing (belt chains, inserter connections, drill outputs), flow graph visualization, belt placement preview, and factory connection summary |
 | MCP Tools | ✅ Functional | Movement, inventory/crafting, entity placement/mining, entity interaction (insert/remove items, inspect), world scanning, proximity checking, chat message, goal planning, energy management, research, building memory, vision screenshots, task primitives (gather/refuel/smelt) tools exposed via MCP SDK |
 | MCP Hosting | ✅ Functional | Program.cs wiring with DI, configuration, stdio transport |
 | Realistic Behaviors | ✅ Functional | Walking with real physics, crafting with real queue, proximity validation on place/mine, wait/polling for crafting completion, position arrival, and game tick timing — no cheating |
@@ -90,50 +91,16 @@ ___
 
 Analysis of which MCP tools should be removed because they are too low-level, confuse the AI, or overlap with better alternatives.
 
-## High Priority — Remove These Tools
+## ~~High Priority — Remove These Tools~~ ✅ DONE
 
-### `InitializeChatListener` (ChatTools.cs)
-**Reason: Confuses the AI — infrastructure concern, not a player action**
-- Auto-called at startup by `RconConnectionService` (line 62 in `RconConnectionService.cs`)
-- The AI has no reason to call this; it's already initialized before the AI connects
-- If the listener is lost after game reload, the server should re-initialize automatically, not rely on the AI to know about it
-- Exposing it leads to wasted calls or confusion about whether chat is "working"
+All 6 tools removed — MCP tools, service methods (where not used internally), tests, and documentation updated. Moved to DONE.md on next cleanup.
 
-### `GetBeltDirectionHelp` (BeltTools.cs)
-**Reason: Static reference text, not a tool**
-- Returns a hardcoded JSON document explaining belt direction mechanics
-- This is documentation, not an action — it belongs in the system prompt (`PROMPT.md`) or in the `Description` attribute of `PlanBeltRoute`
-- Having it as a callable tool teaches the AI to "ask for help" instead of just knowing the rules
-- Move the content into `PROMPT.md` under the belt placement section
-
-### `EstimateTravelTime` (UtilityTools.cs)
-**Reason: Low-level, misleading output**
-- Returns straight-line distance divided by movement speed — a trivial calculation
-- Does NOT account for obstacles, water, pathfinding detours, or terrain
-- The AI gets a falsely precise estimate that doesn't match actual travel
-- Better approach: just call `WalkToPosition` and observe the real result
-- If the AI needs to decide whether to walk, `CheckDistance` already tells it if it's in range
-
-### `ScanTiles` (WorldTools.cs)
-**Reason: Low-value, rarely actionable for AI**
-- Returns terrain type distribution (grass, sand, water, dirt counts)
-- The AI almost never needs to know "there are 15 grass tiles nearby"
-- The one useful case (water detection) is better served by `FindBuildableArea` which directly checks if an area is clear for building
-- Adds noise to the tool list without informing meaningful decisions
-
-### `GetGameTick` (WaitTools.cs)
-**Reason: Too low-level — raw tick numbers are meaningless to the AI**
-- Returns the current Factorio game tick (an integer)
-- The AI has no frame of reference for what tick 847293 means
-- All useful timing is already handled by purpose-built wait tools (`WaitForCrafting`, `WaitForEntityStatus`, `WaitForEntityInventory`)
-- If elapsed time measurement is needed, the wait tools already report duration
-
-### `GetAvailableSlots` (EntityTools.cs)
-**Reason: Too low-level — internal detail of placement workflow**
-- Reports which tiles around an entity are free for adjacent placement
-- This is an implementation detail that `PlaceInserter` and `InsertBetween` handle automatically
-- The AI shouldn't need to manually query slot availability — the placement tools already validate positions
-- Adds decision-making complexity without meaningful benefit
+~~`InitializeChatListener`~~ — Removed MCP tool (service method kept — called by RconConnectionService at startup)
+~~`GetBeltDirectionHelp`~~ — Removed MCP tool and static method from BeltPlannerService
+~~`EstimateTravelTime`~~ — Removed MCP tool and EstimateTravelTimeAsync service method
+~~`ScanTiles`~~ — Removed MCP tool and ScanTilesAsync service method
+~~`GetGameTick`~~ — Removed MCP tool (service method kept — used by WaitForTicksAsync)
+~~`GetAvailableSlots`~~ — Removed MCP tool and GetAvailableSlotsAsync service method
 
 ---
 
@@ -245,7 +212,7 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 - **All BuildingTools** (except `ClearBuildingMemory`) — well-structured memory system
 - **All InteractionTools** (`InsertItems`, `RemoveItems`, `InspectEntity`, `PickupItems`) — essential
 - **Core InventoryTools** (`GetInventory`, `Craft`, `GetCraftingQueue`, `TransferAllItems`, `GetEntityInventory`, `EnsureItem`) — necessary
-- **All FlowTools** (`GetFlowGraph`, `TraceItemFlow`, `PreviewBeltPlacement`) — advanced but justified
+- **All FlowTools** (`GetFlowGraph`, `TraceItemFlow`, `PreviewBeltPlacement`) — advanced but justified; belt collapsing and flow summary integration working
 - **All EnergyTools** — complementary (balance vs. topology vs. per-entity)
 - **All LogisticsTools** — clear and distinct
 - **All TrainTools** — well-scoped
@@ -272,7 +239,7 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 
 ### Low Priority
 
-- [x] **PreviewBeltPlacement tool** — ✅ **DONE** — Implemented in `FlowService.PreviewBeltPlacementAsync` and `FlowTools.PreviewBeltPlacement`. Shows output/input sides, nearby inserters, existing entities, and can_place check.
+*No low priority items*
 
 ### ON HOLD
 
@@ -344,8 +311,7 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 
 ### Active Bugs
 
-- [ ] **`PlaceEntitySmartAsync` ignores entity grid alignment — places entities at wrong position** — ✅ **FIXED** — The spiral search now queries `prototypes.entity[name].tile_width`/`tile_height` and snaps the search center to the entity's tile grid (odd dimensions → half-integer, even → integer). Direction-aware: swaps width/height for east/west placement. See `FactorioService.Entity.cs:888-906`. Move to DONE.md on next cleanup. **(CPX 2)**
-- [ ] **`sort_entities` doesn't sort by distance — entity operations target wrong entity** — ✅ **FIXED** — `LuaEntitySort` now accepts `(t, qx, qy)` and sorts non-resource entities by distance from query position. All 12 call sites updated. Move to DONE.md on next cleanup.
+*No active bugs*
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 

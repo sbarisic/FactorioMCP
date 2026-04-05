@@ -35,17 +35,4 @@ internal sealed class UtilityTools(FactorioService factorio, GameCommandQueue qu
     {
         return queue.ExecuteAsync(nameof(CountItemInWorld), ct => factorio.CountItemInWorldAsync(itemName, radius, ct), cancellationToken);
     }
-
-    [McpServerTool, Description(
-        "Estimate the walking time to reach a target position based on straight-line distance " +
-        "and the player's current movement speed. Useful for planning whether to walk or find alternatives.")]
-    public Task<string> EstimateTravelTime(
-        [Description("Target X coordinate")]
-        double x,
-        [Description("Target Y coordinate")]
-        double y,
-        CancellationToken cancellationToken = default)
-    {
-        return queue.ExecuteAsync(nameof(EstimateTravelTime), ct => factorio.EstimateTravelTimeAsync(x, y, ct), cancellationToken);
-    }
 }

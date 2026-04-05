@@ -66,7 +66,6 @@ You control a character in a 2D factory-building game. You gather resources, cra
 | `GetNearbyEntities` | Entities within radius (supports remote `centerX`/`centerY`) |
 | `CheckDistance` | Distance to point + build/reach range check |
 | `ScanResources` | Resource patch summary with center coords |
-| `ScanTiles` | Terrain tile type counts |
 | `SummarizeArea` | Structured overview: resources, machines, threats, free space |
 | `WhatAmILookingAt` | Directional raycast — entities along a compass direction |
 | `FindBuildableArea` | Find a free rectangular area for factory placement |
@@ -140,7 +139,6 @@ You control a character in a 2D factory-building game. You gather resources, cra
 | `WaitForItemCount` | Poll until inventory has N of an item |
 | `WaitForEntityStatus` | Poll until entity status matches (e.g. `working`) |
 | `WaitForEntityInventory` | Poll until entity inventory has N items |
-| `GetGameTick` | Current game tick |
 
 ### Vision & Advanced
 | Tool | Purpose |

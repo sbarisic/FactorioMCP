@@ -86,13 +86,10 @@ public partial class FactorioServiceTests
         await _service.GetAvailableRecipesAsync();
         await _service.GetTechnologyDetailsAsync("automation");
         await _service.ExecuteRawLuaAsync("rcon.print('test')");
-        await _service.GetGameTickAsync();
         await _service.ScanResourcesAsync();
-        await _service.ScanTilesAsync();
         await _service.InsertItemsAsync(0, 0, "coal", 5);
         await _service.RemoveItemsAsync(0, 0, "iron-plate", 10);
         await _service.InspectEntityAsync(0, 0);
-        await _service.InitializeChatListenerAsync();
         await _service.GetChatMessagesAsync();
         await _service.SendChatMessageAsync("hello");
         await _service.DropItemsAsync("iron-plate", 10);
@@ -103,10 +100,8 @@ public partial class FactorioServiceTests
         await _service.RotateEntityAsync(0, 0);
         await _service.GetReachableEntitiesAsync();
         await _service.CountItemInWorldAsync("iron-plate");
-        await _service.EstimateTravelTimeAsync(10, 20);
         await _service.GetInventorySummaryAsync();
         await _service.CheckEnsureItemAsync("iron-plate", 5);
-        await _service.GetAvailableSlotsAsync(0, 0);
         await _service.PickupItemsAsync();
         await _service.PlaceEntitySmartAsync("stone-furnace", 0, 0);
         await _service.FindUnpoweredEntitiesAsync();
@@ -114,7 +109,7 @@ public partial class FactorioServiceTests
         await _service.FindMissingInputsAsync(0, 0);
         await _service.PlanCraftAsync("iron-gear-wheel");
 
-        Assert.Equal(42, _rcon.AllCommands.Count);
+        Assert.Equal(37, _rcon.AllCommands.Count);
         Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command ", cmd));
     }
 }

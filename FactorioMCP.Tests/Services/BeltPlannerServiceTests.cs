@@ -297,41 +297,6 @@ public class BeltPlannerServiceTests
         Assert.Equal(-1, steps[2].GetProperty("x").GetInt32());
     }
 
-    // ── GetBeltDirectionHelp ─────────────────────────────────────────
-
-    [Fact]
-    public void GetBeltDirectionHelp_ReturnsValidJson()
-    {
-        var result = BeltPlannerService.GetBeltDirectionHelp();
-        using var doc = JsonDocument.Parse(result);
-        var root = doc.RootElement;
-
-        Assert.True(root.TryGetProperty("directions", out var dirs));
-        Assert.Equal(4, dirs.GetArrayLength());
-
-        Assert.True(root.TryGetProperty("tips", out var tips));
-        Assert.True(tips.GetArrayLength() > 0);
-    }
-
-    [Fact]
-    public void GetBeltDirectionHelp_ContainsAllCardinalDirections()
-    {
-        var result = BeltPlannerService.GetBeltDirectionHelp();
-        using var doc = JsonDocument.Parse(result);
-        var dirs = doc.RootElement.GetProperty("directions");
-
-        var dirNames = new HashSet<string>();
-        for (int i = 0; i < dirs.GetArrayLength(); i++)
-        {
-            dirNames.Add(dirs[i].GetProperty("direction").GetString()!);
-        }
-
-        Assert.Contains("north", dirNames);
-        Assert.Contains("south", dirNames);
-        Assert.Contains("east", dirNames);
-        Assert.Contains("west", dirNames);
-    }
-
     // ── Single Tile Diagonal (L-shaped with 1 tile each leg) ─────────
 
     [Fact]

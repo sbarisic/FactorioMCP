@@ -56,20 +56,4 @@ internal sealed class WorldTools(FactorioService factorio, GameCommandQueue queu
     {
         return queue.ExecuteAsync(nameof(ScanResources), ct => factorio.ScanResourcesAsync(radius, centerX, centerY, ct), cancellationToken);
     }
-
-    [McpServerTool, Description(
-        "Scan tiles to get terrain information. " +
-        "Returns a summary of tile types (grass, sand, water, dirt, etc.) and their counts. " +
-        "Defaults to scanning around the player. Provide centerX/centerY to scan a remote area without walking there.")]
-    public Task<string> ScanTiles(
-        [Description("Search radius in tiles (default 16)")]
-        double radius = 16,
-        [Description("Optional X coordinate to center the scan on (omit to use player position)")]
-        double? centerX = null,
-        [Description("Optional Y coordinate to center the scan on (omit to use player position)")]
-        double? centerY = null,
-        CancellationToken cancellationToken = default)
-    {
-        return queue.ExecuteAsync(nameof(ScanTiles), ct => factorio.ScanTilesAsync(radius, centerX, centerY, ct), cancellationToken);
-    }
 }

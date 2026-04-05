@@ -247,18 +247,6 @@ Auto-place an entity near a target position. Searches outward in a spiral for th
 
 ---
 
-### `GetAvailableSlots`
-Get available adjacent tile slots around an entity. Checks each perimeter tile for collision, reporting which are free for inserters, belts, or buildings.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `x` | `double` | Entity X |
-| `y` | `double` | Entity Y |
-
-**Returns:** `{ "entity", "x", "y", "slots": [{ "x", "y", "side", "blocked", "blocked_by" }] }`
-
----
-
 ## Entity Interaction
 
 ### `InsertItems`
@@ -343,17 +331,6 @@ Scan for resource patches. Returns type summary with patch count, total amount, 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `radius` | `double` | `50` | |
-| `centerX` | `double?` | player pos | |
-| `centerY` | `double?` | player pos | |
-
----
-
-### `ScanTiles`
-Scan terrain tiles and get type counts (grass, sand, water, etc.).
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `radius` | `double` | `16` | |
 | `centerX` | `double?` | player pos | |
 | `centerY` | `double?` | player pos | |
 
@@ -559,13 +536,6 @@ Wait for N game ticks. 60 ticks = 1 second at normal speed (1×).
 | `timeoutSeconds` | `double` | `30` | |
 
 **Returns:** `{ "status": "complete"|"timeout", "start_tick", "end_tick", "elapsed" }`
-
----
-
-### `GetGameTick`
-Get the current game tick.
-
-**Returns:** `{ "tick": 12345 }`
 
 ---
 
@@ -792,11 +762,6 @@ Calculate belt tile positions and directions for a route between two points. Sup
 
 ---
 
-### `GetBeltDirectionHelp`
-Return a reference guide on belt direction mechanics and placement tips. Call this if unsure how belts work.
-
----
-
 ## Building Memory
 
 Buildings are auto-tracked on `PlaceEntity` and auto-removed on `MineEntity`.
@@ -927,11 +892,6 @@ Resume a suspended goal. No other goal can be active.
 ---
 
 ## Chat
-
-### `InitializeChatListener`
-Register the chat event listener. Called automatically on startup. Safe to call again after a game reload.
-
----
 
 ### `GetChatMessages`
 Read in-game chat messages from players.
@@ -1202,18 +1162,6 @@ Count how many of an item exist across all nearby containers (chests, furnaces, 
 |-----------|------|---------|-------------|
 | `itemName` | `string` | required | e.g. `iron-plate`, `coal` |
 | `radius` | `double` | `50` | Search radius |
-
----
-
-### `EstimateTravelTime`
-Estimate walking time to a target position based on straight-line distance and current movement speed.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `x` | `double` | Target X |
-| `y` | `double` | Target Y |
-
-**Returns:** `{ "distance", "speed", "estimated_seconds" }`
 
 ---
 

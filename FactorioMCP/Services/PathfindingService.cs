@@ -22,7 +22,7 @@ internal sealed class PathfindingService(RconClient rcon)
     /// <summary>
     /// Poll interval for position checks during walking. Can be overridden in tests.
     /// </summary>
-    internal TimeSpan PollInterval { get; set; } = TimeSpan.FromMilliseconds(50);
+    internal TimeSpan PollInterval { get; set; } = TimeSpan.FromMilliseconds(25);
 
     private bool _pathHandlerInstalled;
     private int? _lastDirection;

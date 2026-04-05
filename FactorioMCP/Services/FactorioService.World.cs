@@ -106,45 +106,6 @@ internal sealed partial class FactorioService
     }
 
     /// <summary>
-    /// Scan tiles to get terrain type information.
-    /// When centerX/centerY are provided, scans around those coordinates instead of the player.
-    /// Returns a summary of tile types found within the specified radius.
-    /// </summary>
-    public Task<string> ScanTilesAsync(double radius = 16, double? centerX = null, double? centerY = null, CancellationToken cancellationToken = default)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
-
-        var posExpr = centerX.HasValue && centerY.HasValue
-            ? string.Create(CultureInfo.InvariantCulture, $"{{x={centerX.Value},y={centerY.Value}}}")
-            : "player.position";
-
-        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
-            {{LuaJsonEscape}}
-            local player = game.connected_players[1]
-            local pos = {{posExpr}}
-            local r = {{radius}}
-            local tiles = player.surface.find_tiles_filtered{
-                area={{"{"}}{pos.x-r, pos.y-r}, {pos.x+r, pos.y+r}{{"}"}}
-            }
-            local summary = {}
-            for _, t in pairs(tiles) do
-                local name = t.name
-                if not summary[name] then
-                    summary[name] = 0
-                end
-                summary[name] = summary[name] + 1
-            end
-            local parts = {}
-            for name, count in pairs(summary) do
-                parts[#parts+1] = '{"name":"'..esc(name)..'","count":'..count..'}'
-            end
-            rcon.print('{"scan_radius":{{radius}},"tiles":['..table.concat(parts, ",")..']}')
-            """);
-
-        return rcon.ExecuteLuaAsync(lua, cancellationToken);
-    }
-
-    /// <summary>
     /// Get a comprehensive factory status snapshot in a single RCON call.
     /// Returns player position, inventory summary, crafting queue, research status,
     /// nearby resource summary, and electric network summary. Building memory and
@@ -720,32 +681,6 @@ internal sealed partial class FactorioService
             end
             local total = player_count + container_total
             rcon.print('{"item":"'..esc(item)..'","total":'..total..',"player_count":'..player_count..',"container_count":'..container_total..',"search_radius":{{radius}},"containers":['..table.concat(containers, ",")..']}')
-            """);
-
-        return rcon.ExecuteLuaAsync(lua, cancellationToken);
-    }
-
-    /// <summary>
-    /// Estimate walk time to a position based on straight-line distance and player speed.
-    /// </summary>
-    public Task<string> EstimateTravelTimeAsync(double x, double y, CancellationToken cancellationToken = default)
-    {
-        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
-            local player = game.connected_players[1]
-            local px = player.position.x
-            local py = player.position.y
-            local tx = {{x}}
-            local ty = {{y}}
-            local dx = tx - px
-            local dy = ty - py
-            local distance = math.sqrt(dx*dx + dy*dy)
-            local speed = player.character_running_speed
-            local tiles_per_second = speed * 60
-            local seconds = 0
-            if tiles_per_second > 0 then
-                seconds = distance / tiles_per_second
-            end
-            rcon.print('{"distance":'..string.format("%.1f", distance)..',"estimated_seconds":'..string.format("%.1f", seconds)..',"tiles_per_second":'..string.format("%.1f", tiles_per_second)..',"player_x":'..string.format("%.1f", px)..',"player_y":'..string.format("%.1f", py)..',"target_x":'..string.format("%.1f", tx)..',"target_y":'..string.format("%.1f", ty)..'}')
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);

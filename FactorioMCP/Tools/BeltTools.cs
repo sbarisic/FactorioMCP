@@ -38,11 +38,4 @@ internal sealed class BeltTools(BeltPlannerService planner)
         return planner.PlanRoute(startX, startY, endX, endY, turnPreference);
     }
 
-    [McpServerTool, Description(
-        "Get a reference guide explaining transport belt direction mechanics and placement tips. " +
-        "Call this if you're unsure how belt directions work or need a reminder before placing belts.")]
-    public static string GetBeltDirectionHelp()
-    {
-        return BeltPlannerService.GetBeltDirectionHelp();
-    }
 }

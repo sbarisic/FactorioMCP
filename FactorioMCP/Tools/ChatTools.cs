@@ -13,16 +13,6 @@ namespace FactorioMCP.Tools;
 internal sealed class ChatTools(FactorioService factorio, GameCommandQueue queue)
 {
     [McpServerTool, Description(
-        "Initialize the chat message listener. Registers an event handler that captures " +
-        "in-game chat messages from players. This is called automatically on startup, but " +
-        "can be called again to re-initialize if the listener was lost (e.g. after a game reload). " +
-        "Safe to call multiple times.")]
-    public Task<string> InitializeChatListener(CancellationToken cancellationToken = default)
-    {
-        return queue.ExecuteAsync(nameof(InitializeChatListener), factorio.InitializeChatListenerAsync, cancellationToken);
-    }
-
-    [McpServerTool, Description(
         "Get chat messages from the in-game chat log. Returns messages sent by players " +
         "(not commands). Use the 'sinceTick' parameter to only get new messages since " +
         "the last poll — pass the 'latest_tick' value from the previous response. " +

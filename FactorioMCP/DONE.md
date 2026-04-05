@@ -37,6 +37,8 @@ Items completed from the [TODO list](TODO.md).
 - [x] **Batch Entity Action Tools (CPX 3)** — `BatchTools.cs` with `MineEntityMultiple`, `InspectEntityMultiple`, `InsertItemsMultiple`, `RefuelEntityMultiple`. Accepts JSON arrays of targets, executes sequentially with fail-fast, returns aggregated results. 7 unit tests.
 - [x] **Factory Analysis Tools (CPX 3)** — `FactoryTools.cs` with `FindUnpoweredEntities`, `FindIdleMachines`, `FindMissingInputs`. Service methods in `FactorioService.Factory.cs`. Diagnoses power issues, idle machines, and missing inputs. 7 unit tests.
 - [x] **Craft & Factory Planning (CPX 3)** — `PlanCraft` MCP tool in `RecipeTools.cs` and `PlanCraftAsync` in `FactorioService.Planning.cs`. Recursively expands recipe tree showing all intermediates and raw materials with exact quantities. 3 unit tests.
+- [x] **PreviewBeltPlacement Tool (CPX 2)** — `FlowService.PreviewBeltPlacementAsync` and `FlowTools.PreviewBeltPlacement`. Shows output/input sides, nearby inserters, existing entities, and `can_place_entity` check for a hypothetical belt tile.
+- [x] **Flow Summary in Factory Status (CPX 2)** — Added `GetFlowSummaryAsync` to `FlowService` and integrated into `StatusTools.GetFactoryStatus` via `flowSummaryRadius` parameter. Returns inserter-mediated machine-to-machine connections and drill outputs as `item_flow` array in the factory status JSON. 6 unit tests.
 
 ---
 
@@ -128,6 +130,8 @@ Items completed from the [TODO list](TODO.md).
 - [x] **MCP Tools Error-on-Success Resolved (CPX 2)** — Live-tested all 4 affected tools (`place_entity`, `set_goal`, `insert_between`, `place_ghost_entity`) — all returned proper structured JSON without MCP SDK errors. The bug was not consistently reproducible and appears to have been fixed by prior refactoring (JSON parsing, coordinate standardization, Lua string escaping). Confirmed resolved through live testing.
 
 - [x] **Direction Oscillation on Straight-Line Paths (CPX 2)** — `CalculateDirection` in `PathfindingService.cs` caused direction to flip-flop between adjacent octants when walking straight lines with small lateral drift. Added hysteresis with a ~7.5° dead zone: cardinal directions use `tan(60°)` relaxed threshold to resist switching to diagonal, diagonal directions use `tan(75°)` strict threshold to resist switching to cardinal. Extracted `ComputeOctant` helper. 7 new hysteresis tests.
+- [x] **`sort_entities` Doesn't Sort by Distance (CPX 2)** — `LuaEntitySort` only deprioritized resource entities and player character but didn't sort remaining entities by distance from the query position. Fixed: `sort_entities(t, qx, qy)` now accepts query coordinates and sorts non-resource entities by Euclidean distance. Updated all 12 call sites.
+- [x] **`PlaceEntitySmartAsync` Grid Alignment (CPX 2)** — Spiral search used integer offsets, so 3×3 entities (electric-mining-drill, assembling-machine) snapped to wrong positions. Fixed: queries `prototypes.entity[name].tile_width`/`tile_height`, snaps search center to entity grid (odd dimensions → half-integer, even → integer), direction-aware width/height swap for east/west placement.
 
 ---
 

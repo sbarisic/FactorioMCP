@@ -26,24 +26,6 @@ public partial class FactorioServiceTests
     }
 
     [Fact]
-    public async Task ScanTilesAsync_GeneratesCorrectLua()
-    {
-        await _service.ScanTilesAsync();
-        var defaultCmd = _rcon.LastCommand!;
-
-        Assert.Contains("find_tiles_filtered", defaultCmd);
-        Assert.Contains("\"scan_radius\":16", defaultCmd);
-        Assert.Contains("player.position", defaultCmd);
-
-        await _service.ScanTilesAsync(32, centerX: -10.5, centerY: 42.0);
-        var customCmd = _rcon.LastCommand!;
-
-        Assert.Contains("\"scan_radius\":32", customCmd);
-        Assert.Contains("-10.5", customCmd);
-        Assert.DoesNotContain("player.position", customCmd);
-    }
-
-    [Fact]
     public async Task GetNearbyEntitiesAsync_GeneratesCorrectLua()
     {
         await _service.GetNearbyEntitiesAsync();
