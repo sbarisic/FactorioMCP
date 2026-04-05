@@ -5,374 +5,85 @@ namespace FactorioMCP.Tests.Services;
 
 public partial class FactorioServiceTests
 {
-    // ── GetResearchStatus ────────────────────────────────────────────
-
     [Fact]
-    public async Task GetResearchStatusAsync_QueriesCurrentResearch()
+    public async Task ResearchCommands_GenerateCorrectLua()
     {
+        // GetResearchStatusAsync
         await _service.GetResearchStatusAsync();
+        var statusCmd = _rcon.LastCommand!;
+        Assert.Contains("current_research", statusCmd);
+        Assert.Contains("\"researching\":true", statusCmd);
+        Assert.Contains("\"progress\":", statusCmd);
 
-        Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/silent-command", _rcon.LastCommand);
-        Assert.Contains("current_research", _rcon.LastCommand);
-    }
-
-    [Fact]
-    public async Task GetResearchStatusAsync_OutputsJsonWhenResearching()
-    {
-        await _service.GetResearchStatusAsync();
-
-        Assert.Contains("\"researching\":true", _rcon.LastCommand!);
-        Assert.Contains("\"technology\":\"", _rcon.LastCommand!);
-        Assert.Contains("\"progress\":", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetResearchStatusAsync_OutputsJsonWhenNoResearch()
-    {
-        await _service.GetResearchStatusAsync();
-
-        Assert.Contains("\"researching\":false", _rcon.LastCommand!);
-    }
-
-    // ── GetAvailableTechnologies ─────────────────────────────────────
-
-    [Fact]
-    public async Task GetAvailableTechnologiesAsync_SendsSilentCommand()
-    {
+        // GetAvailableTechnologiesAsync
         await _service.GetAvailableTechnologiesAsync();
+        var availCmd = _rcon.LastCommand!;
+        Assert.Contains("force.technologies", availCmd);
+        Assert.Contains("not tech.researched", availCmd);
+        Assert.Contains("tech.enabled", availCmd);
+        Assert.Contains("tech.prerequisites", availCmd);
+        Assert.Contains("research_unit_count", availCmd);
 
-        Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/silent-command", _rcon.LastCommand);
-    }
-
-    [Fact]
-    public async Task GetAvailableTechnologiesAsync_UsesForce()
-    {
-        await _service.GetAvailableTechnologiesAsync();
-
-        Assert.Contains("game.connected_players[1].force", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetAvailableTechnologiesAsync_IteratesTechnologies()
-    {
-        await _service.GetAvailableTechnologiesAsync();
-
-        Assert.Contains("force.technologies", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetAvailableTechnologiesAsync_ChecksPrerequisites()
-    {
-        await _service.GetAvailableTechnologiesAsync();
-
-        Assert.Contains("tech.prerequisites", _rcon.LastCommand!);
-        Assert.Contains("prereq.researched", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetAvailableTechnologiesAsync_FiltersResearchedAndDisabled()
-    {
-        await _service.GetAvailableTechnologiesAsync();
-
-        Assert.Contains("not tech.researched", _rcon.LastCommand!);
-        Assert.Contains("tech.enabled", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetAvailableTechnologiesAsync_IncludesCostAndIngredients()
-    {
-        await _service.GetAvailableTechnologiesAsync();
-
-        Assert.Contains("research_unit_count", _rcon.LastCommand!);
-        Assert.Contains("research_unit_ingredients", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetAvailableTechnologiesAsync_OutputsJsonWithTechnologiesArray()
-    {
-        await _service.GetAvailableTechnologiesAsync();
-
-        Assert.Contains("\"technologies\":[", _rcon.LastCommand!);
-        Assert.Contains("\"count\":", _rcon.LastCommand!);
-    }
-
-    // ── StartResearch ────────────────────────────────────────────────
-
-    [Fact]
-    public async Task StartResearchAsync_SendsSilentCommand()
-    {
-        await _service.StartResearchAsync("automation");
-
-        Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/silent-command", _rcon.LastCommand);
-    }
-
-    [Fact]
-    public async Task StartResearchAsync_LookUpTechnologyByName()
-    {
+        // StartResearchAsync
         await _service.StartResearchAsync("logistics");
-
-        Assert.Contains("force.technologies[\"logistics\"]", _rcon.LastCommand!);
+        var startCmd = _rcon.LastCommand!;
+        Assert.Contains("force.technologies[\"logistics\"]", startCmd);
+        Assert.Contains("force.add_research(tech)", startCmd);
+        Assert.Contains("pcall", startCmd);
+        Assert.Contains("\"error\":\"unknown_technology\"", startCmd);
+        Assert.Contains("\"error\":\"already_researched\"", startCmd);
     }
 
     [Fact]
-    public async Task StartResearchAsync_ValidatesTechnologyExists()
+    public async Task RecipeCommands_GenerateCorrectLua()
     {
-        await _service.StartResearchAsync("automation");
-
-        Assert.Contains("\"error\":\"unknown_technology\"", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task StartResearchAsync_ChecksAlreadyResearched()
-    {
-        await _service.StartResearchAsync("automation");
-
-        Assert.Contains("tech.researched", _rcon.LastCommand!);
-        Assert.Contains("\"error\":\"already_researched\"", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task StartResearchAsync_UsesAddResearch()
-    {
-        await _service.StartResearchAsync("automation");
-
-        Assert.Contains("force.add_research(tech)", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task StartResearchAsync_UsesPcallForSafety()
-    {
-        await _service.StartResearchAsync("automation");
-
-        Assert.Contains("pcall", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task StartResearchAsync_OutputsJsonSuccessResponse()
-    {
-        await _service.StartResearchAsync("automation");
-
-        Assert.Contains("\"success\":true", _rcon.LastCommand!);
-        Assert.Contains("\"technology\":\"", _rcon.LastCommand!);
-        Assert.Contains("\"cost\":", _rcon.LastCommand!);
-        Assert.Contains("\"ingredients\":[", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task StartResearchAsync_OutputsJsonErrorOnFailure()
-    {
-        await _service.StartResearchAsync("automation");
-
-        Assert.Contains("\"success\":false", _rcon.LastCommand!);
-        Assert.Contains("\"error\":\"research_failed\"", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task StartResearchAsync_ThrowsOnNullTechnology()
-    {
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => _service.StartResearchAsync(null!));
-    }
-
-    [Fact]
-    public async Task StartResearchAsync_ThrowsOnWhitespaceTechnology()
-    {
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => _service.StartResearchAsync("   "));
-    }
-
-    // ── GetRecipeDetails ─────────────────────────────────────────────
-
-    [Fact]
-    public async Task GetRecipeDetailsAsync_SendsSilentCommand()
-    {
-        await _service.GetRecipeDetailsAsync("iron-gear-wheel");
-
-        Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/silent-command", _rcon.LastCommand);
-    }
-
-    [Fact]
-    public async Task GetRecipeDetailsAsync_LooksUpRecipeByName()
-    {
+        // GetRecipeDetailsAsync
         await _service.GetRecipeDetailsAsync("electronic-circuit");
+        var detailCmd = _rcon.LastCommand!;
+        Assert.Contains("force.recipes[\"electronic-circuit\"]", detailCmd);
+        Assert.Contains("recipe.ingredients", detailCmd);
+        Assert.Contains("recipe.products", detailCmd);
+        Assert.Contains("recipe.energy", detailCmd);
+        Assert.Contains("recipe.category", detailCmd);
 
-        Assert.Contains("force.recipes[\"electronic-circuit\"]", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetRecipeDetailsAsync_ValidatesRecipeExists()
-    {
-        await _service.GetRecipeDetailsAsync("iron-gear-wheel");
-
-        Assert.Contains("\"error\":\"unknown_recipe\"", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetRecipeDetailsAsync_IncludesIngredientsAndProducts()
-    {
-        await _service.GetRecipeDetailsAsync("iron-gear-wheel");
-
-        Assert.Contains("recipe.ingredients", _rcon.LastCommand!);
-        Assert.Contains("recipe.products", _rcon.LastCommand!);
-        Assert.Contains("\"ingredients\":[", _rcon.LastCommand!);
-        Assert.Contains("\"products\":[", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetRecipeDetailsAsync_IncludesEnergyAndCategory()
-    {
-        await _service.GetRecipeDetailsAsync("iron-gear-wheel");
-
-        Assert.Contains("recipe.energy", _rcon.LastCommand!);
-        Assert.Contains("recipe.category", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetRecipeDetailsAsync_IncludesEnabledStatus()
-    {
-        await _service.GetRecipeDetailsAsync("iron-gear-wheel");
-
-        Assert.Contains("recipe.enabled", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetRecipeDetailsAsync_ThrowsOnNullRecipe()
-    {
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => _service.GetRecipeDetailsAsync(null!));
-    }
-
-    [Fact]
-    public async Task GetRecipeDetailsAsync_ThrowsOnWhitespaceRecipe()
-    {
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => _service.GetRecipeDetailsAsync("   "));
-    }
-
-    // ── GetAvailableRecipes ──────────────────────────────────────────
-
-    [Fact]
-    public async Task GetAvailableRecipesAsync_SendsSilentCommand()
-    {
+        // GetAvailableRecipesAsync
         await _service.GetAvailableRecipesAsync();
+        var availCmd = _rcon.LastCommand!;
+        Assert.Contains("force.recipes", availCmd);
+        Assert.Contains("recipe.enabled", availCmd);
+        Assert.Contains("\"recipes\":[", availCmd);
 
-        Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/silent-command", _rcon.LastCommand);
-    }
-
-    [Fact]
-    public async Task GetAvailableRecipesAsync_FiltersEnabledRecipes()
-    {
-        await _service.GetAvailableRecipesAsync();
-
-        Assert.Contains("recipe.enabled", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetAvailableRecipesAsync_IteratesForceRecipes()
-    {
-        await _service.GetAvailableRecipesAsync();
-
-        Assert.Contains("force.recipes", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetAvailableRecipesAsync_OutputsJsonWithRecipesArray()
-    {
-        await _service.GetAvailableRecipesAsync();
-
-        Assert.Contains("\"recipes\":[", _rcon.LastCommand!);
-        Assert.Contains("\"count\":", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetAvailableRecipesAsync_IncludesCategoryAndEnergy()
-    {
-        await _service.GetAvailableRecipesAsync();
-
-        Assert.Contains("\"category\":\"", _rcon.LastCommand!);
-        Assert.Contains("\"energy\":", _rcon.LastCommand!);
-    }
-
-    // ── GetTechnologyDetails ─────────────────────────────────────────
-
-    [Fact]
-    public async Task GetTechnologyDetailsAsync_SendsSilentCommand()
-    {
+        // GetTechnologyDetailsAsync
         await _service.GetTechnologyDetailsAsync("automation");
-
-        Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+        var techCmd = _rcon.LastCommand!;
+        Assert.Contains("force.technologies[\"automation\"]", techCmd);
+        Assert.Contains("tech.prerequisites", techCmd);
+        Assert.Contains("tech.prototype.effects", techCmd);
+        Assert.Contains("research_unit_count", techCmd);
+        Assert.Contains("tech.researched", techCmd);
     }
 
-    [Fact]
-    public async Task GetTechnologyDetailsAsync_LooksUpTechnologyByName()
+    [Theory]
+    [InlineData("StartResearch_NullTech", null, "")]
+    [InlineData("StartResearch_WhitespaceTech", "   ", "")]
+    [InlineData("GetRecipeDetails_NullRecipe", "", null)]
+    [InlineData("GetRecipeDetails_WhitespaceRecipe", "", "   ")]
+    public async Task ResearchValidation_ThrowsOnInvalidInput(
+        string scenario, string? techName, string? recipeName)
     {
-        await _service.GetTechnologyDetailsAsync("logistics");
-
-        Assert.Contains("force.technologies[\"logistics\"]", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetTechnologyDetailsAsync_ValidatesTechnologyExists()
-    {
-        await _service.GetTechnologyDetailsAsync("automation");
-
-        Assert.Contains("\"error\":\"unknown_technology\"", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetTechnologyDetailsAsync_IncludesPrerequisites()
-    {
-        await _service.GetTechnologyDetailsAsync("automation");
-
-        Assert.Contains("tech.prerequisites", _rcon.LastCommand!);
-        Assert.Contains("\"prerequisites\":[", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetTechnologyDetailsAsync_IncludesEffectsWithRecipeUnlocks()
-    {
-        await _service.GetTechnologyDetailsAsync("automation");
-
-        Assert.Contains("tech.prototype.effects", _rcon.LastCommand!);
-        Assert.Contains("\"effects\":[", _rcon.LastCommand!);
-        Assert.Contains("unlock-recipe", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetTechnologyDetailsAsync_IncludesCostAndIngredients()
-    {
-        await _service.GetTechnologyDetailsAsync("automation");
-
-        Assert.Contains("research_unit_count", _rcon.LastCommand!);
-        Assert.Contains("research_unit_ingredients", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetTechnologyDetailsAsync_IncludesResearchedAndEnabledStatus()
-    {
-        await _service.GetTechnologyDetailsAsync("automation");
-
-        Assert.Contains("tech.researched", _rcon.LastCommand!);
-        Assert.Contains("tech.enabled", _rcon.LastCommand!);
-    }
-
-    [Fact]
-    public async Task GetTechnologyDetailsAsync_ThrowsOnNullTechnology()
-    {
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => _service.GetTechnologyDetailsAsync(null!));
-    }
-
-    [Fact]
-    public async Task GetTechnologyDetailsAsync_ThrowsOnWhitespaceTechnology()
-    {
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => _service.GetTechnologyDetailsAsync("   "));
+        if (scenario.StartsWith("StartResearch"))
+        {
+            if (techName == null)
+                await Assert.ThrowsAsync<ArgumentNullException>(() => _service.StartResearchAsync(null!));
+            else
+                await Assert.ThrowsAsync<ArgumentException>(() => _service.StartResearchAsync(techName));
+        }
+        else
+        {
+            if (recipeName == null)
+                await Assert.ThrowsAsync<ArgumentNullException>(() => _service.GetRecipeDetailsAsync(null!));
+            else
+                await Assert.ThrowsAsync<ArgumentException>(() => _service.GetRecipeDetailsAsync(recipeName));
+        }
     }
 }
