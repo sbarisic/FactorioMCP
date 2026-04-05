@@ -178,16 +178,21 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 
 ### High Priority
 
-*No high priority items*
-
+- [ ] **Batch Ghost Placement** — `PlaceGhostBatchAsync` in `BlueprintService.cs` to place N ghosts in a single RCON call using a Lua `for` loop over `{inner_name, x, y, direction}` entries. Currently placing N ghosts requires N round-trips. New MCP tool: `PlaceGhostBatch(placementsJson)` → `{placed, skipped, errors[]}`. **(CPX 2)**
+- [ ] **Area Occupancy Grid Query** — New `GetAreaOccupancy(x1, y1, x2, y2)` tool returning per-tile `{x, y, blocked, entity_name?}` array. No existing tool provides a collision map for a rectangular area — `GetNearbyEntities` returns entity list but not a grid bitmap. Essential for layout planning. Add as Lua method in `FactorioService.World.cs` or new standalone service. **(CPX 2)**
+- [ ] **Entity Prototype Query** — New `GetEntityPrototype(entityName)` tool exposing `tile_width`, `tile_height`, `max_health`, `crafting_speed`, `mining_speed`. `PlaceEntitySmartAsync` (`FactorioService.Entity.cs:889`) already queries `prototypes.entity[name].tile_width` internally but never returns it. **(CPX 1)**
 
 ### Medium Priority
 
-*No medium priority items*
+- [ ] **Recipe Rate Calculator** — New `RecipeRateCalculatorService` (pure C#). Tool: `CalculateProductionRate(recipe, targetItemsPerSecond, machineType?)` → `{machines_needed, items_per_second_actual, inputs_per_second[], outputs_per_second[]}`. `PlanCraftAsync` (`FactorioService.Planning.cs`) gives ingredient ratios but not machine-count-per-rate calculations. Fetch recipe data via existing `GetRecipeDetailsAsync`, cache per session. **(CPX 2)**
+- [ ] **Smelter Line Layout Synthesis** — New `LayoutSynthesisService` (pure C# geometry). Tool: `PlanSmelterLine(originX, originY, furnaceCount, furnaceName, inserterName, beltName)` → `PlacementInstruction[]` JSON (no placement). Standard pattern: furnace row, input belt (west), output belt (east), inbound/outbound inserters, power poles every 7 tiles. Uses occupancy grid to avoid collisions. **(CPX 3)**
+- [ ] **Production Planner** — New `ProductionPlannerService` orchestrating: `PlanCraftAsync` → `RecipeRateCalculatorService` → `FindBestResourcePatchAsync` → returns `ProductionPlan` with stages (ore→plates, plates→gears). Tool: `PlanProduction(targetItem, targetRatePerSecond)` → full plan JSON without placing anything. **(CPX 3)**
 
 ### Low Priority
 
-*No low priority items*
+- [ ] **Obstacle-Aware Belt Routing** — Extend `BeltPlannerService.cs` with `PlanRouteWithObstacles(startX, startY, endX, endY, bool[,] occupancy)` using BFS grid pathfinding instead of the current geometric L-path logic (`PlanRoute` at line 26). Add underground belt pair generation for gaps > 2 tiles. New MCP tool: `PlanBeltRouteWithObstacles`. **(CPX 3)**
+- [ ] **Power Pole Layout Helper** — New `PowerPoleLayoutService` (pure C# geometry). Given entity positions needing power, compute minimum pole placements at correct spacing intervals (small=5×5, medium=9×9). Returns `PlacementInstruction[]` for poles only. **(CPX 2)**
+- [ ] **Build Plan Execution** — New `ExecuteBuildPlan(planJson, useGhosts)` tool that takes a `PlacementInstruction[]` and calls `PlaceGhostBatch` for all entries, then `ValidateGhostPlacements` (existing). Orchestration tool combining existing primitives. **(CPX 2)**
 
 ### ON HOLD
 
@@ -200,7 +205,7 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 
 ### High Priority
 
-*No high priority items*
+- [ ] **Fix GetGhostEntities direction output** — `BlueprintService.cs:117` returns `g.direction or 0` as raw integer instead of human-readable name (outputs `0`, `4` instead of `"north"`, `"east"`). Should map through `dir_names` lookup like `GetNearbyEntitiesAsync` (`FactorioService.World.cs:31`) does: `dir_names[v] = k` table for `defines.direction`. Simple one-line fix in the Lua template. **(CPX 1)**
 
 ### Medium Priority
 
@@ -209,6 +214,8 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 ### Low Priority
 
 - [ ] **Multiplayer Player Targeting** — All Lua commands use `game.connected_players[1]` which is unsafe in multiplayer: wrong player if host changes slot order, breaks with multiple clients on headless server. Should use a configurable player index or name-based lookup. Affects PathfindingService, FactorioService, MiningService, and all tool Lua snippets. **(CPX 3)**
+- [ ] **PlaceGhostEntity bypasses build distance** — `BlueprintService.PlaceGhostEntityAsync` (`BlueprintService.cs:28-46`) uses `surface.create_entity` without checking `player.build_distance`, unlike `PlaceEntityAsync` (`FactorioService.Entity.cs:32`). Ghosts can be placed anywhere on the map. May violate realistic AI constraint. **(CPX 1)**
+- [ ] **PlaceBlueprintString does not report placed entities** — `BlueprintService.PlaceBlueprintStringAsync` (`BlueprintService.cs:67-92`) returns success and `import_warnings` but not the individual entity positions. Call `GetGhostEntities` after placement as workaround. **(CPX 1)**
 
 ### ON HOLD
 
@@ -246,7 +253,7 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 
 #### Medium Priority
 
-*No medium priority items*
+- [ ] **Add data models for build planning** — New records in `Models/`: `PlacementInstruction(EntityName, X, Y, Direction, Role, RecipeOrFilter?, PlanId?)`, `ProductionPlan(Id, TargetItem, TargetRate, Stages[])`, `ProductionStage(InputItem, OutputItem, Recipe, MachineType, MachineCount, InputRate, OutputRate, BeltTier)`, `OccupancyMap(OriginX, OriginY, Width, Height, Cells[,])`. Extend `TrackedBuilding` with `Role` and `PlanId` optional fields. **(CPX 2)**
 
 #### Low Priority
 
@@ -312,6 +319,51 @@ The following reported issues were investigated and found to be **not bugs** in 
 - Avoid forcing LLM to do geometry
 - Minimize number of tool calls
 - Return structured data (not text)
+
+## MVP: Iron Ore → Plates → Gears (Belt-Based Build)
+
+Target flow: `ScanResources` → `PlanProduction("iron-gear-wheel", 2.0)` → `PlanSmelterLine(origin, 2, ...)` → `PlaceGhostBatch(instructions)` → `ValidateGhostPlacements()` → player/bots fulfill ghosts.
+
+**Stage 1** — 2× stone-furnace smelter line (iron-ore → iron-plate, ~3.2s/plate at speed 1.0)  
+**Stage 2** — 1× assembling-machine-1 (iron-plate → iron-gear-wheel, 0.5s per 2 gears)
+
+Entities per smelter line: furnaces + input belt (west) + output belt (east) + inbound inserters + outbound inserters + power poles. ~16-20 `PlacementInstruction` entries total.
+
+### Existing Tools That Support MVP
+
+| Step | Tools |
+|------|-------|
+| Find ore | `ScanResources`, `FindBestResourcePatch` |
+| Plan recipe chain | `PlanCraft`, `GetRecipeDetails` |
+| Validate area | `GetNearbyEntities`, `SummarizeArea` |
+| Place ghosts | `PlaceGhostEntity`, `PlaceGhostBatch` *(new)* |
+| Validate layout | `ValidateGhostPlacements` |
+| Plan belt route | `PlanBeltRoute` |
+| Execute placement | `PlaceEntity`, `PlaceEntitySmart`, `PlaceInserter` |
+
+### New Tools Needed for MVP
+
+| Tool | Service | Type |
+|------|---------|------|
+| `GetAreaOccupancy` | `FactorioService.World.cs` or standalone | Lua + C# |
+| `GetEntityPrototype` | `FactorioService.World.cs` | Lua |
+| `CalculateProductionRate` | `RecipeRateCalculatorService` | Pure C# |
+| `PlanSmelterLine` | `LayoutSynthesisService` | Pure C# |
+| `PlanProduction` | `ProductionPlannerService` | C# + Lua |
+| `PlaceGhostBatch` | `BlueprintService` (extend) | Lua |
+
+## Blueprint/Ghost Tooling Audit
+
+All five named blueprint tools are fully implemented with complete RCON/Lua backing:
+
+| Tool | Service Method | Lua API Used |
+|------|---------------|-------------|
+| `PlaceGhostEntity` | `BlueprintService.PlaceGhostEntityAsync` (line 18) | `surface.create_entity{name="entity-ghost", inner_name=...}` + `can_place_entity` pre-check |
+| `PlaceBlueprintString` | `BlueprintService.PlaceBlueprintStringAsync` (line 54) | `stack.import_stack()` + `player.build_from_cursor{position, direction, build_mode}` |
+| `GetGhostEntities` | `BlueprintService.GetGhostEntitiesAsync` (line 98) | `find_entities_filtered{type="entity-ghost"}` |
+| `CreateBlueprintFromArea` | `BlueprintService.CreateBlueprintFromAreaAsync` (line 130) | `stack.create_blueprint{surface, force, area}` + `stack.export_stack()` |
+| `RevokeGhostEntity` | `BlueprintService.RevokeGhostEntityAsync` (line 171) | `find_entities_filtered{type="entity-ghost"}` + `g.destroy()` |
+| `ValidateGhostPlacements` | `BlueprintService.ValidateGhostPlacementsAsync` (line 204) | `can_place_entity` + inserter pickup/drop target checks |
 
 ## Notes
 
