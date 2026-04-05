@@ -920,6 +920,131 @@ Force a full RCON reconnection. Use when commands return `"nothing"` or the conn
 
 ---
 
+## Energy & Power (Extended)
+
+### `GetPowerNetworkTopology`
+Map the electric pole connectivity graph within a radius. Groups all poles by their network segment and lists producers (generators/boilers/solar) and consumers (machines) per network. Returns pole adjacency (neighbours) for visualising how power flows across the area.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `radius` | `double` | `80` | Search radius in tiles |
+
+**Returns:** `{ "status", "network_count", "radius", "networks": [{ "network_id", "pole_count", "poles": [{ "name", "x", "y", "neighbours" }], "producer_count", "producers": [...], "consumer_count", "consumers": [...] }] }`
+
+---
+
+## Combat
+
+### `ScanEnemies`
+Scan for enemy units (biters, spitters), spawners (nests), and worms within a radius. Returns positions grouped by category and the nearest military enemy.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `radius` | `double` | `100` | Search radius in tiles |
+
+**Returns:** `{ "status", "radius", "unit_count", "spawner_count", "worm_count", "units": [...], "spawners": [...], "worms": [...], "nearest_enemy" }`
+
+---
+
+### `GetDefenses`
+Find all player-owned turrets within a radius. Returns type, position, ammo count, kill count, and current shooting target for each turret.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `radius` | `double` | `80` | Search radius in tiles |
+
+**Returns:** `{ "status", "radius", "turret_count", "turrets": [{ "name", "type", "x", "y", "ammo_count", "kills", "shooting_target" }] }`
+
+---
+
+## Train Management
+
+### `GetTrains`
+List all trains on the player's surface. Returns ID, state, position, speed, locomotive/cargo wagon count, and current station for each train.
+
+**Returns:** `{ "status", "train_count", "trains": [{ "id", "state", "manual_mode", "x", "y", "has_path", "speed", "locomotive_count", "cargo_wagon_count", "station" }] }`
+
+---
+
+### `GetTrainStops`
+List all train stops on the player's surface with name, position, and docked train ID.
+
+**Returns:** `{ "status", "stop_count", "stops": [{ "name", "x", "y", "stopped_train_id" }] }`
+
+---
+
+### `InspectTrain`
+Inspect a specific train by numeric ID. Returns state, speed, schedule (station names), and cargo contents.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `trainId` | `uint` | Numeric train ID from `GetTrains` |
+
+**Returns:** `{ "status", "id", "state", "manual_mode", "has_path", "speed", "schedule": [{ "index", "station" }], "cargo": [{ "name", "count" }] }`
+
+---
+
+### `SetTrainMode`
+Switch a train between manual (stopped, script-controlled) and automatic (schedule-driven) mode.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `trainId` | `uint` | Numeric train ID |
+| `manual` | `bool` | `true` = manual control, `false` = follow schedule |
+
+**Returns:** `{ "status", "id", "manual_mode" }`
+
+---
+
+## Logistics Network
+
+### `GetLogisticNetwork`
+Get statistics for the logistic network at the player's position: robot counts (logistic and construction), robot limit, and counts of provider/requester/storage entities.
+
+**Returns:** `{ "status", "network_id", "name", "all_logistic_robots", "available_logistic_robots", "all_construction_robots", "available_construction_robots", "robot_limit", "provider_count", "requester_count", "storage_count", "cell_count" }`
+
+---
+
+### `GetNetworkContents`
+Get the complete item inventory of the logistic network at the player's position. Lists all items in provider and storage chests.
+
+**Returns:** `{ "status", "network_id", "item_count", "items": [{ "name", "count" }] }`
+
+---
+
+### `GetRobotStatus`
+Get a breakdown of logistic and construction robot activity: idle vs. busy counts and a sample of active robot positions.
+
+**Returns:** `{ "status", "network_id", "logistic_idle", "logistic_busy", "construction_idle", "construction_busy", "busy_robots_sample": [...] }`
+
+---
+
+## Logistics Flow Tracking
+
+### `GetFlowGraph`
+Build a directed item-flow graph for the area around the player. Scans belts, inserters, and mining drills and returns directed edges showing which entity feeds which other entity, with connection type.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `radius` | `double` | `30` | Search radius in tiles (keep small for readability) |
+
+**Returns:** `{ "status", "radius", "edge_count", "edges": [{ "type", "from_name", "from_type", "from_x", "from_y", "to_name", "to_type", "to_x", "to_y" }] }`
+
+---
+
+### `TraceItemFlow`
+Trace the downstream flow of items from a specific entity using BFS. Follows inserter drops and belt outputs up to the given depth.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `x` | `double` | required | X coordinate of starting entity |
+| `y` | `double` | required | Y coordinate of starting entity |
+| `depth` | `int` | `5` | Maximum hops to follow downstream |
+
+**Returns:** `{ "status", "start_name", "start_x", "start_y", "node_count", "nodes": [{ "name", "type", "x", "y", "depth" }], "edges": [{ "from_name", "from_x", "from_y", "to_name", "to_x", "to_y", "kind" }] }`
+
+---
+
 ## MCP Resources
 
 Read-only game state accessible without tool calls via `read_resource`:

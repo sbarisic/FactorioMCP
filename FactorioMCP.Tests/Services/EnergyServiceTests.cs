@@ -233,4 +233,98 @@ public class EnergyServiceTests
 
         Assert.Contains("game.connected_players[1]", _rcon.LastCommand!);
     }
+
+    // ── GetPowerNetworkTopologyAsync ──────────────────────────────────
+
+    [Fact]
+    public async Task GetPowerNetworkTopologyAsync_SendsSilentCommand()
+    {
+        await _service.GetPowerNetworkTopologyAsync();
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GetPowerNetworkTopologyAsync_FindsElectricPoles()
+    {
+        await _service.GetPowerNetworkTopologyAsync();
+
+        Assert.Contains("electric-pole", _rcon.LastCommand!);
+        Assert.Contains("find_entities_filtered", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetPowerNetworkTopologyAsync_GroupsByNetworkId()
+    {
+        await _service.GetPowerNetworkTopologyAsync();
+
+        Assert.Contains("electric_network_id", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetPowerNetworkTopologyAsync_MapsPoleNeighbours()
+    {
+        await _service.GetPowerNetworkTopologyAsync();
+
+        Assert.Contains("neighbours.copper", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetPowerNetworkTopologyAsync_DistinguishesProducersAndConsumers()
+    {
+        await _service.GetPowerNetworkTopologyAsync();
+
+        Assert.Contains("producers", _rcon.LastCommand!);
+        Assert.Contains("consumers", _rcon.LastCommand!);
+        Assert.Contains("energy_generated_last_tick", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetPowerNetworkTopologyAsync_UsesDefaultRadius()
+    {
+        await _service.GetPowerNetworkTopologyAsync();
+
+        Assert.Contains("radius=80", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetPowerNetworkTopologyAsync_UsesCustomRadius()
+    {
+        await _service.GetPowerNetworkTopologyAsync(radius: 120);
+
+        Assert.Contains("radius=120", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetPowerNetworkTopologyAsync_ThrowsOnZeroRadius()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.GetPowerNetworkTopologyAsync(radius: 0));
+    }
+
+    [Fact]
+    public async Task GetPowerNetworkTopologyAsync_ThrowsOnNegativeRadius()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.GetPowerNetworkTopologyAsync(radius: -5));
+    }
+
+    [Fact]
+    public async Task GetPowerNetworkTopologyAsync_OutputsNetworkList()
+    {
+        await _service.GetPowerNetworkTopologyAsync();
+
+        Assert.Contains("rcon.print(", _rcon.LastCommand!);
+        Assert.Contains("\"network_count\"", _rcon.LastCommand!);
+        Assert.Contains("\"networks\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetPowerNetworkTopologyAsync_UsesConnectedPlayers()
+    {
+        await _service.GetPowerNetworkTopologyAsync();
+
+        Assert.Contains("game.connected_players[1]", _rcon.LastCommand!);
+    }
 }

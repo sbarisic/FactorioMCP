@@ -39,4 +39,18 @@ internal sealed class EnergyTools(EnergyService energy, GameCommandQueue queue)
     {
         return queue.ExecuteAsync(nameof(InspectEntityPower), ct => energy.InspectEntityPowerAsync(x, y, ct), cancellationToken);
     }
+
+    [McpServerTool, Description(
+        "Map the electric pole connectivity graph within a radius of the player. " +
+        "Groups all electric poles by their network segment (electric_network_id) and lists " +
+        "which entities are producers (generators/boilers/solar) and consumers (machines) per network. " +
+        "Returns pole adjacency (neighbours) so you can visualise how power flows across the area. " +
+        "Use this to find coverage gaps, isolated sub-networks, and plan pole expansion routes.")]
+    public Task<string> GetPowerNetworkTopology(
+        [Description("Search radius in tiles around the player. Default 80.")]
+        double radius = 80,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(GetPowerNetworkTopology), ct => energy.GetPowerNetworkTopologyAsync(radius, ct), cancellationToken);
+    }
 }
