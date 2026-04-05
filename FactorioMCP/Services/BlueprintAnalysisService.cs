@@ -799,11 +799,11 @@ internal sealed class BlueprintAnalysisService(BlueprintCodecService codec, Rcon
         int reach = LongInserters.Contains(inserter.Name) ? 2 : 1;
         var (dx, dy) = DirectionOffset(inserter.Direction);
 
-        // Inserter faces the DROP direction: pickup is behind, drop is in front
-        double pickupX = inserter.X - dx * reach;
-        double pickupY = inserter.Y - dy * reach;
-        double dropX = inserter.X + dx * reach;
-        double dropY = inserter.Y + dy * reach;
+        // Inserter faces the PICKUP direction: pickup is in front, drop is behind
+        double pickupX = inserter.X + dx * reach;
+        double pickupY = inserter.Y + dy * reach;
+        double dropX = inserter.X - dx * reach;
+        double dropY = inserter.Y - dy * reach;
 
         var pickupTarget = FindEntityAt(pickupX, pickupY, positionIndex, inserter.Number);
         var dropTarget = FindEntityAt(dropX, dropY, positionIndex, inserter.Number);

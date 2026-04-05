@@ -262,6 +262,7 @@ public class BlueprintAnalysisServiceTests
     [Fact]
     public void BuildFlowGraph_InserterBetweenChestAndBelt_CreatesPickupAndDrop()
     {
+        // Inserter facing east picks up from east (belt) and drops to west (chest)
         var entities = new List<BlueprintAnalysisService.BpEntity>
         {
             new(1, "iron-chest", 0.5, 0.5, 0, "north", null),
@@ -271,13 +272,14 @@ public class BlueprintAnalysisServiceTests
 
         var edges = _service.BuildFlowGraph(entities);
 
-        Assert.Contains(edges, e => e.FromNum == 1 && e.ToNum == 2 && e.Type == "inserter_pickup");
-        Assert.Contains(edges, e => e.FromNum == 2 && e.ToNum == 3 && e.Type == "inserter_drop");
+        Assert.Contains(edges, e => e.FromNum == 3 && e.ToNum == 2 && e.Type == "inserter_pickup");
+        Assert.Contains(edges, e => e.FromNum == 2 && e.ToNum == 1 && e.Type == "inserter_drop");
     }
 
     [Fact]
     public void BuildFlowGraph_LongInserter_ReachesTwoTiles()
     {
+        // Long inserter facing east picks up from 2 tiles east, drops 2 tiles west
         var entities = new List<BlueprintAnalysisService.BpEntity>
         {
             new(1, "iron-chest", 0.5, 0.5, 0, "north", null),
@@ -287,15 +289,14 @@ public class BlueprintAnalysisServiceTests
 
         var edges = _service.BuildFlowGraph(entities);
 
-        Assert.Contains(edges, e => e.FromNum == 1 && e.ToNum == 2 && e.Type == "inserter_pickup");
-        Assert.Contains(edges, e => e.FromNum == 2 && e.ToNum == 3 && e.Type == "inserter_drop");
+        Assert.Contains(edges, e => e.FromNum == 3 && e.ToNum == 2 && e.Type == "inserter_pickup");
+        Assert.Contains(edges, e => e.FromNum == 2 && e.ToNum == 1 && e.Type == "inserter_drop");
     }
 
     [Fact]
-    public void BuildFlowGraph_InserterIntoFurnace_HitsLargeEntity()
+    public void BuildFlowGraph_InserterFromFurnace_HitsLargeEntity()
     {
-        // Furnace centered at (1,1) occupies tiles (0,0),(1,0),(0,1),(1,1)
-        // Inserter at (2.5,0.5) facing west drops at (1.5,0.5) → tile (1,0) which is furnace
+        // Inserter at (2.5,0.5) facing west picks up from (1.5,0.5) → furnace tile
         var entities = new List<BlueprintAnalysisService.BpEntity>
         {
             new(1, "stone-furnace", 1, 1, 0, "north", null),
@@ -304,7 +305,7 @@ public class BlueprintAnalysisServiceTests
 
         var edges = _service.BuildFlowGraph(entities);
 
-        Assert.Contains(edges, e => e.FromNum == 2 && e.ToNum == 1 && e.Type == "inserter_drop");
+        Assert.Contains(edges, e => e.FromNum == 1 && e.ToNum == 2 && e.Type == "inserter_pickup");
     }
 
     [Fact]
@@ -489,13 +490,12 @@ public class BlueprintAnalysisServiceTests
     public async Task AnalyzeBlueprintProduction_DetectsInserterBottleneck()
     {
         // Create blueprint with a fast machine but slow inserter → bottleneck
+        // Inserter faces west: picks from belt (west), drops into AM3 (east)
         var codec = new BlueprintCodecService();
         var json = @"{""blueprint"":{""item"":""blueprint"",""entities"":[
             {""entity_number"":1,""name"":""transport-belt"",""position"":{""x"":-1.5,""y"":0.5},""direction"":8},
-            {""entity_number"":2,""name"":""burner-inserter"",""position"":{""x"":-0.5,""y"":0.5},""direction"":4},
-            {""entity_number"":3,""name"":""assembling-machine-3"",""position"":{""x"":2,""y"":1},""recipe"":""iron-gear-wheel""},
-            {""entity_number"":4,""name"":""burner-inserter"",""position"":{""x"":4.5,""y"":0.5},""direction"":4},
-            {""entity_number"":5,""name"":""transport-belt"",""position"":{""x"":5.5,""y"":0.5},""direction"":8}
+            {""entity_number"":2,""name"":""burner-inserter"",""position"":{""x"":-0.5,""y"":0.5},""direction"":12},
+            {""entity_number"":3,""name"":""assembling-machine-3"",""position"":{""x"":2,""y"":1},""recipe"":""iron-gear-wheel""}
         ],""version"":562949954076672}}";
         var encResult = codec.EncodeBlueprintString(json);
         using var encDoc = JsonDocument.Parse(encResult);
