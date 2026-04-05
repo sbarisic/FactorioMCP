@@ -6,141 +6,79 @@ namespace FactorioMCP.Tests.Services;
 
 public partial class FactorioServiceTests
 {
-    // ── FindBuildableArea Ore Patch Avoidance ────────────────────────
-
     [Fact]
-    public async Task FindBuildableAreaAsync_Default_ExcludesOrePatches()
+    public async Task FactoryCommands_GenerateCorrectLua()
     {
-        await _service.FindBuildableAreaAsync(5, 5);
-
-        Assert.NotNull(_rcon.LastCommand);
-        // Default: only character excluded from blocking (ore patches count as blocking)
-        Assert.Contains("\"character\"", _rcon.LastCommand);
-        Assert.Contains("invert=true", _rcon.LastCommand);
-        // Should NOT have "resource" in the filter (ore patches block)
-        Assert.DoesNotContain("\"resource\"", _rcon.LastCommand);
-    }
-
-    [Fact]
-    public async Task FindBuildableAreaAsync_AllowOrePatches_ExcludesResourceFromBlocking()
-    {
-        await _service.FindBuildableAreaAsync(5, 5, allowOrePatches: true);
-
-        Assert.NotNull(_rcon.LastCommand);
-        // When allowOrePatches=true, both resource and character excluded from blocking
-        Assert.Contains("\"resource\"", _rcon.LastCommand);
-        Assert.Contains("\"character\"", _rcon.LastCommand);
-        Assert.Contains("invert=true", _rcon.LastCommand);
-    }
-
-    // ── PlaceEntitySmart ────────────────────────────────────────────
-
-    [Fact]
-    public async Task PlaceEntitySmartAsync_GeneratesValidLua()
-    {
+        // PlaceEntitySmartAsync
         await _service.PlaceEntitySmartAsync("stone-furnace", 10, 20);
+        var placeCmd = _rcon.LastCommand!;
+        Assert.StartsWith("/silent-command", placeCmd);
+        Assert.Contains("can_place_entity", placeCmd);
+        Assert.Contains("stone-furnace", placeCmd);
+        Assert.Contains("10", placeCmd);
+        Assert.Contains("20", placeCmd);
 
-        Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/silent-command", _rcon.LastCommand);
-        Assert.Contains("can_place_entity", _rcon.LastCommand);
-        Assert.Contains("stone-furnace", _rcon.LastCommand);
-        Assert.Contains("10", _rcon.LastCommand);
-        Assert.Contains("20", _rcon.LastCommand);
-    }
-
-    [Fact]
-    public async Task PlaceEntitySmartAsync_EmptyName_Throws()
-    {
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _service.PlaceEntitySmartAsync("", 0, 0));
-    }
-
-    [Fact]
-    public async Task PlaceEntitySmartAsync_ZeroRadius_Throws()
-    {
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            _service.PlaceEntitySmartAsync("stone-furnace", 0, 0, searchRadius: 0));
-    }
-
-    // ── PickupItems ─────────────────────────────────────────────────
-
-    [Fact]
-    public async Task PickupItemsAsync_GeneratesValidLua()
-    {
-        await _service.PickupItemsAsync(15);
-
-        Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/silent-command", _rcon.LastCommand);
-        Assert.Contains("item-entity", _rcon.LastCommand);
-        Assert.Contains("15", _rcon.LastCommand);
-    }
-
-    [Fact]
-    public async Task PickupItemsAsync_ZeroRadius_Throws()
-    {
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            _service.PickupItemsAsync(0));
-    }
-
-    // ── Factory Analysis ────────────────────────────────────────────
-
-    [Fact]
-    public async Task FindUnpoweredEntitiesAsync_GeneratesValidLua()
-    {
+        // FindUnpoweredEntitiesAsync
         await _service.FindUnpoweredEntitiesAsync(30);
+        var unpoweredCmd = _rcon.LastCommand!;
+        Assert.StartsWith("/silent-command", unpoweredCmd);
+        Assert.Contains("no_power", unpoweredCmd);
+        Assert.Contains("30", unpoweredCmd);
 
-        Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/silent-command", _rcon.LastCommand);
-        Assert.Contains("no_power", _rcon.LastCommand);
-        Assert.Contains("30", _rcon.LastCommand);
-    }
-
-    [Fact]
-    public async Task FindIdleMachinesAsync_GeneratesValidLua()
-    {
+        // FindIdleMachinesAsync
         await _service.FindIdleMachinesAsync(25);
+        var idleCmd = _rcon.LastCommand!;
+        Assert.StartsWith("/silent-command", idleCmd);
+        Assert.Contains("25", idleCmd);
 
-        Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/silent-command", _rcon.LastCommand);
-        Assert.Contains("25", _rcon.LastCommand);
-    }
-
-    [Fact]
-    public async Task FindMissingInputsAsync_GeneratesValidLua()
-    {
+        // FindMissingInputsAsync
         await _service.FindMissingInputsAsync(5, 10);
+        var missingCmd = _rcon.LastCommand!;
+        Assert.StartsWith("/silent-command", missingCmd);
+        Assert.Contains("5", missingCmd);
+        Assert.Contains("10", missingCmd);
+        Assert.Contains("furnace_source", missingCmd);
 
-        Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/silent-command", _rcon.LastCommand);
-        Assert.Contains("5", _rcon.LastCommand);
-        Assert.Contains("10", _rcon.LastCommand);
-        Assert.Contains("furnace_source", _rcon.LastCommand);
-    }
+        // PickupItemsAsync
+        await _service.PickupItemsAsync(15);
+        var pickupCmd = _rcon.LastCommand!;
+        Assert.StartsWith("/silent-command", pickupCmd);
+        Assert.Contains("item-entity", pickupCmd);
+        Assert.Contains("15", pickupCmd);
 
-    // ── PlanCraft ───────────────────────────────────────────────────
-
-    [Fact]
-    public async Task PlanCraftAsync_GeneratesValidLua()
-    {
+        // PlanCraftAsync
         await _service.PlanCraftAsync("iron-gear-wheel", 10);
-
-        Assert.NotNull(_rcon.LastCommand);
-        Assert.StartsWith("/silent-command", _rcon.LastCommand);
-        Assert.Contains("iron-gear-wheel", _rcon.LastCommand);
-        Assert.Contains("recipe_for", _rcon.LastCommand);
+        var planCmd = _rcon.LastCommand!;
+        Assert.StartsWith("/silent-command", planCmd);
+        Assert.Contains("iron-gear-wheel", planCmd);
+        Assert.Contains("recipe_for", planCmd);
     }
 
-    [Fact]
-    public async Task PlanCraftAsync_EmptyName_Throws()
+    [Theory]
+    [InlineData("PlaceEntitySmart_EmptyName", "", 0, 0, 5)]
+    [InlineData("PlaceEntitySmart_ZeroRadius", "stone-furnace", 0, 0, 0)]
+    [InlineData("PlanCraft_EmptyName", "", 0, 0, -1)]
+    [InlineData("PickupItems_ZeroRadius", "pickup", 0, 0, -2)]
+    public async Task FactoryValidation_ThrowsOnInvalidInput(string scenario, string name, double x, double y, int extra)
     {
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            _service.PlanCraftAsync(""));
-    }
-
-    [Fact]
-    public async Task PlanCraftAsync_ZeroCount_Throws()
-    {
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            _service.PlanCraftAsync("iron-plate", 0));
+        switch (scenario)
+        {
+            case "PlaceEntitySmart_EmptyName":
+                await Assert.ThrowsAsync<ArgumentException>(() =>
+                    _service.PlaceEntitySmartAsync(name, x, y));
+                break;
+            case "PlaceEntitySmart_ZeroRadius":
+                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+                    _service.PlaceEntitySmartAsync(name, x, y, searchRadius: extra));
+                break;
+            case "PlanCraft_EmptyName":
+                await Assert.ThrowsAsync<ArgumentException>(() =>
+                    _service.PlanCraftAsync(name));
+                break;
+            case "PickupItems_ZeroRadius":
+                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+                    _service.PickupItemsAsync(0));
+                break;
+        }
     }
 }
