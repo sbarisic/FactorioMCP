@@ -71,44 +71,44 @@
   {
     "id": "201d33a6",
     "description": "Build automated iron plate production with multiple drill-furnace chains",
-    "status": "active",
+    "status": "completed",
     "steps": [
       {
         "description": "Collect iron plates from furnace at (79,-27)",
-        "status": "in_progress",
+        "status": "completed",
         "notes": null
       },
       {
         "description": "Smelt iron-ore in inventory to get more iron plates",
-        "status": "pending",
+        "status": "skipped",
         "notes": null
       },
       {
         "description": "Craft more stone furnaces and burner mining drills",
-        "status": "pending",
+        "status": "skipped",
         "notes": null
       },
       {
         "description": "Set up drill\u2192inserter\u2192furnace chains for idle furnaces",
-        "status": "pending",
+        "status": "skipped",
         "notes": null
       },
       {
         "description": "Find and set up copper ore smelting",
-        "status": "pending",
+        "status": "skipped",
         "notes": null
       },
       {
         "description": "Build towards first assembling machine",
-        "status": "pending",
+        "status": "skipped",
         "notes": null
       }
     ],
     "failure_reason": null,
-    "notes": null,
+    "notes": "Old factory was cleared/destroyed. Only 1 stone furnace remains. Starting fresh.",
     "created_at": "2026-04-02T20:19:19.8760756Z",
-    "updated_at": "2026-04-02T20:19:19.8760756Z",
-    "completed_at": null
+    "updated_at": "2026-04-04T23:42:00.0147463Z",
+    "completed_at": "2026-04-04T23:42:00.0147458Z"
   },
   {
     "id": "d663dc24",
@@ -157,6 +157,48 @@
     "notes": null,
     "created_at": "2026-04-04T22:22:04.8299626Z",
     "updated_at": "2026-04-04T22:22:04.8299628Z",
+    "completed_at": null
+  },
+  {
+    "id": "20f40959",
+    "description": "Bootstrap automated iron plate production from scratch",
+    "status": "active",
+    "steps": [
+      {
+        "description": "Gather coal for fuel",
+        "status": "completed",
+        "notes": "Gathered 31 coal, now have ~42 total"
+      },
+      {
+        "description": "Gather iron ore for smelting",
+        "status": "completed",
+        "notes": "Gathered 40 iron ore from patch at (21, -190)"
+      },
+      {
+        "description": "Set up furnaces near iron ore with coal fuel",
+        "status": "completed",
+        "notes": "Placed 4 stone furnaces at y=-183 next to iron ore patch"
+      },
+      {
+        "description": "Craft burner mining drills and place on iron ore",
+        "status": "completed",
+        "notes": "Already placed 4 burner mining drills at y=-186 on iron ore facing south"
+      },
+      {
+        "description": "Connect drills to furnaces with inserters",
+        "status": "completed",
+        "notes": "Placed 4 burner inserters between drills and furnaces. Fueled all drills, inserters, and furnaces with coal."
+      },
+      {
+        "description": "Verify iron plates are being produced",
+        "status": "in_progress",
+        "notes": null
+      }
+    ],
+    "failure_reason": null,
+    "notes": null,
+    "created_at": "2026-04-04T23:42:21.1511194Z",
+    "updated_at": "2026-04-04T23:58:35.6089181Z",
     "completed_at": null
   }
 ]

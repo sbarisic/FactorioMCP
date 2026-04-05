@@ -386,8 +386,10 @@ internal sealed partial class FactorioService
                 }
                 local off = offsets[e.direction]
                 if off then
-                    local drop_x, drop_y = e.position.x + off.dx, e.position.y + off.dy
-                    local pickup_x, pickup_y = e.position.x - off.dx, e.position.y - off.dy
+                    -- In Factorio, direction = PICKUP side (arm extends in facing direction)
+                    -- Drop is on the OPPOSITE side
+                    local pickup_x, pickup_y = e.position.x + off.dx, e.position.y + off.dy
+                    local drop_x, drop_y = e.position.x - off.dx, e.position.y - off.dy
                     local drop_ents = surface.find_entities_filtered{position={drop_x, drop_y}, radius=0.5}
                     local drop_parts = {}
                     for _, de in pairs(drop_ents) do
@@ -522,7 +524,8 @@ internal sealed partial class FactorioService
             local dir = defines.direction.{{direction}}
             local ix, iy = {{x}}, {{y}}
 
-            -- Direction offsets: the direction the inserter faces is the DROP direction
+            -- Direction offsets: the direction the inserter faces is the PICKUP direction
+            -- (the arm extends in the facing direction to grab items)
             local offsets = {
                 [defines.direction.north]     = {dx=0,  dy=-1},
                 [defines.direction.south]     = {dx=0,  dy=1},
@@ -539,9 +542,9 @@ internal sealed partial class FactorioService
                 return
             end
 
-            -- Drop position is in the facing direction, pickup is opposite
-            local drop_x, drop_y = ix + off.dx, iy + off.dy
-            local pickup_x, pickup_y = ix - off.dx, iy - off.dy
+            -- Pickup position is in the facing direction, drop is opposite
+            local pickup_x, pickup_y = ix + off.dx, iy + off.dy
+            local drop_x, drop_y = ix - off.dx, iy - off.dy
 
             local surface = game.connected_players[1].surface
 
@@ -641,18 +644,19 @@ internal sealed partial class FactorioService
             inserter_y = math.floor(inserter_y) + 0.5
 
             -- Calculate inserter direction
-            -- inbound = drop INTO target = face toward target
-            -- outbound = pick FROM target = face away from target
+            -- In Factorio, direction = PICKUP side (arm extends toward facing direction)
+            -- inbound = drop INTO target = face AWAY from target (pick from outside, drop into target)
+            -- outbound = pick FROM target = face TOWARD target (pick from target, drop outside)
             local inbound = {{(inbound ? "true" : "false")}}
             local dir
             if side == "north" then
-                dir = inbound and defines.direction.south or defines.direction.north
-            elseif side == "south" then
                 dir = inbound and defines.direction.north or defines.direction.south
+            elseif side == "south" then
+                dir = inbound and defines.direction.south or defines.direction.north
             elseif side == "east" then
-                dir = inbound and defines.direction.west or defines.direction.east
-            elseif side == "west" then
                 dir = inbound and defines.direction.east or defines.direction.west
+            elseif side == "west" then
+                dir = inbound and defines.direction.west or defines.direction.east
             end
 
             -- Check distance
@@ -750,9 +754,10 @@ internal sealed partial class FactorioService
             local inserter_x = math.floor(mid_x) + 0.5
             local inserter_y = math.floor(mid_y) + 0.5
 
-            -- Determine direction: inserter faces toward destination (drop side)
-            local diff_x = dx - sx
-            local diff_y = dy - sy
+            -- Determine direction: inserter faces toward source (pickup side)
+            -- In Factorio, direction = where the arm reaches to PICK UP items
+            local diff_x = sx - dx
+            local diff_y = sy - dy
             local dir
             if math.abs(diff_x) > math.abs(diff_y) then
                 dir = diff_x > 0 and defines.direction.east or defines.direction.west
