@@ -15,6 +15,9 @@ public partial class FactorioServiceTests
         Assert.StartsWith("/silent-command", placeCmd);
         Assert.Contains("can_place_entity", placeCmd);
         Assert.Contains("stone-furnace", placeCmd);
+        Assert.Contains("prototypes.entity", placeCmd);
+        Assert.Contains("tile_width", placeCmd);
+        Assert.Contains("tile_height", placeCmd);
         Assert.Contains("10", placeCmd);
         Assert.Contains("20", placeCmd);
 
@@ -80,5 +83,32 @@ public partial class FactorioServiceTests
                     _service.PickupItemsAsync(0));
                 break;
         }
+    }
+
+    [Fact]
+    public async Task PlaceEntitySmart_GridSnapping_IncludesDirectionSwapLogic()
+    {
+        // Verify the Lua includes direction-aware tile width/height swapping
+        await _service.PlaceEntitySmartAsync("boiler", 10, 20, direction: "east");
+        var cmd = _rcon.LastCommand!;
+        Assert.Contains("defines.direction.east", cmd);
+        // Should swap tw/th for east/west directions
+        Assert.Contains("tw, th = th, tw", cmd);
+        // Should snap based on odd/even parity
+        Assert.Contains("math.floor", cmd);
+    }
+
+    [Theory]
+    [InlineData("north")]
+    [InlineData("east")]
+    [InlineData("south")]
+    [InlineData("west")]
+    public async Task PlaceEntitySmart_GridSnapping_WorksForAllDirections(string direction)
+    {
+        await _service.PlaceEntitySmartAsync("electric-mining-drill", 41, -60, direction: direction);
+        var cmd = _rcon.LastCommand!;
+        Assert.Contains($"defines.direction.{direction}", cmd);
+        Assert.Contains("prototypes.entity", cmd);
+        Assert.Contains("tile_width", cmd);
     }
 }

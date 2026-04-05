@@ -885,6 +885,25 @@ internal sealed partial class FactorioService
                 rcon.print('{"success":false,"error":"missing_item","entity":"'..name..'"}')
                 return
             end
+            -- Snap search center to entity's tile grid so offsets land on valid positions
+            local proto = prototypes.entity[name]
+            if proto then
+                local tw = proto.tile_width or 1
+                local th = proto.tile_height or 1
+                if dir == defines.direction.east or dir == defines.direction.west then
+                    tw, th = th, tw
+                end
+                if tw % 2 == 1 then
+                    near_x = math.floor(near_x) + 0.5
+                else
+                    near_x = math.floor(near_x + 0.5)
+                end
+                if th % 2 == 1 then
+                    near_y = math.floor(near_y) + 0.5
+                else
+                    near_y = math.floor(near_y + 0.5)
+                end
+            end
             -- Spiral search for a valid placement position
             local best = nil
             for dist = 0, search_r do
