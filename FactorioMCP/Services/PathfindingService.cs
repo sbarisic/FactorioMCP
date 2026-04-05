@@ -93,17 +93,6 @@ internal sealed class PathfindingService(RconClient rcon)
     }
 
     /// <summary>
-    /// Stop the player from walking and clear navigation state.
-    /// </summary>
-    public async Task<string> StopAsync(CancellationToken cancellationToken = default)
-    {
-        await StopWalkingAsync(cancellationToken);
-        var (x, y) = await GetPositionAsync(cancellationToken);
-        return string.Create(CultureInfo.InvariantCulture,
-            $$"""{"status":"stopped","x":{{x}},"y":{{y}}}""");
-    }
-
-    /// <summary>
     /// Get the player's current position.
     /// </summary>
     public Task<string> GetPlayerPositionAsync(CancellationToken cancellationToken = default)

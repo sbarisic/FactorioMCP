@@ -22,13 +22,6 @@ Walk to a target using Factorio's built-in A* pathfinder. Navigates around build
 
 ---
 
-### `StopWalking`
-Stop walking immediately and cancel any active pathfinding.
-
-**Returns:** `"Stopped walking."`
-
----
-
 ### `GetPlayerPosition`
 Get the player's current map position.
 
@@ -523,19 +516,6 @@ Poll until the player reaches a target position. The player must already be walk
 | `tolerance` | `double` | `2.0` | |
 | `pollIntervalSeconds` | `double` | `0.5` | |
 | `timeoutSeconds` | `double` | `30` | |
-
----
-
-### `WaitForTicks`
-Wait for N game ticks. 60 ticks = 1 second at normal speed (1×).
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `ticks` | `int` | required | Ticks to wait |
-| `pollIntervalSeconds` | `double` | `0.5` | |
-| `timeoutSeconds` | `double` | `30` | |
-
-**Returns:** `{ "status": "complete"|"timeout", "start_tick", "end_tick", "elapsed" }`
 
 ---
 
@@ -1144,16 +1124,6 @@ Check which inputs a furnace or assembler is missing. Inspects fuel, source/inpu
 ---
 
 ## Utility
-
-### `GetReachableEntities`
-Get entities within the player's reach distance, optionally filtered by type. Useful for finding what the player can interact with right now.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `type` | `string?` | none | Optional filter (e.g. `stone-furnace`, `transport-belt`) |
-| `maxDistance` | `double?` | reach dist | Max distance in tiles |
-
----
 
 ### `CountItemInWorld`
 Count how many of an item exist across all nearby containers (chests, furnaces, assemblers) and the player's inventory. Returns a per-location breakdown.

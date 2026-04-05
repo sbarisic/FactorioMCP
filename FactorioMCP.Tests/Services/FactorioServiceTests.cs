@@ -98,7 +98,6 @@ public partial class FactorioServiceTests
         await _service.FindNearestEntityAsync("stone-furnace");
         await _service.FindBestResourcePatchAsync("iron-ore");
         await _service.RotateEntityAsync(0, 0);
-        await _service.GetReachableEntitiesAsync();
         await _service.CountItemInWorldAsync("iron-plate");
         await _service.GetInventorySummaryAsync();
         await _service.CheckEnsureItemAsync("iron-plate", 5);
@@ -109,7 +108,7 @@ public partial class FactorioServiceTests
         await _service.FindMissingInputsAsync(0, 0);
         await _service.PlanCraftAsync("iron-gear-wheel");
 
-        Assert.Equal(37, _rcon.AllCommands.Count);
+        Assert.Equal(36, _rcon.AllCommands.Count);
         Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command ", cmd));
     }
 }

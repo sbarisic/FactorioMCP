@@ -66,32 +66,6 @@ internal sealed class WaitTools(FactorioService factorio, GameCommandQueue queue
     }
 
     [McpServerTool, Description(
-        "Wait for a specified number of game ticks to elapse. Factorio runs at 60 ticks per second " +
-        "at normal speed (1x). Use this for precise timing when you need to wait for game mechanics " +
-        "to process (e.g. furnace smelting, inserter cycles).")]
-    public async Task<string> WaitForTicks(
-        [Description("Number of game ticks to wait (60 ticks = 1 second at normal speed)")]
-        int ticks,
-        [Description("How often to check the tick count in seconds (default 0.5)")]
-        double pollIntervalSeconds = 0.5,
-        [Description("Maximum real-time seconds to wait before giving up (default 30)")]
-        double timeoutSeconds = 30,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            return await queue.ExecuteAsync(nameof(WaitForTicks), ct => factorio.WaitForTicksAsync(
-                ticks,
-                TimeSpan.FromSeconds(pollIntervalSeconds),
-                TimeSpan.FromSeconds(timeoutSeconds),
-                ct), cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            return """{"status":"timeout","reason":"cancelled"}""";        }
-    }
-
-    [McpServerTool, Description(
         "Wait until the player's inventory contains at least the specified count of an item. " +
         "Use this after starting crafting or mining to reactively wait for items to appear " +
         "instead of polling GetInventory repeatedly.")]

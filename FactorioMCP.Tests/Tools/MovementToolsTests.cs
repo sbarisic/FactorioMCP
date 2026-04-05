@@ -117,26 +117,6 @@ public class MovementToolsTests
         Assert.Contains("\"distance\":", result);
     }
 
-    // ── StopWalking ──────────────────────────────────────────────────
-
-    [Fact]
-    public async Task StopWalking_CallsPathfindingStop()
-    {
-        var rcon = new ScriptedRconClient([
-            // StopWalkingAsync
-            """ok""",
-            // GetPositionAsync
-            """{"x":5,"y":10}"""
-        ]);
-        var pathfinding = new PathfindingService(rcon) { PollInterval = TimeSpan.FromMilliseconds(10) };
-        var queue = new GameCommandQueue();
-        var tools = new MovementTools(pathfinding, queue);
-
-        var result = await tools.StopWalking();
-
-        Assert.Contains("Stopped walking", result);
-    }
-
     // ── GetPlayerPosition ────────────────────────────────────────────
 
     [Fact]

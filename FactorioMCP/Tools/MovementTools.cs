@@ -32,16 +32,6 @@ internal sealed class MovementTools(PathfindingService pathfinding, GameCommandQ
             cancellationToken);
     }
 
-    [McpServerTool, Description("Stop the player from walking immediately and cancel any active pathfinding.")]
-    public Task<string> StopWalking(CancellationToken cancellationToken = default)
-    {
-        return queue.ExecuteAsync(nameof(StopWalking), async ct =>
-        {
-            await pathfinding.StopAsync(ct);
-            return "Stopped walking.";
-        }, cancellationToken);
-    }
-
     [McpServerTool, Description("Get the player's current map position as x,y coordinates.")]
     public Task<string> GetPlayerPosition(CancellationToken cancellationToken = default)
     {

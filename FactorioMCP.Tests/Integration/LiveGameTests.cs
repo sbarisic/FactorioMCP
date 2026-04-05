@@ -453,29 +453,6 @@ public sealed class LiveGameTests : IAsyncLifetime
         }
     }
 
-    // ── 12. Wait For Ticks ──────────────────────────────────────────
-
-    [Fact]
-    public async Task WaitForTicks_WaitsCorrectDuration()
-    {
-        var startTick = Parse(await _service.GetGameTickAsync()).GetProperty("tick").GetInt64();
-        _output.WriteLine($"Start tick: {startTick}");
-
-        var result = await _service.WaitForTicksAsync(60, TimeSpan.FromSeconds(0.5), TimeSpan.FromSeconds(5));
-        LogResult("WaitForTicks(60)", result);
-
-        var json = Parse(result);
-        var status = json.GetProperty("status").GetString();
-        _output.WriteLine($"  → Status: {status}");
-
-        if (status == "complete")
-        {
-            var elapsed = json.GetProperty("elapsed").GetInt64();
-            _output.WriteLine($"  → Elapsed: {elapsed} ticks (~{elapsed / 60.0:F1} seconds) ✓");
-            Assert.True(elapsed >= 60, "Should have waited at least 60 ticks");
-        }
-    }
-
     // ── 13. Comprehensive Entity Scan ───────────────────────────────
 
     [Fact]

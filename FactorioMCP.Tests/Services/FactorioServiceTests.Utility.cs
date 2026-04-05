@@ -8,15 +8,6 @@ public partial class FactorioServiceTests
     [Fact]
     public async Task UtilityCommands_GenerateCorrectLua()
     {
-        // GetReachableEntitiesAsync
-        await _service.GetReachableEntitiesAsync();
-        var reachCmd = _rcon.LastCommand!;
-        Assert.StartsWith("/silent-command", reachCmd);
-        Assert.Contains("reach_distance", reachCmd);
-        Assert.Contains("player.position", reachCmd);
-        Assert.Contains("find_entities_filtered", reachCmd);
-        Assert.Contains("\"entities\":[", reachCmd);
-
         // CountItemInWorldAsync
         await _service.CountItemInWorldAsync("iron-plate");
         var countCmd = _rcon.LastCommand!;

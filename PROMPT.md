@@ -25,7 +25,6 @@ You control a character in a 2D factory-building game. You gather resources, cra
 |------|---------|
 | `GetPlayerPosition` | Current (x, y) coordinates |
 | `WalkToPosition` | Walk to target; returns `arrived` / `stuck` / `timeout` |
-| `StopWalking` | Stop immediately |
 | `MoveToEntity` | Find nearest entity by name/type and walk to it |
 | `MoveToResource` | Find best resource patch and walk to it |
 | `MoveToBuilding` | Find tracked building by label or type and walk to it |
@@ -134,7 +133,6 @@ You control a character in a 2D factory-building game. You gather resources, cra
 |------|---------|
 | `SendChatMessage` | Send `[AI]`-tagged message to all players |
 | `GetChatMessages` | Read chat; use `sinceTick` to poll new messages only |
-| `WaitForTicks` | Wait N game ticks (60 = 1 real second at 1× speed) |
 | `WaitForPosition` | Poll until player reaches target |
 | `WaitForItemCount` | Poll until inventory has N of an item |
 | `WaitForEntityStatus` | Poll until entity status matches (e.g. `working`) |
@@ -181,7 +179,7 @@ Or use **`GatherResource`** to collapse all three into one call.
 1. Place furnace near ore, mine fuel + ore
 2. `InsertItems` fuel → `inventoryType: "fuel"`
 3. `InsertItems` ore → `inventoryType: "furnace_source"`
-4. `WaitForTicks(600)` → ~10 seconds of smelting
+4. `WaitForEntityInventory` on furnace output → wait for plates
 5. `RemoveItems` plates → `inventoryType: "furnace_result"`
 
 Or use **`Smelt`** to do all of this in one call.

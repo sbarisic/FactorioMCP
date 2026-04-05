@@ -598,46 +598,6 @@ internal sealed partial class FactorioService
     }
 
     /// <summary>
-    /// Get entities within the player's reach distance, optionally filtered by entity type/name.
-    /// If maxDistance is not specified, uses the player's reach_distance.
-    /// </summary>
-    public Task<string> GetReachableEntitiesAsync(string? type = null, double? maxDistance = null, CancellationToken cancellationToken = default)
-    {
-        if (maxDistance.HasValue)
-            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxDistance.Value);
-
-        var escapedType = type?.Replace("\\", "\\\\").Replace("\"", "\\\"");
-        var filterExpr = escapedType is not null
-            ? string.Create(CultureInfo.InvariantCulture, $"name=\"{escapedType}\"")
-            : "";
-
-        var radiusExpr = maxDistance.HasValue
-            ? string.Create(CultureInfo.InvariantCulture, $"{maxDistance.Value}")
-            : "radius";
-
-        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
-            {{LuaJsonEscape}}
-            local player = game.connected_players[1]
-            local radius = player.reach_distance
-            local entities = player.surface.find_entities_filtered{
-                position=player.position, radius={{radiusExpr}}{{(escapedType is not null ? $", {filterExpr}" : "")}}
-            }
-            local parts = {}
-            for _, e in pairs(entities) do
-                if e ~= player.character then
-                    local dx = e.position.x - player.position.x
-                    local dy = e.position.y - player.position.y
-                    local dist = math.sqrt(dx*dx + dy*dy)
-                    parts[#parts+1] = '{"name":"'..esc(e.name)..'","type":"'..esc(e.type)..'","x":'..string.format("%.1f", e.position.x)..',"y":'..string.format("%.1f", e.position.y)..',"distance":'..string.format("%.1f", dist)..'}'
-                end
-            end
-            rcon.print('{"reach_distance":'..radius..',"search_radius":'..{{radiusExpr}}..',"count":'..#parts..',"entities":['..table.concat(parts, ",")..']}')
-            """);
-
-        return rcon.ExecuteLuaAsync(lua, cancellationToken);
-    }
-
-    /// <summary>
     /// Count an item across all nearby containers (chests, furnaces, assemblers) and player inventory.
     /// </summary>
     public Task<string> CountItemInWorldAsync(string itemName, double radius = 50, CancellationToken cancellationToken = default)

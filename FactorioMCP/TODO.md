@@ -91,77 +91,25 @@ ___
 
 Analysis of which MCP tools should be removed because they are too low-level, confuse the AI, or overlap with better alternatives.
 
-## ~~High Priority — Remove These Tools~~ ✅ DONE
-
-All 6 tools removed — MCP tools, service methods (where not used internally), tests, and documentation updated. Moved to DONE.md on next cleanup.
-
-~~`InitializeChatListener`~~ — Removed MCP tool (service method kept — called by RconConnectionService at startup)
-~~`GetBeltDirectionHelp`~~ — Removed MCP tool and static method from BeltPlannerService
-~~`EstimateTravelTime`~~ — Removed MCP tool and EstimateTravelTimeAsync service method
-~~`ScanTiles`~~ — Removed MCP tool and ScanTilesAsync service method
-~~`GetGameTick`~~ — Removed MCP tool (service method kept — used by WaitForTicksAsync)
-~~`GetAvailableSlots`~~ — Removed MCP tool and GetAvailableSlotsAsync service method
-
----
-
-## Medium Priority — Consider Removing or Reworking
-
-### `WaitForTicks` (WaitTools.cs)
-**Reason: Low-level timing primitive; task-oriented waits are better**
-- Waits for N game ticks (60 = 1 second at normal speed)
-- The AI must know the tick-to-seconds conversion and guess how long things take
-- Task-oriented alternatives are always better:
-  - Smelting? Use `WaitForEntityInventory` to wait for output items
-  - Crafting? Use `WaitForCrafting`
-  - Entity startup? Use `WaitForEntityStatus`
-- **Keep only if** there are genuine cases where no task-oriented wait exists
-
-### `StopWalking` (MovementTools.cs)
-**Reason: Edge case that confuses tool selection**
-- Stops the player from walking mid-path
-- `WalkToPosition` already handles stuck detection and timeouts
-- The AI would need to be in a multi-step async workflow to use this, which is rare
-- Creates confusion: "should I stop walking before doing something else?"
-- **Keep only if** there are real scenarios where the AI needs to abort a walk
+## Low Priority — Consider Reworking
 
 ### `WhatAmILookingAt` (PerceptionTools.cs)
 **Reason: Niche directional scan with limited AI utility**
-- Performs a cone-shaped raycast in a compass direction
-- `SummarizeArea` provides a more comprehensive omnidirectional overview
-- The directional use case ("what's north of me?") rarely drives AI decisions
+- Unique directional cone-scan capability, but overlaps with `SummarizeArea`
 - Could be merged into `SummarizeArea` with an optional direction filter parameter
-- **Keep only if** directional awareness is important for combat or exploration
+- **Keep for now** — unique capability worth preserving
 
 ### `ClearBuildingMemory` (BuildingTools.cs)
 **Reason: Destructive operation the AI should rarely use**
-- Wipes all tracked buildings from memory (not from the game world)
-- No undo; the AI loses all spatial knowledge of its factory
+- Wipes all tracked buildings from memory — no undo
 - `ValidateBuildingMemory` is the safe alternative (prunes only stale entries)
-- Risk: AI calls this thinking it's "cleaning up" and loses critical building locations
 - **Rework**: Add a confirmation parameter or rename to make the destructive nature clearer
 
 ### `ExecuteLua` (LuaTools.cs)
-**Reason: Dangerous escape hatch that bypasses safety constraints**
-- Executes arbitrary Lua code on the Factorio server with no sandboxing
-- Can corrupt game state, crash the server, or cause data loss
-- Encourages the AI to bypass purpose-built tools with ad-hoc Lua
-- The tool description includes warnings, but AI models tend to use the "easiest" path
-- **Rework**: Consider gating behind an opt-in flag or requiring structured Lua templates instead of freeform code
-
-### `GetReachableEntities` (UtilityTools.cs)
-**Reason: Overlaps with `GetNearbyEntities` using a small radius**
-- Returns entities within the player's reach/build range
-- `GetNearbyEntities(radius: 6)` returns nearly the same result
-- Having both creates confusion about which to call
-- **Rework**: Add a `withinReach` boolean parameter to `GetNearbyEntities` instead
+**Keep as-is** — Essential escape hatch. All services depend on the underlying method. Already has safety warnings in the tool description.
 
 ### `DropItems` (InventoryTools.cs)
-**Reason: Niche edge case that confuses inventory management**
-- Drops items on the ground at the player's position
-- The AI rarely needs to discard items; it should craft, store, or use them
-- Creates confusion: "should I drop excess items or find a chest?"
-- Risk of items being lost on the ground with no way to track them
-- **Keep only if** inventory-full situations genuinely require ground dropping as a strategy
+**Keep as-is** — Unique functionality for inventory-full scenarios. No overlap with other tools.
 
 ---
 
@@ -211,7 +159,7 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 - **All TargetTools** (`FindNearest`, `FindBestResourcePatch`, `GetClosestBuildingOfType`) — complementary search tools
 - **All BuildingTools** (except `ClearBuildingMemory`) — well-structured memory system
 - **All InteractionTools** (`InsertItems`, `RemoveItems`, `InspectEntity`, `PickupItems`) — essential
-- **Core InventoryTools** (`GetInventory`, `Craft`, `GetCraftingQueue`, `TransferAllItems`, `GetEntityInventory`, `EnsureItem`) — necessary
+- **Core InventoryTools** (`GetInventory`, `Craft`, `GetCraftingQueue`, `TransferAllItems`, `GetEntityInventory`, `EnsureItem`, `DropItems`) — necessary
 - **All FlowTools** (`GetFlowGraph`, `TraceItemFlow`, `PreviewBeltPlacement`) — advanced but justified; belt collapsing and flow summary integration working
 - **All EnergyTools** — complementary (balance vs. topology vs. per-entity)
 - **All LogisticsTools** — clear and distinct
@@ -222,7 +170,7 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 - **VisionTools** (`TakeScreenshot`) — unique capability
 - **BeltTools** (`PlanBeltRoute`) — useful planning tool
 - **ChatTools** (`GetChatMessages`, `SendChatMessage`) — essential communication
-- **LuaTools** (`ReconnectRcon`) — necessary recovery tool
+- **LuaTools** (`ExecuteLua`, `ReconnectRcon`) — essential escape hatch and recovery
 
 ---
 

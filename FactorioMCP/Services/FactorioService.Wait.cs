@@ -78,42 +78,6 @@ internal sealed partial class FactorioService
     }
 
     /// <summary>
-    /// Wait for a specified number of game ticks to elapse.
-    /// Polls the game tick and waits until the target tick count has passed.
-    /// </summary>
-    public async Task<string> WaitForTicksAsync(
-        int ticks,
-        TimeSpan pollInterval,
-        TimeSpan timeout,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(ticks);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pollInterval, TimeSpan.Zero);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
-
-        var startResult = await GetGameTickAsync(cancellationToken);
-        if (!TryParseJsonLong(startResult, "tick", out var startTick))
-            return """{"status":"error","error":"failed_to_read_tick"}""";
-
-        var targetTick = startTick + ticks;
-        var deadline = DateTime.UtcNow + timeout;
-
-        while (DateTime.UtcNow < deadline)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            await Task.Delay(pollInterval, cancellationToken);
-
-            var tickResult = await GetGameTickAsync(cancellationToken);
-            if (TryParseJsonLong(tickResult, "tick", out var currentTick) && currentTick >= targetTick)
-                return string.Create(CultureInfo.InvariantCulture, $$$"""{"status":"complete","start_tick":{{{startTick}}},"end_tick":{{{currentTick}}},"elapsed":{{{currentTick - startTick}}}}""");
-        }
-
-        var finalResult = await GetGameTickAsync(cancellationToken);
-        TryParseJsonLong(finalResult, "tick", out var finalTick);
-        return string.Create(CultureInfo.InvariantCulture, $$$"""{"status":"timeout","start_tick":{{{startTick}}},"current_tick":{{{finalTick}}},"target_tick":{{{targetTick}}}}""");
-    }
-
-    /// <summary>
     /// Poll the player's inventory until it contains at least <paramref name="targetCount"/>
     /// of the specified item, or the timeout expires.
     /// </summary>
