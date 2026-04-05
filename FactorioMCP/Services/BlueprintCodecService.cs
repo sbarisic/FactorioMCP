@@ -16,25 +16,25 @@ internal sealed class BlueprintCodecService
     private static readonly Dictionary<string, int> DirectionToNumber = new(StringComparer.OrdinalIgnoreCase)
     {
         ["north"] = 0,
-        ["northeast"] = 1,
-        ["east"] = 2,
-        ["southeast"] = 3,
-        ["south"] = 4,
-        ["southwest"] = 5,
-        ["west"] = 6,
-        ["northwest"] = 7,
+        ["northeast"] = 2,
+        ["east"] = 4,
+        ["southeast"] = 6,
+        ["south"] = 8,
+        ["southwest"] = 10,
+        ["west"] = 12,
+        ["northwest"] = 14,
     };
 
     private static readonly Dictionary<int, string> NumberToDirection = new()
     {
         [0] = "north",
-        [1] = "northeast",
-        [2] = "east",
-        [3] = "southeast",
-        [4] = "south",
-        [5] = "southwest",
-        [6] = "west",
-        [7] = "northwest",
+        [2] = "northeast",
+        [4] = "east",
+        [6] = "southeast",
+        [8] = "south",
+        [10] = "southwest",
+        [12] = "west",
+        [14] = "northwest",
     };
 
     /// <summary>

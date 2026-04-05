@@ -21,15 +21,15 @@ public class BlueprintAnalysisServiceTests
         {
             var codec = new BlueprintCodecService();
             var json = @"{""blueprint"":{""item"":""blueprint"",""label"":""Test Smelter"",""entities"":[
-                {""entity_number"":1,""name"":""transport-belt"",""position"":{""x"":-1.5,""y"":0.5},""direction"":4},
-                {""entity_number"":2,""name"":""transport-belt"",""position"":{""x"":-1.5,""y"":1.5},""direction"":4},
-                {""entity_number"":3,""name"":""burner-inserter"",""position"":{""x"":-0.5,""y"":0.5},""direction"":2},
-                {""entity_number"":4,""name"":""burner-inserter"",""position"":{""x"":-0.5,""y"":1.5},""direction"":2},
+                {""entity_number"":1,""name"":""transport-belt"",""position"":{""x"":-1.5,""y"":0.5},""direction"":8},
+                {""entity_number"":2,""name"":""transport-belt"",""position"":{""x"":-1.5,""y"":1.5},""direction"":8},
+                {""entity_number"":3,""name"":""burner-inserter"",""position"":{""x"":-0.5,""y"":0.5},""direction"":4},
+                {""entity_number"":4,""name"":""burner-inserter"",""position"":{""x"":-0.5,""y"":1.5},""direction"":4},
                 {""entity_number"":5,""name"":""stone-furnace"",""position"":{""x"":1,""y"":1}},
-                {""entity_number"":6,""name"":""burner-inserter"",""position"":{""x"":2.5,""y"":0.5},""direction"":2},
-                {""entity_number"":7,""name"":""burner-inserter"",""position"":{""x"":2.5,""y"":1.5},""direction"":2},
-                {""entity_number"":8,""name"":""transport-belt"",""position"":{""x"":3.5,""y"":0.5},""direction"":4},
-                {""entity_number"":9,""name"":""transport-belt"",""position"":{""x"":3.5,""y"":1.5},""direction"":4}
+                {""entity_number"":6,""name"":""burner-inserter"",""position"":{""x"":2.5,""y"":0.5},""direction"":4},
+                {""entity_number"":7,""name"":""burner-inserter"",""position"":{""x"":2.5,""y"":1.5},""direction"":4},
+                {""entity_number"":8,""name"":""transport-belt"",""position"":{""x"":3.5,""y"":0.5},""direction"":8},
+                {""entity_number"":9,""name"":""transport-belt"",""position"":{""x"":3.5,""y"":1.5},""direction"":8}
             ],""version"":562949954076672}}";
             var result = codec.EncodeBlueprintString(json);
             using var doc = JsonDocument.Parse(result);
@@ -233,9 +233,9 @@ public class BlueprintAnalysisServiceTests
     {
         var entities = new List<BlueprintAnalysisService.BpEntity>
         {
-            new(1, "transport-belt", 0.5, 0.5, 2, "east", null),
-            new(2, "transport-belt", 1.5, 0.5, 2, "east", null),
-            new(3, "transport-belt", 2.5, 0.5, 2, "east", null),
+            new(1, "transport-belt", 0.5, 0.5, 4, "east", null),
+            new(2, "transport-belt", 1.5, 0.5, 4, "east", null),
+            new(3, "transport-belt", 2.5, 0.5, 4, "east", null),
         };
 
         var edges = _service.BuildFlowGraph(entities);
@@ -250,8 +250,8 @@ public class BlueprintAnalysisServiceTests
     {
         var entities = new List<BlueprintAnalysisService.BpEntity>
         {
-            new(1, "transport-belt", 0.5, 0.5, 4, "south", null),
-            new(2, "transport-belt", 0.5, 1.5, 4, "south", null),
+            new(1, "transport-belt", 0.5, 0.5, 8, "south", null),
+            new(2, "transport-belt", 0.5, 1.5, 8, "south", null),
         };
 
         var edges = _service.BuildFlowGraph(entities);
@@ -265,8 +265,8 @@ public class BlueprintAnalysisServiceTests
         var entities = new List<BlueprintAnalysisService.BpEntity>
         {
             new(1, "iron-chest", 0.5, 0.5, 0, "north", null),
-            new(2, "inserter", 1.5, 0.5, 2, "east", null),
-            new(3, "transport-belt", 2.5, 0.5, 2, "east", null),
+            new(2, "inserter", 1.5, 0.5, 4, "east", null),
+            new(3, "transport-belt", 2.5, 0.5, 4, "east", null),
         };
 
         var edges = _service.BuildFlowGraph(entities);
@@ -281,7 +281,7 @@ public class BlueprintAnalysisServiceTests
         var entities = new List<BlueprintAnalysisService.BpEntity>
         {
             new(1, "iron-chest", 0.5, 0.5, 0, "north", null),
-            new(2, "long-handed-inserter", 2.5, 0.5, 2, "east", null),
+            new(2, "long-handed-inserter", 2.5, 0.5, 4, "east", null),
             new(3, "iron-chest", 4.5, 0.5, 0, "north", null),
         };
 
@@ -299,7 +299,7 @@ public class BlueprintAnalysisServiceTests
         var entities = new List<BlueprintAnalysisService.BpEntity>
         {
             new(1, "stone-furnace", 1, 1, 0, "north", null),
-            new(2, "inserter", 2.5, 0.5, 6, "west", null),
+            new(2, "inserter", 2.5, 0.5, 12, "west", null),
         };
 
         var edges = _service.BuildFlowGraph(entities);
@@ -336,7 +336,7 @@ public class BlueprintAnalysisServiceTests
     public void AnalyzeBlueprint_OrphanedInserter_ReportsIssue()
     {
         var json = @"{""blueprint"":{""item"":""blueprint"",""entities"":[
-            {""entity_number"":1,""name"":""inserter"",""position"":{""x"":10.5,""y"":10.5},""direction"":2}
+            {""entity_number"":1,""name"":""inserter"",""position"":{""x"":10.5,""y"":10.5},""direction"":4}
         ],""version"":562949954076672}}";
         var encodeResult = _codec.EncodeBlueprintString(json);
         using var encDoc = JsonDocument.Parse(encodeResult);
@@ -354,8 +354,8 @@ public class BlueprintAnalysisServiceTests
     public void AnalyzeBlueprint_DeadEndBelt_ReportsIssue()
     {
         var json = @"{""blueprint"":{""item"":""blueprint"",""entities"":[
-            {""entity_number"":1,""name"":""transport-belt"",""position"":{""x"":0.5,""y"":0.5},""direction"":2},
-            {""entity_number"":2,""name"":""transport-belt"",""position"":{""x"":1.5,""y"":0.5},""direction"":2}
+            {""entity_number"":1,""name"":""transport-belt"",""position"":{""x"":0.5,""y"":0.5},""direction"":4},
+            {""entity_number"":2,""name"":""transport-belt"",""position"":{""x"":1.5,""y"":0.5},""direction"":4}
         ],""version"":562949954076672}}";
         var encodeResult = _codec.EncodeBlueprintString(json);
         using var encDoc = JsonDocument.Parse(encodeResult);
@@ -403,11 +403,11 @@ public class BlueprintAnalysisServiceTests
     {
         var codec = new BlueprintCodecService();
         var json = @"{""blueprint"":{""item"":""blueprint"",""label"":""Smelter Line"",""entities"":[
-            {""entity_number"":1,""name"":""transport-belt"",""position"":{""x"":-1.5,""y"":0.5},""direction"":4},
-            {""entity_number"":2,""name"":""inserter"",""position"":{""x"":-0.5,""y"":0.5},""direction"":2},
+            {""entity_number"":1,""name"":""transport-belt"",""position"":{""x"":-1.5,""y"":0.5},""direction"":8},
+            {""entity_number"":2,""name"":""inserter"",""position"":{""x"":-0.5,""y"":0.5},""direction"":4},
             {""entity_number"":3,""name"":""stone-furnace"",""position"":{""x"":1,""y"":1},""recipe"":""iron-plate""},
-            {""entity_number"":4,""name"":""inserter"",""position"":{""x"":2.5,""y"":0.5},""direction"":2},
-            {""entity_number"":5,""name"":""transport-belt"",""position"":{""x"":3.5,""y"":0.5},""direction"":4}
+            {""entity_number"":4,""name"":""inserter"",""position"":{""x"":2.5,""y"":0.5},""direction"":4},
+            {""entity_number"":5,""name"":""transport-belt"",""position"":{""x"":3.5,""y"":0.5},""direction"":8}
         ],""version"":562949954076672}}";
         var result = codec.EncodeBlueprintString(json);
         using var doc = JsonDocument.Parse(result);
@@ -491,11 +491,11 @@ public class BlueprintAnalysisServiceTests
         // Create blueprint with a fast machine but slow inserter → bottleneck
         var codec = new BlueprintCodecService();
         var json = @"{""blueprint"":{""item"":""blueprint"",""entities"":[
-            {""entity_number"":1,""name"":""transport-belt"",""position"":{""x"":-1.5,""y"":0.5},""direction"":4},
-            {""entity_number"":2,""name"":""burner-inserter"",""position"":{""x"":-0.5,""y"":0.5},""direction"":2},
+            {""entity_number"":1,""name"":""transport-belt"",""position"":{""x"":-1.5,""y"":0.5},""direction"":8},
+            {""entity_number"":2,""name"":""burner-inserter"",""position"":{""x"":-0.5,""y"":0.5},""direction"":4},
             {""entity_number"":3,""name"":""assembling-machine-3"",""position"":{""x"":2,""y"":1},""recipe"":""iron-gear-wheel""},
-            {""entity_number"":4,""name"":""burner-inserter"",""position"":{""x"":4.5,""y"":0.5},""direction"":2},
-            {""entity_number"":5,""name"":""transport-belt"",""position"":{""x"":5.5,""y"":0.5},""direction"":4}
+            {""entity_number"":4,""name"":""burner-inserter"",""position"":{""x"":4.5,""y"":0.5},""direction"":4},
+            {""entity_number"":5,""name"":""transport-belt"",""position"":{""x"":5.5,""y"":0.5},""direction"":8}
         ],""version"":562949954076672}}";
         var encResult = codec.EncodeBlueprintString(json);
         using var encDoc = JsonDocument.Parse(encResult);

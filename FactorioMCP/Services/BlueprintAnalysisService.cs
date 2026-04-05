@@ -100,13 +100,13 @@ internal sealed class BlueprintAnalysisService(BlueprintCodecService codec, Rcon
     private static readonly Dictionary<int, string> NumberToDirection = new()
     {
         [0] = "north",
-        [1] = "northeast",
-        [2] = "east",
-        [3] = "southeast",
-        [4] = "south",
-        [5] = "southwest",
-        [6] = "west",
-        [7] = "northwest",
+        [2] = "northeast",
+        [4] = "east",
+        [6] = "southeast",
+        [8] = "south",
+        [10] = "southwest",
+        [12] = "west",
+        [14] = "northwest",
     };
 
     /// <summary>
@@ -842,11 +842,11 @@ internal sealed class BlueprintAnalysisService(BlueprintCodecService codec, Rcon
         {
             var (w, h) = GetEntitySize(e.Name);
             // For entities whose size depends on direction (e.g. splitters), swap w/h
-            if (e.Direction is 0 or 4) // north/south — splitters are 2-wide horizontal by default
+            if (e.Direction is 0 or 8) // north/south — splitters are 2-wide horizontal by default
             {
                 // default orientation
             }
-            else if (e.Direction is 2 or 6) // east/west — swap for splitters
+            else if (e.Direction is 4 or 12) // east/west — swap for splitters
             {
                 if (SplitterTypes.Contains(e.Name))
                     (w, h) = (h, w);
@@ -1086,14 +1086,14 @@ internal sealed class BlueprintAnalysisService(BlueprintCodecService codec, Rcon
 
     private static (int dx, int dy) DirectionOffset(int direction) => direction switch
     {
-        0 => (0, -1),  // north
-        1 => (1, -1),  // northeast
-        2 => (1, 0),   // east
-        3 => (1, 1),   // southeast
-        4 => (0, 1),   // south
-        5 => (-1, 1),  // southwest
-        6 => (-1, 0),  // west
-        7 => (-1, -1), // northwest
+        0 => (0, -1),   // north
+        2 => (1, -1),   // northeast
+        4 => (1, 0),    // east
+        6 => (1, 1),    // southeast
+        8 => (0, 1),    // south
+        10 => (-1, 1),  // southwest
+        12 => (-1, 0),  // west
+        14 => (-1, -1), // northwest
         _ => (0, 0)
     };
 

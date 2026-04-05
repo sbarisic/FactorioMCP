@@ -42,7 +42,7 @@ public class BlueprintCodecServiceTests
     [Fact]
     public void Decode_ValidBlueprint_ReturnsEntities()
     {
-        var json = """{"blueprint":{"item":"blueprint","entities":[{"entity_number":1,"name":"transport-belt","position":{"x":0.5,"y":0.5},"direction":2}],"version":562949954076672}}""";
+        var json = """{"blueprint":{"item":"blueprint","entities":[{"entity_number":1,"name":"transport-belt","position":{"x":0.5,"y":0.5},"direction":4}],"version":562949954076672}}""";
         var bpString = MakeBlueprintString(json);
 
         var result = _service.DecodeBlueprintString(bpString);
@@ -130,8 +130,9 @@ public class BlueprintCodecServiceTests
     public void Decode_DirectionMapping_AllDirections()
     {
         var entities = new List<string>();
-        for (int dir = 0; dir < 8; dir++)
-            entities.Add($"{{\"entity_number\":{dir + 1},\"name\":\"transport-belt\",\"position\":{{\"x\":{dir},\"y\":0}},\"direction\":{dir}}}");
+        int[] dirs = [0, 2, 4, 6, 8, 10, 12, 14];
+        for (int i = 0; i < dirs.Length; i++)
+            entities.Add($"{{\"entity_number\":{i + 1},\"name\":\"transport-belt\",\"position\":{{\"x\":{i},\"y\":0}},\"direction\":{dirs[i]}}}");
 
         var json = $"{{\"blueprint\":{{\"item\":\"blueprint\",\"entities\":[{string.Join(",", entities)}],\"version\":562949954076672}}}}";
         var bpString = MakeBlueprintString(json);
@@ -165,7 +166,7 @@ public class BlueprintCodecServiceTests
     [Fact]
     public void Encode_ValidBlueprint_ReturnsString()
     {
-        var json = """{"blueprint":{"item":"blueprint","entities":[{"entity_number":1,"name":"transport-belt","position":{"x":0.5,"y":0.5},"direction":2}],"version":562949954076672}}""";
+        var json = """{"blueprint":{"item":"blueprint","entities":[{"entity_number":1,"name":"transport-belt","position":{"x":0.5,"y":0.5},"direction":4}],"version":562949954076672}}""";
 
         var result = _service.EncodeBlueprintString(json);
         using var doc = JsonDocument.Parse(result);
@@ -205,7 +206,7 @@ public class BlueprintCodecServiceTests
     [Fact]
     public void RoundTrip_EncodeAndDecode_PreservesEntities()
     {
-        var json = """{"blueprint":{"item":"blueprint","entities":[{"entity_number":1,"name":"stone-furnace","position":{"x":1,"y":1}},{"entity_number":2,"name":"inserter","position":{"x":0,"y":1},"direction":6}],"version":562949954076672}}""";
+        var json = """{"blueprint":{"item":"blueprint","entities":[{"entity_number":1,"name":"stone-furnace","position":{"x":1,"y":1}},{"entity_number":2,"name":"inserter","position":{"x":0,"y":1},"direction":12}],"version":562949954076672}}""";
 
         // Encode
         var encodeResult = _service.EncodeBlueprintString(json);
