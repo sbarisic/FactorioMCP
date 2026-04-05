@@ -716,8 +716,8 @@ internal sealed partial class FactorioService
             parts[#parts+1] = '"tile_height":'..th
             parts[#parts+1] = '"max_health":'..(proto.max_health or 0)
             parts[#parts+1] = '"type":"'..esc(proto.type)..'"'
-            if proto.crafting_speed then
-                parts[#parts+1] = '"crafting_speed":'..proto.crafting_speed
+            if proto.get_crafting_speed then
+                parts[#parts+1] = '"crafting_speed":'..proto.get_crafting_speed()
             end
             if proto.mining_speed then
                 parts[#parts+1] = '"mining_speed":'..proto.mining_speed

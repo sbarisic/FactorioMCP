@@ -42,6 +42,19 @@ internal sealed class ProductionPlannerService(RconClient rcon)
             local recipe_for = {}
             for name, recipe in pairs(force.recipes) do
                 if recipe.enabled then
+                    -- Skip recycling recipes — prefer direct production
+                    if not string.find(name, "%-recycling$") then
+                        for _, product in pairs(recipe.products) do
+                            if not recipe_for[product.name] then
+                                recipe_for[product.name] = recipe
+                            end
+                        end
+                    end
+                end
+            end
+            -- Second pass: fill in gaps with recycling if no direct recipe exists
+            for name, recipe in pairs(force.recipes) do
+                if recipe.enabled and string.find(name, "%-recycling$") then
                     for _, product in pairs(recipe.products) do
                         if not recipe_for[product.name] then
                             recipe_for[product.name] = recipe
@@ -86,7 +99,7 @@ internal sealed class ProductionPlannerService(RconClient rcon)
 
             local function get_speed(machine_name)
                 local proto = prototypes.entity[machine_name]
-                if proto and proto.crafting_speed then return proto.crafting_speed end
+                if proto and proto.get_crafting_speed then return proto.get_crafting_speed() end
                 return 1.0
             end
 

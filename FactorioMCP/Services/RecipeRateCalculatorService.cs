@@ -48,11 +48,11 @@ internal sealed class RecipeRateCalculatorService(RconClient rcon)
                     rcon.print('{"success":false,"error":"unknown_machine","machine":"'..esc(machine_name)..'"}')
                     return
                 end
-                if not proto.crafting_speed then
+                if not proto.get_crafting_speed then
                     rcon.print('{"success":false,"error":"not_a_crafting_machine","machine":"'..esc(machine_name)..'"}')
                     return
                 end
-                crafting_speed = proto.crafting_speed
+                crafting_speed = proto.get_crafting_speed()
             else
                 local defs = {}
                 defs["crafting"] = "assembling-machine-1"
@@ -70,12 +70,12 @@ internal sealed class RecipeRateCalculatorService(RconClient rcon)
                 machine_name = defs[cat]
                 if machine_name then
                     local mp = prototypes.entity[machine_name]
-                    if mp then crafting_speed = mp.crafting_speed end
+                    if mp and mp.get_crafting_speed then crafting_speed = mp.get_crafting_speed() end
                 else
                     for _, proto in pairs(prototypes.get_entity_filtered{ {filter="crafting-machine"} }) do
                         if proto.crafting_categories and proto.crafting_categories[cat] then
                             machine_name = proto.name
-                            crafting_speed = proto.crafting_speed
+                            if proto.get_crafting_speed then crafting_speed = proto.get_crafting_speed() end
                             break
                         end
                     end
