@@ -110,6 +110,25 @@ Inspect an entity's inventory contents, slot count, and empty slots.
 
 ---
 
+### `GetInventorySummary`
+Get a condensed inventory as item-name:count pairs. Much more compact than `GetInventory` — use this when you just need to know what the player has.
+
+**Returns:** `{ "iron-plate": 50, "coal": 20, ... }`
+
+---
+
+### `EnsureItem`
+Check if the player has enough of an item. If not, reports whether it can be crafted and what ingredients are missing. Does NOT auto-craft.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `itemName` | `string` | e.g. `iron-plate`, `electronic-circuit` |
+| `count` | `int` | Required quantity |
+
+**Returns:** `{ "has_enough", "have", "need", "can_craft", "missing_ingredients": [...] }`
+
+---
+
 ## Building & Mining
 
 ### `PlaceEntity`
@@ -122,7 +141,7 @@ Place an entity from inventory at map coordinates. Validates proximity, inventor
 | `y` | `double` | required | |
 | `direction` | `string` | `"north"` | `north`, `south`, `east`, `west` (and diagonals) |
 
-> **Inserter critical:** `direction` = the DROP side (where items go TO). Pickup is the OPPOSITE side. Always use `PreviewInserterPlacement` first.
+> **Inserter critical:** `direction` = the PICKUP side (where the arm reaches to GRAB items). Drop is ALWAYS on the OPPOSITE side. Think: `direction = where items come FROM`. Always use `PreviewInserterPlacement` first.
 
 > **Belt tip:** `direction` = the way items FLOW (arrow direction). Use `PlanBeltRoute` to calculate a full path.
 
@@ -177,7 +196,7 @@ Preview what an inserter would pick up from and drop to at a given position and 
 |-----------|------|---------|-------------|
 | `x` | `double` | required | Where the inserter would go |
 | `y` | `double` | required | |
-| `direction` | `string` | `"north"` | DROP direction |
+| `direction` | `string` | `"north"` | PICKUP direction (drop is opposite) |
 
 **Returns:** `{ "inserter_position", "direction", "pickup": { "x", "y", "entities": [...] }, "drop": { "x", "y", "entities": [...] }, "can_place" }`
 
@@ -210,6 +229,33 @@ Auto-place an inserter in the 1-tile gap between two adjacent entities. Calculat
 | `destY` | `double` | |
 
 **Returns:** `{ "success": true, "x", "y", "direction", "entity" }`
+
+---
+
+### `PlaceEntitySmart`
+Auto-place an entity near a target position. Searches outward in a spiral for the nearest valid placement. Validates inventory and build distance. Use instead of `PlaceEntity` when you want the backend to pick the best spot.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `entityName` | `string` | required | e.g. `stone-furnace`, `burner-mining-drill` |
+| `nearX` | `double` | required | X coordinate to place near |
+| `nearY` | `double` | required | Y coordinate to place near |
+| `direction` | `string` | `"north"` | Direction the entity faces |
+| `searchRadius` | `double` | `10` | How far from target to search |
+
+**Returns:** `{ "success": true, "entity", "x", "y" }`
+
+---
+
+### `GetAvailableSlots`
+Get available adjacent tile slots around an entity. Checks each perimeter tile for collision, reporting which are free for inserters, belts, or buildings.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `x` | `double` | Entity X |
+| `y` | `double` | Entity Y |
+
+**Returns:** `{ "entity", "x", "y", "slots": [{ "x", "y", "side", "blocked", "blocked_by" }] }`
 
 ---
 
@@ -252,6 +298,17 @@ Inspect entity status, inventory contents, fuel, recipe, health. For inserters, 
 |-----------|------|-------------|
 | `x` | `double` | |
 | `y` | `double` | |
+
+---
+
+### `PickupItems`
+Pick up items dropped on the ground near the player — like holding 'F' in-game.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `radius` | `double` | `10` | Search radius in tiles |
+
+**Returns:** `{ "success", "picked_up": [{ "name", "count" }], "total_items" }`
 
 ---
 
@@ -327,7 +384,7 @@ Directional raycast — returns entities along a compass direction sorted by dis
 ---
 
 ### `FindBuildableArea`
-Find a flat, empty rectangular area for factory placement. Searches outward from player (or center). Ignores resource entities, blocked by buildings and water.
+Find a flat, empty rectangular area for factory placement. Searches outward from player (or center). By default, ore patches block placement to avoid wasting ore — set `allowOrePatches=true` only when placing mining drills.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -336,6 +393,7 @@ Find a flat, empty rectangular area for factory placement. Searches outward from
 | `searchRadius` | `double` | `50` | Max search distance |
 | `centerX` | `double?` | player pos | |
 | `centerY` | `double?` | player pos | |
+| `allowOrePatches` | `bool` | `false` | Allow building on ore (use for mining drills) |
 
 **Returns:** `{ "success", "top_left": { "x", "y" }, "center": { "x", "y" }, "distance" }`
 
@@ -609,6 +667,18 @@ Get prerequisites, effects (recipe unlocks), cost, and science pack requirements
 
 ---
 
+### `PlanCraft`
+Recursively plan a full crafting chain for an item. Expands the recipe tree showing all intermediates and raw materials needed with exact quantities. Uses actual Factorio recipe data.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `item` | `string` | required | e.g. `electronic-circuit`, `automation-science-pack` |
+| `count` | `int` | `1` | Number to craft |
+
+**Returns:** `{ "item", "count", "recipe_tree": { ... }, "raw_materials": [{ "name", "count" }], "player_stock" }`
+
+---
+
 ## Energy & Power
 
 ### `GetElectricNetwork`
@@ -691,6 +761,17 @@ Cancel ghost entities at a position.
 | `x` | `double` | required | |
 | `y` | `double` | required | |
 | `radius` | `double` | `1` | Search radius |
+
+---
+
+### `ValidateGhostPlacements`
+Validate ghost entity placements in an area. Checks each ghost for blocked positions and inserters pointing at nothing useful. Use after placing ghosts to verify the plan before committing real entities.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `radius` | `double` | `50` | Search radius |
+| `centerX` | `double?` | player pos | |
+| `centerY` | `double?` | player pos | |
 
 ---
 
@@ -1042,6 +1123,127 @@ Trace the downstream flow of items from a specific entity using BFS. Follows ins
 | `depth` | `int` | `5` | Maximum hops to follow downstream |
 
 **Returns:** `{ "status", "start_name", "start_x", "start_y", "node_count", "nodes": [{ "name", "type", "x", "y", "depth" }], "edges": [{ "from_name", "from_x", "from_y", "to_name", "to_x", "to_y", "kind" }] }`
+
+---
+
+## Factory Diagnostics
+
+### `FindUnpoweredEntities`
+Find entities with no power or low power within a radius. Diagnose power distribution problems.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `radius` | `double` | `50` | Search radius in tiles |
+
+**Returns:** `{ "status", "radius", "unpowered_count", "entities": [{ "name", "type", "x", "y", "status" }] }`
+
+---
+
+### `FindIdleMachines`
+Find machines that are idle (not working) within a radius. Filters out passive entities (belts, pipes, poles, walls). Use to find bottlenecks.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `radius` | `double` | `50` | Search radius in tiles |
+
+**Returns:** `{ "status", "radius", "idle_count", "machines": [{ "name", "type", "x", "y", "status_reason" }] }`
+
+---
+
+### `FindMissingInputs`
+Check which inputs a furnace or assembler is missing. Inspects fuel, source/input inventories, and output fullness.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `x` | `double` | Machine X |
+| `y` | `double` | Machine Y |
+
+**Returns:** `{ "entity", "x", "y", "missing": [{ "slot", "issue", "have", "need" }] }`
+
+---
+
+## Utility
+
+### `GetReachableEntities`
+Get entities within the player's reach distance, optionally filtered by type. Useful for finding what the player can interact with right now.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `type` | `string?` | none | Optional filter (e.g. `stone-furnace`, `transport-belt`) |
+| `maxDistance` | `double?` | reach dist | Max distance in tiles |
+
+---
+
+### `CountItemInWorld`
+Count how many of an item exist across all nearby containers (chests, furnaces, assemblers) and the player's inventory. Returns a per-location breakdown.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `itemName` | `string` | required | e.g. `iron-plate`, `coal` |
+| `radius` | `double` | `50` | Search radius |
+
+---
+
+### `EstimateTravelTime`
+Estimate walking time to a target position based on straight-line distance and current movement speed.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `x` | `double` | Target X |
+| `y` | `double` | Target Y |
+
+**Returns:** `{ "distance", "speed", "estimated_seconds" }`
+
+---
+
+## Batch Operations
+
+Execute multiple operations in a single MCP call. All process targets sequentially and fail fast on the first error.
+
+### `MineEntityMultiple`
+Mine multiple entities in one call.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `targets` | `string` | JSON array: `[{"x":1,"y":2},{"x":3,"y":4}]` |
+
+**Returns:** `{ "success", "status", "total", "succeeded", "failed", "results": [...] }`
+
+---
+
+### `InspectEntityMultiple`
+Inspect multiple entities in one call.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `targets` | `string` | JSON array: `[{"x":1,"y":2},{"x":3,"y":4}]` |
+
+**Returns:** `{ "success", "status", "total", "succeeded", "failed", "results": [...] }`
+
+---
+
+### `InsertItemsMultiple`
+Insert items into multiple entities in one call. Each target specifies coordinates, item name, count, and optional inventory type.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `targets` | `string` | JSON array: `[{"x":1,"y":2,"item":"coal","count":5},{"x":3,"y":4,"item":"iron-ore","count":10,"inventoryType":"furnace_source"}]` |
+
+**Returns:** `{ "success", "status", "total", "succeeded", "failed", "results": [...] }`
+
+---
+
+### `RefuelEntityMultiple`
+Refuel multiple entities in one call. Walks to each entity and inserts fuel.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `targets` | `string` | required | JSON array: `[{"x":1,"y":2},{"x":3,"y":4,"fuelItem":"wood","count":10}]` |
+| `defaultFuel` | `string` | `"coal"` | Fuel for targets that don't specify one |
+| `defaultCount` | `int` | `5` | Count for targets that don't specify one |
+| `walkTimeoutSeconds` | `double` | `30` | Walk timeout per entity |
+
+**Returns:** `{ "success", "status", "total", "succeeded", "failed", "results": [...] }`
 
 ---
 

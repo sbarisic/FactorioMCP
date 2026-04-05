@@ -200,5 +200,47 @@
     "created_at": "2026-04-04T23:42:21.1511194Z",
     "updated_at": "2026-04-04T23:58:35.6089181Z",
     "completed_at": null
+  },
+  {
+    "id": "ad7b7389",
+    "description": "Build automated coal mining and self-fueling system near the base coal patch, then set up iron and copper smelting",
+    "status": "pending",
+    "steps": [
+      {
+        "description": "Find coal patch near base and plan layout",
+        "status": "pending",
+        "notes": null
+      },
+      {
+        "description": "Place burner mining drills on coal facing toward belt line",
+        "status": "pending",
+        "notes": null
+      },
+      {
+        "description": "Run belt from drill outputs and loop coal back to fuel drills via inserters (self-fueling)",
+        "status": "pending",
+        "notes": null
+      },
+      {
+        "description": "Set up iron ore mining with drills feeding belt to furnaces",
+        "status": "pending",
+        "notes": null
+      },
+      {
+        "description": "Set up copper ore mining similarly",
+        "status": "pending",
+        "notes": null
+      },
+      {
+        "description": "Update KNOWLEDGE_BASE.md with findings",
+        "status": "pending",
+        "notes": null
+      }
+    ],
+    "failure_reason": null,
+    "notes": null,
+    "created_at": "2026-04-05T01:21:56.999066Z",
+    "updated_at": "2026-04-05T01:21:56.9990679Z",
+    "completed_at": null
   }
 ]
