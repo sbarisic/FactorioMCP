@@ -228,7 +228,7 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 
 ### Medium Priority
 
-- [ ] **Condense PROMPT.md** — Rewrite the AI prompt file to be 300 lines max while preserving all essential instructions and context. Prefer high level functions instead of low level primitives, and remove any redundant or obvious information. **(CPX 2)**
+- [x] **Condense PROMPT.md** — Rewrite the AI prompt file to be 300 lines max while preserving all essential instructions and context. Prefer high level functions instead of low level primitives, and remove any redundant or obvious information. **(CPX 2)** ✅ Condensed from 254→206 lines; added 40+ missing tools (production planning, blueprint analysis, flow tracing, batch ops, combat, trains, logistics); reorganized with high-level tools first
 
 ### Low Priority
 
