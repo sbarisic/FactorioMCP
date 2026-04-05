@@ -973,13 +973,16 @@ Take an annotated PNG screenshot of the game world. Draws entity bounding boxes 
 ## Status
 
 ### `GetFactoryStatus`
-Comprehensive factory snapshot in a single call: position, inventory, crafting queue, research, nearby resources, nearby entities, power status, building summary, and active goal.
+Comprehensive factory snapshot in a single call: position, inventory, crafting queue, research, nearby resources, nearby entities, power status, building summary, active goal, and **item flow connections** (inserter-mediated machine-to-machine links and drill outputs, with belt-to-belt transfers filtered out).
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `resourceScanRadius` | `double` | `50` | |
 | `entityScanRadius` | `double` | `20` | |
 | `electricPoleRadius` | `double` | `50` | |
+| `flowSummaryRadius` | `double` | `50` | Radius for item flow connections. Set to 0 to disable. |
+
+**`item_flow` array:** Each entry is `{ "from", "from_x", "from_y", "to", "to_x", "to_y" }` showing a direct item transfer via inserter or drill output. Only connections where at least one side is a machine (not belt-to-belt) are included.
 
 ---
 

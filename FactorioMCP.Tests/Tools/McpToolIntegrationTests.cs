@@ -72,6 +72,7 @@ public class McpToolIntegrationTests
         services.AddSingleton<GameCommandQueue>();
         services.AddSingleton<BeltPlannerService>();
         services.AddSingleton<VisionService>();
+        services.AddSingleton<FlowService>();
 
         var tempPath = Path.Combine(Path.GetTempPath(), $"goals-di-{Guid.NewGuid():N}.json");
         services.AddSingleton(new GoalPlannerService(tempPath));
@@ -96,22 +97,29 @@ public class McpToolIntegrationTests
     public async Task StatusTools_GetFactoryStatus_ReturnsComprehensiveStatus()
     {
         await _goals.SetGoalAsync("Test factory goal", ["Step 1", "Step 2"]);
-        var tools = new StatusTools(_factorio, _buildingMemory, _goals, _queue);
+        var flowService = new FlowService(_rcon);
+        var tools = new StatusTools(_factorio, flowService, _buildingMemory, _goals, _queue);
 
         var result = await tools.GetFactoryStatus(
             resourceScanRadius: 100,
             entityScanRadius: 30,
             electricPoleRadius: 75);
 
-        // Lua script was sent to RCON
-        Assert.Contains("get_main_inventory", _rcon.LastCommand!);
-        Assert.Contains("crafting_queue", _rcon.LastCommand!);
-        Assert.Contains("current_research", _rcon.LastCommand!);
+        // Lua script was sent to RCON (first command is game status, second is flow summary)
+        var gameStatusCmd = _rcon.AllCommands[^2]; // second-to-last is game status
+        Assert.Contains("get_main_inventory", gameStatusCmd);
+        Assert.Contains("crafting_queue", gameStatusCmd);
+        Assert.Contains("current_research", gameStatusCmd);
 
         // Custom radii were forwarded
-        Assert.Contains("100", _rcon.LastCommand!);
-        Assert.Contains("30", _rcon.LastCommand!);
-        Assert.Contains("75", _rcon.LastCommand!);
+        Assert.Contains("100", gameStatusCmd);
+        Assert.Contains("30", gameStatusCmd);
+        Assert.Contains("75", gameStatusCmd);
+
+        // Flow summary was also requested
+        var flowCmd = _rcon.LastCommand!;
+        Assert.Contains("inserter", flowCmd);
+        Assert.Contains("mining-drill", flowCmd);
 
         // Result merges game state with C#-side state
         Assert.Contains("\"building_summary\":", result);

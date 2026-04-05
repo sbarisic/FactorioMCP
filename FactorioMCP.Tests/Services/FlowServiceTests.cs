@@ -287,4 +287,59 @@ public class FlowServiceTests
 
         Assert.Contains("existing_at_position", _rcon.LastCommand!);
     }
+
+    // ── GetFlowSummaryAsync ──────────────────────────────────────────
+
+    [Fact]
+    public async Task GetFlowSummaryAsync_SendsSilentCommand()
+    {
+        await _service.GetFlowSummaryAsync();
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task GetFlowSummaryAsync_ScansInserters()
+    {
+        await _service.GetFlowSummaryAsync(40);
+
+        Assert.Contains("find_entities_filtered", _rcon.LastCommand!);
+        Assert.Contains("inserter", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetFlowSummaryAsync_ScansMiningDrills()
+    {
+        await _service.GetFlowSummaryAsync();
+
+        Assert.Contains("mining-drill", _rcon.LastCommand!);
+        Assert.Contains("drop_target", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetFlowSummaryAsync_FiltersBeltToBelt()
+    {
+        await _service.GetFlowSummaryAsync();
+
+        // Should check belt types to filter out belt-to-belt inserter connections
+        Assert.Contains("belt_types", _rcon.LastCommand!);
+        Assert.Contains("src_belt", _rcon.LastCommand!);
+        Assert.Contains("dst_belt", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task GetFlowSummaryAsync_ThrowsOnZeroRadius()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.GetFlowSummaryAsync(0));
+    }
+
+    [Fact]
+    public async Task GetFlowSummaryAsync_UsesCustomRadius()
+    {
+        await _service.GetFlowSummaryAsync(75);
+
+        Assert.Contains("75", _rcon.LastCommand!);
+    }
 }

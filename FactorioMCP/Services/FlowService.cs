@@ -389,4 +389,74 @@ internal sealed class FlowService(RconClient rcon)
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
+
+    /// <summary>
+    /// Get a compact summary of item flow connections in the area.
+    /// Shows inserter-mediated connections between machines and drill outputs.
+    /// Filters out belt-to-belt inserter transfers to keep output compact.
+    /// Designed for inclusion in factory status snapshots.
+    /// </summary>
+    public Task<string> GetFlowSummaryAsync(double radius = 30, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(radius, 0);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{FactorioService.LuaJsonEscape}}
+            local player = game.connected_players[1]
+            local surface = player.surface
+            local pos = player.position
+            local edges = {}
+            local belt_types = {}
+            belt_types["transport-belt"] = true
+            belt_types["fast-transport-belt"] = true
+            belt_types["express-transport-belt"] = true
+            belt_types["turbo-transport-belt"] = true
+            belt_types["underground-belt"] = true
+            belt_types["splitter"] = true
+            local inserters = surface.find_entities_filtered{type="inserter", position=pos, radius={{radius}}}
+            for _, ins in pairs(inserters) do
+                if ins.valid then
+                    local src, dst
+                    local ok_p, pickup = pcall(function() return ins.pickup_target end)
+                    if ok_p and pickup and pickup.valid then src = pickup end
+                    local ok_d, dpos = pcall(function() return ins.drop_position end)
+                    if ok_d and dpos then
+                        local targets = surface.find_entities_filtered{position=dpos, radius=1.5, limit=5}
+                        for _, tgt in pairs(targets) do
+                            if tgt.valid and tgt ~= ins then dst = tgt break end
+                        end
+                    end
+                    if src and dst then
+                        local src_belt = belt_types[src.type] ~= nil
+                        local dst_belt = belt_types[dst.type] ~= nil
+                        if not (src_belt and dst_belt) then
+                            edges[#edges+1] = '{"from":"'..esc(src.name)..'",'..
+                                '"from_x":'..string.format("%.1f",src.position.x)..','..
+                                '"from_y":'..string.format("%.1f",src.position.y)..','..
+                                '"to":"'..esc(dst.name)..'",'..
+                                '"to_x":'..string.format("%.1f",dst.position.x)..','..
+                                '"to_y":'..string.format("%.1f",dst.position.y)..'}'
+                        end
+                    end
+                end
+            end
+            local drills = surface.find_entities_filtered{type="mining-drill", position=pos, radius={{radius}}}
+            for _, drill in pairs(drills) do
+                if drill.valid then
+                    local ok, dt = pcall(function() return drill.drop_target end)
+                    if ok and dt and dt.valid then
+                        edges[#edges+1] = '{"from":"'..esc(drill.name)..'",'..
+                            '"from_x":'..string.format("%.1f",drill.position.x)..','..
+                            '"from_y":'..string.format("%.1f",drill.position.y)..','..
+                            '"to":"'..esc(dt.name)..'",'..
+                            '"to_x":'..string.format("%.1f",dt.position.x)..','..
+                            '"to_y":'..string.format("%.1f",dt.position.y)..'}'
+                    end
+                end
+            end
+            rcon.print('['..table.concat(edges, ",")..']')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
 }
