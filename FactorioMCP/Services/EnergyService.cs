@@ -151,4 +151,70 @@ internal sealed class EnergyService(RconClient rcon)
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
+
+    /// <summary>
+    /// Map the electric pole connectivity graph within a radius of the player.
+    /// Groups poles by electric_network_id and lists which entities are powered
+    /// by each network segment. Useful for diagnosing coverage gaps and planning
+    /// power expansion.
+    /// </summary>
+    public Task<string> GetPowerNetworkTopologyAsync(double radius = 80, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(radius, 0);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{FactorioService.LuaJsonEscape}}
+            local player = game.connected_players[1]
+            local surface = player.surface
+            local pos = player.position
+            -- Collect all electric poles in radius
+            local poles = surface.find_entities_filtered{type="electric-pole", position=pos, radius={{radius}}}
+            -- Group poles by network id and build neighbour adjacency
+            local networks = {}
+            for _, pole in pairs(poles) do
+                local nid = pole.electric_network_id
+                if nid then
+                    if not networks[nid] then
+                        networks[nid] = {}
+                        networks[nid].poles = {}
+                        networks[nid].consumers = {}
+                        networks[nid].producers = {}
+                    end
+                    local nb = {}
+                    for _, n in pairs(pole.neighbours.copper) do
+                        if n.electric_network_id == nid then
+                            nb[#nb+1] = '{"name":"'..esc(n.name)..'","x":'..string.format("%.1f",n.position.x)..',"y":'..string.format("%.1f",n.position.y)..'}'
+                        end
+                    end
+                    networks[nid].poles[#networks[nid].poles+1] = '{"name":"'..esc(pole.name)..'","x":'..string.format("%.1f",pole.position.x)..',"y":'..string.format("%.1f",pole.position.y)..',"neighbours":['..table.concat(nb, ",")..']}'
+                end
+            end
+            -- Find all powered entities in radius (non-pole electric entities)
+            local ents = surface.find_entities_filtered{position=pos, radius={{radius}}}
+            for _, e in pairs(ents) do
+                if e.valid and e.type ~= "electric-pole" and e.type ~= "resource" and e.type ~= "item-entity" then
+                    local nid = e.electric_network_id
+                    if nid and networks[nid] then
+                        local connected = (pcall(function() return e.is_connected_to_electric_network() end) and e.is_connected_to_electric_network()) and true or false
+                        local entry = '{"name":"'..esc(e.name)..'","type":"'..esc(e.type)..'","x":'..string.format("%.1f",e.position.x)..',"y":'..string.format("%.1f",e.position.y)..',"connected":'..tostring(connected)..'}'
+                        -- Distinguish producers (generators) from consumers
+                        local ok, gen = pcall(function() return e.energy_generated_last_tick end)
+                        if ok and gen and gen > 0 then
+                            networks[nid].producers[#networks[nid].producers+1] = entry
+                        else
+                            networks[nid].consumers[#networks[nid].consumers+1] = entry
+                        end
+                    end
+                end
+            end
+            -- Serialize networks
+            local net_parts = {}
+            for nid, net in pairs(networks) do
+                net_parts[#net_parts+1] = '{"network_id":'..nid..',"pole_count":'..#net.poles..',"poles":['..table.concat(net.poles, ",")..'],"producer_count":'..#net.producers..',"producers":['..table.concat(net.producers, ",")..'],"consumer_count":'..#net.consumers..',"consumers":['..table.concat(net.consumers, ",")..']}'
+            end
+            rcon.print('{"status":"ok","network_count":'..#net_parts..',"radius":'..string.format("%.1f", {{radius}})..',"networks":['..table.concat(net_parts, ",")..']}'  )
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
 }

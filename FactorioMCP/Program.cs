@@ -20,6 +20,10 @@ builder.Services
     .AddSingleton<BeltPlannerService>()
     .AddSingleton<MiningService>()
     .AddSingleton<VisionService>()
+    .AddSingleton<CombatService>()
+    .AddSingleton<TrainService>()
+    .AddSingleton<LogisticsService>()
+    .AddSingleton<FlowService>()
     .AddSingleton<GameCommandQueue>()
     .AddHostedService<RconConnectionService>()
     .AddMcpServer(options =>
