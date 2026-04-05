@@ -42,6 +42,7 @@ Items completed from the [TODO list](TODO.md).
 - [x] **Entity Prototype Query (CPX 1)** — `GetEntityPrototype` MCP tool in `WorldTools.cs` and `GetEntityPrototypeAsync` in `FactorioService.World.cs`. Queries `prototypes.entity[name]` for tile_width, tile_height, max_health, type, and optional crafting_speed, mining_speed, energy_usage, collision_box. 12 unit tests.
 - [x] **Batch Ghost Placement (CPX 2)** — `PlaceGhostBatch` MCP tool in `BlueprintTools.cs` and `PlaceGhostBatchAsync` in `BlueprintService.cs`. Places N ghosts in a single RCON call via Lua `for` loop over JSON array entries. Returns placed/skipped counts and per-entry errors. 10 unit tests.
 - [x] **Area Occupancy Grid Query (CPX 2)** — `GetAreaOccupancy` MCP tool in `WorldTools.cs` and `GetAreaOccupancyAsync` in `FactorioService.World.cs`. Returns per-tile `{x, y, blocked, entity_name?, water?}` array for a rectangular area. Excludes resources from blocking, detects water tiles, limits to 10,000 tiles max. 9 unit tests.
+- [x] **Blueprint Production Throughput Analysis (CPX 3)** — `AnalyzeBlueprintProduction` MCP tool in `BlueprintTools.cs` and `AnalyzeBlueprintProductionAsync` in `BlueprintAnalysisService.cs`. Fetches recipe and machine prototype data via single RCON call for all unique recipes/machines in blueprint. Calculates per-recipe-group throughput, item balance (surplus/deficit), inserter bottleneck detection (capacity vs demand), and belt tier recommendations. 11 unit tests.
 
 ---
 

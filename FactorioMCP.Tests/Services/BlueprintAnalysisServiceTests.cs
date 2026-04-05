@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FactorioMCP.Rcon;
 using FactorioMCP.Services;
 using Xunit;
 
@@ -7,6 +8,7 @@ namespace FactorioMCP.Tests.Services;
 public class BlueprintAnalysisServiceTests
 {
     private readonly BlueprintCodecService _codec = new();
+    private readonly CapturingRconClient _rcon = new();
     private readonly BlueprintAnalysisService _service;
 
     // User-provided blueprint string (may be corrupt from copy-paste — tests should be resilient)
@@ -37,7 +39,22 @@ public class BlueprintAnalysisServiceTests
 
     public BlueprintAnalysisServiceTests()
     {
-        _service = new BlueprintAnalysisService(_codec);
+        _service = new BlueprintAnalysisService(_codec, _rcon);
+    }
+
+    // ── AllCommands_UseSilentCommandPrefix ─────────────────────────────
+
+    [Fact]
+    public async Task AllCommands_UseSilentCommandPrefix()
+    {
+        var capturingRcon = new CapturingRconClient();
+        var service = new BlueprintAnalysisService(_codec, capturingRcon);
+        var bp = MakeSmelterBlueprintWithRecipe();
+
+        await service.AnalyzeBlueprintProductionAsync(bp);
+
+        Assert.Single(capturingRcon.AllCommands);
+        Assert.All(capturingRcon.AllCommands, cmd => Assert.StartsWith("/silent-command ", cmd));
     }
 
     [Fact]
@@ -377,5 +394,203 @@ public class BlueprintAnalysisServiceTests
         using var doc = JsonDocument.Parse(result);
         Assert.True(doc.RootElement.GetProperty("success").GetBoolean());
         Assert.Equal(0, doc.RootElement.GetProperty("entity_count").GetInt32());
+    }
+
+    // ── AnalyzeBlueprintProductionAsync tests ──────────────────────────
+
+    // Helper to make a smelter blueprint with recipe set on the furnace
+    private static string MakeSmelterBlueprintWithRecipe()
+    {
+        var codec = new BlueprintCodecService();
+        var json = @"{""blueprint"":{""item"":""blueprint"",""label"":""Smelter Line"",""entities"":[
+            {""entity_number"":1,""name"":""transport-belt"",""position"":{""x"":-1.5,""y"":0.5},""direction"":4},
+            {""entity_number"":2,""name"":""inserter"",""position"":{""x"":-0.5,""y"":0.5},""direction"":2},
+            {""entity_number"":3,""name"":""stone-furnace"",""position"":{""x"":1,""y"":1},""recipe"":""iron-plate""},
+            {""entity_number"":4,""name"":""inserter"",""position"":{""x"":2.5,""y"":0.5},""direction"":2},
+            {""entity_number"":5,""name"":""transport-belt"",""position"":{""x"":3.5,""y"":0.5},""direction"":4}
+        ],""version"":562949954076672}}";
+        var result = codec.EncodeBlueprintString(json);
+        using var doc = JsonDocument.Parse(result);
+        return doc.RootElement.GetProperty("blueprint_string").GetString()!;
+    }
+
+    private static string MakeRconRecipeResponse()
+    {
+        return @"{""recipes"":[{""name"":""iron-plate"",""energy"":3.2000,""ings"":[{""n"":""iron-ore"",""a"":1}],""prods"":[{""n"":""iron-plate"",""a"":1.0000}]}],""machines"":[{""name"":""stone-furnace"",""speed"":1.0000}]}";
+    }
+
+    [Fact]
+    public async Task AnalyzeBlueprintProduction_ReturnsSuccess()
+    {
+        var scriptedRcon = new ScriptedRconClient([MakeRconRecipeResponse()]);
+        var service = new BlueprintAnalysisService(_codec, scriptedRcon);
+        var bp = MakeSmelterBlueprintWithRecipe();
+
+        var result = await service.AnalyzeBlueprintProductionAsync(bp);
+        using var doc = JsonDocument.Parse(result);
+        Assert.True(doc.RootElement.GetProperty("success").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AnalyzeBlueprintProduction_ReportsRecipeGroups()
+    {
+        var scriptedRcon = new ScriptedRconClient([MakeRconRecipeResponse()]);
+        var service = new BlueprintAnalysisService(_codec, scriptedRcon);
+        var bp = MakeSmelterBlueprintWithRecipe();
+
+        var result = await service.AnalyzeBlueprintProductionAsync(bp);
+        using var doc = JsonDocument.Parse(result);
+        var root = doc.RootElement;
+
+        Assert.Equal(1, root.GetProperty("machines_with_recipes").GetInt32());
+        var groups = root.GetProperty("recipe_groups");
+        Assert.Equal(1, groups.GetArrayLength());
+
+        var group = groups[0];
+        Assert.Equal("iron-plate", group.GetProperty("recipe").GetString());
+        Assert.Equal("stone-furnace", group.GetProperty("machine_type").GetString());
+        Assert.Equal(1, group.GetProperty("machine_count").GetInt32());
+    }
+
+    [Fact]
+    public async Task AnalyzeBlueprintProduction_CalculatesItemBalance()
+    {
+        var scriptedRcon = new ScriptedRconClient([MakeRconRecipeResponse()]);
+        var service = new BlueprintAnalysisService(_codec, scriptedRcon);
+        var bp = MakeSmelterBlueprintWithRecipe();
+
+        var result = await service.AnalyzeBlueprintProductionAsync(bp);
+        using var doc = JsonDocument.Parse(result);
+        var balance = doc.RootElement.GetProperty("item_balance");
+
+        // iron-ore is consumed but not produced → deficit
+        Assert.True(balance.TryGetProperty("iron-ore", out var oreBalance));
+        Assert.Equal("deficit", oreBalance.GetProperty("status").GetString());
+
+        // iron-plate is produced but not consumed → surplus
+        Assert.True(balance.TryGetProperty("iron-plate", out var plateBalance));
+        Assert.Equal("surplus", plateBalance.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task AnalyzeBlueprintProduction_ReportsBeltAnalysis()
+    {
+        var scriptedRcon = new ScriptedRconClient([MakeRconRecipeResponse()]);
+        var service = new BlueprintAnalysisService(_codec, scriptedRcon);
+        var bp = MakeSmelterBlueprintWithRecipe();
+
+        var result = await service.AnalyzeBlueprintProductionAsync(bp);
+        using var doc = JsonDocument.Parse(result);
+        var beltAnalysis = doc.RootElement.GetProperty("belt_analysis");
+        Assert.True(beltAnalysis.GetArrayLength() > 0);
+    }
+
+    [Fact]
+    public async Task AnalyzeBlueprintProduction_DetectsInserterBottleneck()
+    {
+        // Create blueprint with a fast machine but slow inserter → bottleneck
+        var codec = new BlueprintCodecService();
+        var json = @"{""blueprint"":{""item"":""blueprint"",""entities"":[
+            {""entity_number"":1,""name"":""transport-belt"",""position"":{""x"":-1.5,""y"":0.5},""direction"":4},
+            {""entity_number"":2,""name"":""burner-inserter"",""position"":{""x"":-0.5,""y"":0.5},""direction"":2},
+            {""entity_number"":3,""name"":""assembling-machine-3"",""position"":{""x"":2,""y"":1},""recipe"":""iron-gear-wheel""},
+            {""entity_number"":4,""name"":""burner-inserter"",""position"":{""x"":4.5,""y"":0.5},""direction"":2},
+            {""entity_number"":5,""name"":""transport-belt"",""position"":{""x"":5.5,""y"":0.5},""direction"":4}
+        ],""version"":562949954076672}}";
+        var encResult = codec.EncodeBlueprintString(json);
+        using var encDoc = JsonDocument.Parse(encResult);
+        var bp = encDoc.RootElement.GetProperty("blueprint_string").GetString()!;
+
+        // Machine is very fast (speed=1.25) with short recipe time (0.5s) → needs 2.5 items/s
+        // Burner inserter can only do 0.6 items/s → bottleneck
+        var rconResponse = @"{""recipes"":[{""name"":""iron-gear-wheel"",""energy"":0.5000,""ings"":[{""n"":""iron-plate"",""a"":2}],""prods"":[{""n"":""iron-gear-wheel"",""a"":1.0000}]}],""machines"":[{""name"":""assembling-machine-3"",""speed"":1.2500}]}";
+        var scriptedRcon = new ScriptedRconClient([rconResponse]);
+        var service = new BlueprintAnalysisService(codec, scriptedRcon);
+
+        var result = await service.AnalyzeBlueprintProductionAsync(bp);
+        using var doc = JsonDocument.Parse(result);
+        var bottlenecks = doc.RootElement.GetProperty("inserter_bottlenecks");
+        Assert.True(bottlenecks.GetArrayLength() > 0);
+        Assert.Contains("inserter_bottleneck", bottlenecks[0].GetProperty("issue").GetString());
+    }
+
+    [Fact]
+    public async Task AnalyzeBlueprintProduction_EmptyBlueprint_ReportsNoEntities()
+    {
+        var json = @"{""blueprint"":{""item"":""blueprint"",""entities"":[],""version"":562949954076672}}";
+        var encResult = _codec.EncodeBlueprintString(json);
+        using var encDoc = JsonDocument.Parse(encResult);
+        var bp = encDoc.RootElement.GetProperty("blueprint_string").GetString()!;
+
+        var result = await _service.AnalyzeBlueprintProductionAsync(bp);
+        using var doc = JsonDocument.Parse(result);
+        Assert.True(doc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal(0, doc.RootElement.GetProperty("entity_count").GetInt32());
+    }
+
+    [Fact]
+    public async Task AnalyzeBlueprintProduction_NoRecipeMachines_NoRecipeGroups()
+    {
+        // Blueprint with only belts — no machines with recipes
+        var result = await _service.AnalyzeBlueprintProductionAsync(GoodBlueprint);
+        using var doc = JsonDocument.Parse(result);
+        Assert.True(doc.RootElement.GetProperty("success").GetBoolean());
+        // Furnace without recipe set → not counted
+        Assert.Equal(0, doc.RootElement.GetProperty("machines_with_recipes").GetInt32());
+    }
+
+    [Fact]
+    public async Task AnalyzeBlueprintProduction_MultipleRecipes_GroupedCorrectly()
+    {
+        var codec = new BlueprintCodecService();
+        var json = @"{""blueprint"":{""item"":""blueprint"",""entities"":[
+            {""entity_number"":1,""name"":""stone-furnace"",""position"":{""x"":1,""y"":1},""recipe"":""iron-plate""},
+            {""entity_number"":2,""name"":""stone-furnace"",""position"":{""x"":4,""y"":1},""recipe"":""iron-plate""},
+            {""entity_number"":3,""name"":""stone-furnace"",""position"":{""x"":7,""y"":1},""recipe"":""copper-plate""}
+        ],""version"":562949954076672}}";
+        var encResult = codec.EncodeBlueprintString(json);
+        using var encDoc = JsonDocument.Parse(encResult);
+        var bp = encDoc.RootElement.GetProperty("blueprint_string").GetString()!;
+
+        var rconResponse = @"{""recipes"":[{""name"":""iron-plate"",""energy"":3.2000,""ings"":[{""n"":""iron-ore"",""a"":1}],""prods"":[{""n"":""iron-plate"",""a"":1.0000}]},{""name"":""copper-plate"",""energy"":3.2000,""ings"":[{""n"":""copper-ore"",""a"":1}],""prods"":[{""n"":""copper-plate"",""a"":1.0000}]}],""machines"":[{""name"":""stone-furnace"",""speed"":1.0000}]}";
+        var scriptedRcon = new ScriptedRconClient([rconResponse]);
+        var service = new BlueprintAnalysisService(codec, scriptedRcon);
+
+        var result = await service.AnalyzeBlueprintProductionAsync(bp);
+        using var doc = JsonDocument.Parse(result);
+
+        var groups = doc.RootElement.GetProperty("recipe_groups");
+        Assert.Equal(2, groups.GetArrayLength());
+
+        // iron-plate group should have 2 machines
+        var ironGroup = groups.EnumerateArray()
+            .First(g => g.GetProperty("recipe").GetString() == "iron-plate");
+        Assert.Equal(2, ironGroup.GetProperty("machine_count").GetInt32());
+    }
+
+    [Fact]
+    public async Task AnalyzeBlueprintProduction_InvalidString_ReturnsError()
+    {
+        var result = await _service.AnalyzeBlueprintProductionAsync("invalid");
+        using var doc = JsonDocument.Parse(result);
+        Assert.False(doc.RootElement.GetProperty("success").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AnalyzeBlueprintProduction_RecommendsBeltTier()
+    {
+        var scriptedRcon = new ScriptedRconClient([MakeRconRecipeResponse()]);
+        var service = new BlueprintAnalysisService(_codec, scriptedRcon);
+        var bp = MakeSmelterBlueprintWithRecipe();
+
+        var result = await service.AnalyzeBlueprintProductionAsync(bp);
+        using var doc = JsonDocument.Parse(result);
+        var beltAnalysis = doc.RootElement.GetProperty("belt_analysis");
+
+        // Find the recommendation entry
+        var recommendation = beltAnalysis.EnumerateArray()
+            .FirstOrDefault(b => b.GetProperty("belt_type").GetString() == "recommendation");
+        Assert.NotEqual(default, recommendation);
+        Assert.True(recommendation.TryGetProperty("recommended_belt", out _));
     }
 }

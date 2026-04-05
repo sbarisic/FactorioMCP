@@ -1,15 +1,17 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using FactorioMCP.Rcon;
 
 namespace FactorioMCP.Services;
 
 /// <summary>
-/// Pure C# service for analyzing decoded blueprints offline — no RCON required.
+/// Service for analyzing decoded blueprints — layout analysis is pure C#,
+/// production throughput analysis requires RCON for recipe data.
 /// Builds flow graphs from entity positions/directions, identifies inserter connections,
-/// traces belt chains, and reports layout issues.
-/// Works entirely from the blueprint JSON data.
+/// traces belt chains, reports layout issues, and calculates production throughput.
 /// </summary>
-internal sealed class BlueprintAnalysisService(BlueprintCodecService codec)
+internal sealed class BlueprintAnalysisService(BlueprintCodecService codec, RconClient rcon)
 {
     // Entity size in tiles (width, height) for bounding-box hit-testing.
     // Positions in blueprints are always the center of the entity.
@@ -341,6 +343,381 @@ internal sealed class BlueprintAnalysisService(BlueprintCodecService codec)
             nodes = traceNodes,
             edges = traceEdges
         }, new JsonSerializerOptions { WriteIndented = false });
+    }
+
+    // Inserter throughput in items/second (approximate, without bonuses)
+    private static readonly Dictionary<string, double> InserterThroughput = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["burner-inserter"] = 0.6,
+        ["inserter"] = 0.83,
+        ["long-handed-inserter"] = 1.2,
+        ["fast-inserter"] = 2.31,
+        ["bulk-inserter"] = 4.62,
+        ["stack-inserter"] = 4.62,
+    };
+
+    // Belt throughput in items/second (one lane = half, both lanes = full)
+    private static readonly Dictionary<string, double> BeltThroughput = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["transport-belt"] = 15.0,
+        ["fast-transport-belt"] = 30.0,
+        ["express-transport-belt"] = 45.0,
+        ["turbo-transport-belt"] = 60.0,
+    };
+
+    /// <summary>
+    /// Analyze a blueprint's production throughput using RCON recipe data.
+    /// For each machine with a recipe, fetches crafting speed and recipe details,
+    /// calculates per-machine output rates, identifies bottlenecks between
+    /// inserter capacity and machine throughput, and reports belt tier requirements.
+    /// </summary>
+    public async Task<string> AnalyzeBlueprintProductionAsync(
+        string blueprintString,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(blueprintString);
+
+        var decoded = codec.DecodeBlueprintString(blueprintString);
+        using var decodedDoc = JsonDocument.Parse(decoded);
+        var decodedRoot = decodedDoc.RootElement;
+
+        if (decodedRoot.TryGetProperty("success", out var s) && !s.GetBoolean())
+            return decoded;
+
+        if (decodedRoot.TryGetProperty("type", out var t) && t.GetString() != "blueprint")
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = "not_a_blueprint",
+                message = $"Production analysis only works on single blueprints, got '{t.GetString()}'"
+            });
+
+        if (!decodedRoot.TryGetProperty("raw_json", out var rawJsonEl))
+            return JsonSerializer.Serialize(new { success = false, error = "no_raw_json" });
+
+        using var bpDoc = JsonDocument.Parse(rawJsonEl.GetString()!);
+        if (!bpDoc.RootElement.TryGetProperty("blueprint", out var bp))
+            return JsonSerializer.Serialize(new { success = false, error = "no_blueprint_key" });
+
+        var entities = ParseEntities(bp);
+        if (entities.Count == 0)
+            return JsonSerializer.Serialize(new { success = true, entity_count = 0, message = "No entities to analyze" });
+
+        var label = bp.TryGetProperty("label", out var lbl) ? lbl.GetString() : null;
+        var edges = BuildFlowGraph(entities);
+
+        // Find machines with recipes
+        var machinesWithRecipes = entities
+            .Where(e => e.Recipe is not null && IsMachine(e.Name))
+            .ToList();
+
+        // Find unique recipes and machine types
+        var uniqueRecipes = machinesWithRecipes
+            .Select(m => m.Recipe!)
+            .Distinct()
+            .ToList();
+
+        var uniqueMachineTypes = machinesWithRecipes
+            .Select(m => m.Name)
+            .Distinct()
+            .ToList();
+
+        // Fetch all recipe and machine data in one RCON call
+        var recipeData = new Dictionary<string, RecipeInfo>();
+        var machineData = new Dictionary<string, double>();
+
+        if (uniqueRecipes.Count > 0 || uniqueMachineTypes.Count > 0)
+        {
+            var luaResult = await FetchRecipeAndMachineDataAsync(
+                uniqueRecipes, uniqueMachineTypes, cancellationToken);
+            ParseRecipeAndMachineData(luaResult, recipeData, machineData);
+        }
+
+        // Track total production and consumption per item
+        var itemProduction = new Dictionary<string, double>();
+        var itemConsumption = new Dictionary<string, double>();
+
+        // Calculate per-recipe group aggregate rates
+        var recipeGroups = machinesWithRecipes
+            .GroupBy(m => m.Recipe!)
+            .Select(g =>
+            {
+                var recipe = g.Key;
+                int count = g.Count();
+                if (!recipeData.TryGetValue(recipe, out var rInfo))
+                    return (object)new { recipe, machine_count = count, error = "recipe_data_unavailable" };
+
+                var machineName = g.First().Name;
+                double craftingSpeed = machineData.GetValueOrDefault(machineName, 1.0);
+                double craftsPerSecond = craftingSpeed / rInfo.Energy;
+                double totalCraftsPerSecond = craftsPerSecond * count;
+
+                foreach (var (name, amount) in rInfo.Products)
+                    itemProduction[name] = itemProduction.GetValueOrDefault(name) + amount * totalCraftsPerSecond;
+
+                foreach (var (name, amount) in rInfo.Ingredients)
+                    itemConsumption[name] = itemConsumption.GetValueOrDefault(name) + amount * totalCraftsPerSecond;
+
+                return (object)new
+                {
+                    recipe,
+                    machine_type = machineName,
+                    machine_count = count,
+                    crafts_per_second = Math.Round(totalCraftsPerSecond, 4),
+                    outputs = rInfo.Products.Select(p => new
+                    {
+                        name = p.Name,
+                        total_per_second = Math.Round(p.Amount * totalCraftsPerSecond, 4)
+                    }),
+                    inputs = rInfo.Ingredients.Select(i => new
+                    {
+                        name = i.Name,
+                        total_per_second = Math.Round(i.Amount * totalCraftsPerSecond, 4)
+                    })
+                };
+            })
+            .ToList();
+
+        // Analyze inserter bottlenecks
+        var inserterBottlenecks = AnalyzeInserterBottlenecks(entities, edges, recipeData, machineData);
+
+        // Analyze belt capacity
+        var beltAnalysis = AnalyzeBeltCapacity(entities, itemProduction, itemConsumption);
+
+        // Net item balance
+        var itemBalance = new Dictionary<string, object>();
+        var allItems = itemProduction.Keys.Union(itemConsumption.Keys);
+        foreach (var item in allItems)
+        {
+            double prod = itemProduction.GetValueOrDefault(item);
+            double cons = itemConsumption.GetValueOrDefault(item);
+            itemBalance[item] = new
+            {
+                produced = Math.Round(prod, 4),
+                consumed = Math.Round(cons, 4),
+                net = Math.Round(prod - cons, 4),
+                status = prod > cons + 0.001 ? "surplus" : cons > prod + 0.001 ? "deficit" : "balanced"
+            };
+        }
+
+        return JsonSerializer.Serialize(new
+        {
+            success = true,
+            label,
+            entity_count = entities.Count,
+            machines_with_recipes = machinesWithRecipes.Count,
+            recipe_groups = recipeGroups,
+            item_balance = itemBalance,
+            inserter_bottlenecks = inserterBottlenecks,
+            belt_analysis = beltAnalysis
+        }, new JsonSerializerOptions { WriteIndented = false });
+    }
+
+    private record RecipeInfo(
+        double Energy,
+        List<(string Name, double Amount)> Ingredients,
+        List<(string Name, double Amount)> Products);
+
+    private async Task<string> FetchRecipeAndMachineDataAsync(
+        List<string> recipes,
+        List<string> machineTypes,
+        CancellationToken cancellationToken)
+    {
+        var recipeList = string.Join(",", recipes.Select(r =>
+            $"\"{r.Replace("\\", "\\\\").Replace("\"", "\\\"")}\""));
+        var machineList = string.Join(",", machineTypes.Select(m =>
+            $"\"{m.Replace("\\", "\\\\").Replace("\"", "\\\"")}\""));
+
+        var lua = $$"""
+            {{FactorioService.LuaJsonEscape}}
+            local force = game.connected_players[1].force
+            local recipe_names = {{{recipeList}}}
+            local machine_names = {{{machineList}}}
+            local recipes = {}
+            for _, rn in pairs(recipe_names) do
+                local r = force.recipes[rn]
+                if r then
+                    local ings = {}
+                    for _, i in pairs(r.ingredients) do
+                        ings[#ings+1] = '{"n":"'..esc(i.name)..'","a":'..i.amount..'}'
+                    end
+                    local prods = {}
+                    for _, p in pairs(r.products) do
+                        local amt = p.amount or ((p.amount_min + p.amount_max) / 2)
+                        local prob = p.probability or 1
+                        prods[#prods+1] = '{"n":"'..esc(p.name)..'","a":'..string.format("%.4f", amt * prob)..'}'
+                    end
+                    recipes[#recipes+1] = '{"name":"'..esc(rn)..'","energy":'..string.format("%.4f", r.energy)..',"ings":['..table.concat(ings,",")..'],"prods":['..table.concat(prods,",")..']}'
+                end
+            end
+            local machines = {}
+            for _, mn in pairs(machine_names) do
+                local p = prototypes.entity[mn]
+                if p and p.get_crafting_speed then
+                    machines[#machines+1] = '{"name":"'..esc(mn)..'","speed":'..string.format("%.4f", p.get_crafting_speed())..'}'
+                end
+            end
+            rcon.print('{"recipes":['..table.concat(recipes,",")..'],"machines":['..table.concat(machines,",")..']}'  )
+            """;
+
+        return await rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    private static void ParseRecipeAndMachineData(
+        string luaResult,
+        Dictionary<string, RecipeInfo> recipeData,
+        Dictionary<string, double> machineData)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(luaResult);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("recipes", out var recipesEl))
+            {
+                foreach (var r in recipesEl.EnumerateArray())
+                {
+                    var name = r.GetProperty("name").GetString()!;
+                    var energy = r.GetProperty("energy").GetDouble();
+                    var ingredients = new List<(string, double)>();
+                    var products = new List<(string, double)>();
+
+                    foreach (var i in r.GetProperty("ings").EnumerateArray())
+                        ingredients.Add((i.GetProperty("n").GetString()!, i.GetProperty("a").GetDouble()));
+
+                    foreach (var p in r.GetProperty("prods").EnumerateArray())
+                        products.Add((p.GetProperty("n").GetString()!, p.GetProperty("a").GetDouble()));
+
+                    recipeData[name] = new RecipeInfo(energy, ingredients, products);
+                }
+            }
+
+            if (root.TryGetProperty("machines", out var machinesEl))
+            {
+                foreach (var m in machinesEl.EnumerateArray())
+                {
+                    var name = m.GetProperty("name").GetString()!;
+                    var speed = m.GetProperty("speed").GetDouble();
+                    machineData[name] = speed;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // If RCON response is malformed, skip production data
+        }
+    }
+
+    private static List<object> AnalyzeInserterBottlenecks(
+        List<BpEntity> entities,
+        List<FlowEdge> edges,
+        Dictionary<string, RecipeInfo> recipeData,
+        Dictionary<string, double> machineData)
+    {
+        var bottlenecks = new List<object>();
+
+        foreach (var entity in entities)
+        {
+            if (!InserterTypes.Contains(entity.Name)) continue;
+            if (!InserterThroughput.TryGetValue(entity.Name, out var inserterRate)) continue;
+
+            // Find the machine this inserter feeds into (drop target)
+            var dropEdge = edges.FirstOrDefault(e =>
+                e.FromNum == entity.Number && e.Type == "inserter_drop");
+            if (dropEdge is null) continue;
+
+            var targetMachine = entities.FirstOrDefault(e => e.Number == dropEdge.ToNum);
+            if (targetMachine is null || !IsMachine(targetMachine.Name)) continue;
+            if (targetMachine.Recipe is null) continue;
+            if (!recipeData.TryGetValue(targetMachine.Recipe, out var rInfo)) continue;
+
+            double craftingSpeed = machineData.GetValueOrDefault(targetMachine.Name, 1.0);
+            double craftsPerSecond = craftingSpeed / rInfo.Energy;
+
+            // Total input demand for the machine
+            double totalInputRate = rInfo.Ingredients.Sum(i => i.Amount * craftsPerSecond);
+
+            // Count how many inserters feed this machine
+            int inserterCount = edges.Count(e =>
+                e.ToNum == targetMachine.Number && e.Type == "inserter_drop");
+
+            double availableRate = inserterRate * inserterCount;
+
+            if (totalInputRate > availableRate * 1.05) // 5% tolerance
+            {
+                bottlenecks.Add(new
+                {
+                    machine_entity = targetMachine.Number,
+                    machine_name = targetMachine.Name,
+                    recipe = targetMachine.Recipe,
+                    input_demand = Math.Round(totalInputRate, 4),
+                    inserter_capacity = Math.Round(availableRate, 4),
+                    inserter_count = inserterCount,
+                    inserter_type = entity.Name,
+                    issue = "inserter_bottleneck",
+                    message = $"Machine needs {totalInputRate:F2} items/s but {inserterCount}x {entity.Name} only provides {availableRate:F2} items/s"
+                });
+            }
+        }
+
+        // Deduplicate by machine entity number
+        return bottlenecks
+            .GroupBy(b => ((dynamic)b).machine_entity)
+            .Select(g => g.First())
+            .ToList();
+    }
+
+    private static List<object> AnalyzeBeltCapacity(
+        List<BpEntity> entities,
+        Dictionary<string, double> itemProduction,
+        Dictionary<string, double> itemConsumption)
+    {
+        var analysis = new List<object>();
+
+        var beltTypes = entities
+            .Where(e => BeltThroughput.ContainsKey(e.Name))
+            .GroupBy(e => e.Name)
+            .ToList();
+
+        double totalThroughputNeeded = Math.Max(
+            itemProduction.Values.DefaultIfEmpty().Sum(),
+            itemConsumption.Values.DefaultIfEmpty().Sum());
+
+        foreach (var group in beltTypes)
+        {
+            double perBeltCapacity = BeltThroughput[group.Key];
+            analysis.Add(new
+            {
+                belt_type = group.Key,
+                count = group.Count(),
+                capacity_per_belt = perBeltCapacity,
+                total_throughput_needed = Math.Round(totalThroughputNeeded, 4)
+            });
+        }
+
+        if (itemProduction.Count > 0 || itemConsumption.Count > 0)
+        {
+            double maxSingleItemRate = Math.Max(
+                itemProduction.Count > 0 ? itemProduction.Values.Max() : 0,
+                itemConsumption.Count > 0 ? itemConsumption.Values.Max() : 0);
+
+            string recommendedBelt = maxSingleItemRate switch
+            {
+                <= 15 => "transport-belt",
+                <= 30 => "fast-transport-belt",
+                <= 45 => "express-transport-belt",
+                _ => "turbo-transport-belt"
+            };
+
+            analysis.Add(new
+            {
+                belt_type = "recommendation",
+                max_single_item_rate = Math.Round(maxSingleItemRate, 4),
+                recommended_belt = recommendedBelt
+            });
+        }
+
+        return analysis;
     }
 
     // ── Internal types ──────────────────────────────────────────────────

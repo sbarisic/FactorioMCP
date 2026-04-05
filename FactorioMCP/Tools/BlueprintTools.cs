@@ -216,4 +216,21 @@ internal sealed class BlueprintTools(BlueprintService blueprints, BlueprintCodec
             _ => Task.FromResult(analysis.TraceBlueprintFlow(blueprintString, startEntityNumber, maxDepth)),
             cancellationToken);
     }
+
+    [McpServerTool, Description(
+        "Analyze a blueprint's production throughput using live recipe data from the game. " +
+        "Calculates per-machine output rates, total item production/consumption balance, " +
+        "identifies inserter bottlenecks (where inserter throughput < machine demand), " +
+        "and recommends belt tiers based on throughput requirements. " +
+        "Requires a running Factorio game for recipe lookups. " +
+        "Use this to validate that a blueprint's production chain is balanced.")]
+    public Task<string> AnalyzeBlueprintProduction(
+        [Description("The blueprint string to analyze (starts with '0', base64-encoded)")]
+        string blueprintString,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(AnalyzeBlueprintProduction),
+            _ => analysis.AnalyzeBlueprintProductionAsync(blueprintString, cancellationToken),
+            cancellationToken);
+    }
 }

@@ -828,6 +828,15 @@ Trace item flow from a specific entity in a blueprint. BFS from the given entity
 
 **Returns:** `{ "success", "start_entity", "start_name", "node_count", "edge_count", "nodes": [{ "entity_number", "name", "x", "y", "direction", "recipe", "depth" }], "edges": [{ "from_entity", "from_name", "to_entity", "to_name", "type" }] }`
 
+### `AnalyzeBlueprintProduction`
+Analyze a blueprint's production throughput using live game recipe data. Calculates per-recipe-group output/input rates, item balance (surplus/deficit), inserter bottlenecks, and belt tier recommendations. Requires a running Factorio game.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `blueprintString` | `string` | required | Blueprint string (starts with `0`) |
+
+**Returns:** `{ "success", "label", "entity_count", "machines_with_recipes", "recipe_groups": [{ "recipe", "machine_type", "machine_count", "crafts_per_second", "outputs", "inputs" }], "item_balance": { "<item>": { "produced", "consumed", "net", "status" } }, "inserter_bottlenecks": [{ "machine_entity", "machine_name", "recipe", "input_demand", "inserter_capacity", "inserter_count", "inserter_type", "issue", "message" }], "belt_analysis": [{ "belt_type", "count", "capacity_per_belt", "total_throughput_needed" }, { "belt_type": "recommendation", "max_single_item_rate", "recommended_belt" }] }`
+
 ---
 
 ## Belt Planning
