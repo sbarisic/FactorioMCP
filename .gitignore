@@ -3,6 +3,9 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+# Alternate build output (used when MCP server locks bin/)
+build-test/
+
 # User-specific files
 *.rsuser
 *.suo

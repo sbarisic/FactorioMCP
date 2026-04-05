@@ -568,8 +568,9 @@ public class BlueprintServiceTests
         await _service.GetGhostEntitiesAsync();
         await _service.CreateBlueprintFromAreaAsync(-10, -10, 10, 10);
         await _service.RevokeGhostEntityAsync(0, 0);
+        await _service.ValidateGhostPlacementsAsync();
 
-        Assert.Equal(6, _rcon.AllCommands.Count);
+        Assert.Equal(7, _rcon.AllCommands.Count);
         Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command", cmd));
     }
 

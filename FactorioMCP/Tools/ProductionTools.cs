@@ -11,7 +11,7 @@ namespace FactorioMCP.Tools;
 /// Generates placement instructions without actually building anything.
 /// </summary>
 [McpServerToolType]
-internal sealed class ProductionTools(LayoutSynthesisService layout, ProductionPlannerService planner, BlueprintCodecService codec, GameCommandQueue queue)
+internal sealed class ProductionTools(LayoutSynthesisService layout, PowerPoleLayoutService powerPoles, ProductionPlannerService planner, BlueprintCodecService codec, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Plan a standard smelter line layout. Generates a PlacementInstruction[] for a row of " +
@@ -87,6 +87,46 @@ internal sealed class ProductionTools(LayoutSynthesisService layout, ProductionP
                         return Task.FromResult(JsonSerializer.Serialize(new { success = false, error = "empty_instructions", message = "No placement instructions provided" }));
 
                     return Task.FromResult(codec.ExportAsBlueprint(instructions, label));
+                }
+                catch (JsonException ex)
+                {
+                    return Task.FromResult(JsonSerializer.Serialize(new { success = false, error = "invalid_json", message = ex.Message }));
+                }
+            },
+            cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Compute power pole placements to cover all entities in a layout. " +
+        "Given a PlacementInstruction[] (from PlanSmelterLine or manual layout), " +
+        "calculates the minimum set of power poles needed to supply electricity to all " +
+        "entities that require it. Automatically filters out passive entities (belts, chests, burner entities). " +
+        "Returns PlacementInstruction[] for poles only. Use with PlaceGhostBatch to plan pole placement.")]
+    public Task<string> PlanPowerPoles(
+        [Description("JSON array of placement instructions: [{\"entity_name\":\"assembling-machine-1\",\"x\":0,\"y\":0}, ...]. " +
+                     "Compatible with PlanSmelterLine output's 'instructions' array.")]
+        string instructionsJson,
+        [Description("Pole type to use: 'small-electric-pole' (default, 5×5 area), " +
+                     "'medium-electric-pole' (7×7), 'big-electric-pole' (4×4, long reach), 'substation' (18×18)")]
+        string poleName = "small-electric-pole",
+        [Description("Optional X coordinate of an existing pole to align the grid to (ensures connectivity)")]
+        double? existingPoleX = null,
+        [Description("Optional Y coordinate of an existing pole to align the grid to")]
+        double? existingPoleY = null,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(PlanPowerPoles),
+            _ =>
+            {
+                try
+                {
+                    var instructions = JsonSerializer.Deserialize<List<PlacementInstruction>>(instructionsJson,
+                        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
+
+                    if (instructions is null || instructions.Count == 0)
+                        return Task.FromResult(JsonSerializer.Serialize(new { success = false, error = "empty_instructions", message = "No placement instructions provided" }));
+
+                    return Task.FromResult(powerPoles.PlanPowerPoles(instructions, poleName, existingPoleX, existingPoleY));
                 }
                 catch (JsonException ex)
                 {

@@ -1,6 +1,8 @@
 using FactorioMCP.Services;
+using FactorioMCP.Models;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
+using System.Text.Json;
 
 namespace FactorioMCP.Tools;
 
@@ -231,6 +233,77 @@ internal sealed class BlueprintTools(BlueprintService blueprints, BlueprintCodec
     {
         return queue.ExecuteAsync(nameof(AnalyzeBlueprintProduction),
             _ => analysis.AnalyzeBlueprintProductionAsync(blueprintString, cancellationToken),
+            cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Execute a build plan by placing all entities as ghosts, then validating the result. " +
+        "Takes a PlacementInstruction[] (from PlanSmelterLine, PlanPowerPoles, or manual layout), " +
+        "converts it to ghost entities via PlaceGhostBatch, then runs ValidateGhostPlacements " +
+        "to check for issues. Returns combined placement and validation results. " +
+        "This is an orchestration tool that chains existing primitives for convenience.")]
+    public Task<string> ExecuteBuildPlan(
+        [Description("JSON array of placement instructions: [{\"entity_name\":\"stone-furnace\",\"x\":0,\"y\":0,\"direction\":\"north\"}, ...]. " +
+                     "Compatible with PlanSmelterLine and PlanPowerPoles output 'instructions' arrays.")]
+        string planJson,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(ExecuteBuildPlan),
+            async ct =>
+            {
+                // Parse PlacementInstruction[] and convert to PlaceGhostBatch format
+                List<PlacementInstruction> instructions;
+                try
+                {
+                    instructions = JsonSerializer.Deserialize<List<PlacementInstruction>>(planJson,
+                        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower })
+                        ?? [];
+                }
+                catch (JsonException ex)
+                {
+                    return JsonSerializer.Serialize(new { success = false, error = "invalid_json", message = ex.Message });
+                }
+
+                if (instructions.Count == 0)
+                    return JsonSerializer.Serialize(new { success = false, error = "empty_plan", message = "No placement instructions provided" });
+
+                // Convert entity_name → name for PlaceGhostBatch
+                var batchEntries = instructions.Select(i => new
+                {
+                    name = i.EntityName,
+                    x = i.X,
+                    y = i.Y,
+                    direction = i.Direction
+                });
+                var batchJson = JsonSerializer.Serialize(batchEntries);
+
+                // Place ghosts
+                var placeResult = await blueprints.PlaceGhostBatchAsync(batchJson, ct);
+
+                // Calculate center and radius for validation
+                double centerX = instructions.Average(i => i.X);
+                double centerY = instructions.Average(i => i.Y);
+                double maxDist = instructions.Max(i =>
+                    Math.Max(Math.Abs(i.X - centerX), Math.Abs(i.Y - centerY)));
+                double radius = maxDist + 10; // Add buffer for entity sizes
+
+                // Validate
+                var validateResult = await blueprints.ValidateGhostPlacementsAsync(radius, centerX, centerY, ct);
+
+                // Combine results
+                using var placeDoc = JsonDocument.Parse(placeResult);
+                using var validateDoc = JsonDocument.Parse(validateResult);
+
+                var combined = new
+                {
+                    success = true,
+                    plan_size = instructions.Count,
+                    placement = placeDoc.RootElement,
+                    validation = validateDoc.RootElement
+                };
+
+                return JsonSerializer.Serialize(combined, new JsonSerializerOptions { WriteIndented = false });
+            },
             cancellationToken);
     }
 }

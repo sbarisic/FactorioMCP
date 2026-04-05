@@ -26,6 +26,7 @@ builder.Services
     .AddSingleton<FlowService>()
     .AddSingleton<RecipeRateCalculatorService>()
     .AddSingleton<LayoutSynthesisService>()
+    .AddSingleton<PowerPoleLayoutService>()
     .AddSingleton<ProductionPlannerService>()
     .AddSingleton<BlueprintCodecService>()
     .AddSingleton<BlueprintAnalysisService>()

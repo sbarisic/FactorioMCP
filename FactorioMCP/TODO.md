@@ -188,8 +188,8 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 ### Low Priority
 
 - [ ] **Obstacle-Aware Belt Routing** — Extend `BeltPlannerService.cs` with `PlanRouteWithObstacles(startX, startY, endX, endY, bool[,] occupancy)` using BFS grid pathfinding instead of the current geometric L-path logic (`PlanRoute` at line 26). Add underground belt pair generation for gaps > 2 tiles. New MCP tool: `PlanBeltRouteWithObstacles`. **(CPX 3)**
-- [ ] **Power Pole Layout Helper** — New `PowerPoleLayoutService` (pure C# geometry). Given entity positions needing power, compute minimum pole placements at correct spacing intervals (small=5×5, medium=9×9). Returns `PlacementInstruction[]` for poles only. **(CPX 2)**
-- [ ] **Build Plan Execution** — New `ExecuteBuildPlan(planJson, useGhosts)` tool that takes a `PlacementInstruction[]` and calls `PlaceGhostBatch` for all entries, then `ValidateGhostPlacements` (existing). Orchestration tool combining existing primitives. **(CPX 2)**
+- [x] **Power Pole Layout Helper** — New `PowerPoleLayoutService` (pure C# geometry). Given entity positions needing power, compute minimum pole placements at correct spacing intervals (small=5×5, medium=7×7, big=4×4, substation=18×18). Returns `PlacementInstruction[]` for poles only. New MCP tool: `PlanPowerPoles` in `ProductionTools.cs`. **(CPX 2)**
+- [x] **Build Plan Execution** — New `ExecuteBuildPlan(planJson)` tool in `BlueprintTools.cs` that takes a `PlacementInstruction[]`, converts to `PlaceGhostBatch` format, places ghosts, then auto-validates with `ValidateGhostPlacements`. Orchestration tool combining existing primitives. **(CPX 2)**
 
 ### ON HOLD
 
