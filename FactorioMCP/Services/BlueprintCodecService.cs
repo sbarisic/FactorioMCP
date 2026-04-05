@@ -163,7 +163,7 @@ internal sealed class BlueprintCodecService
         {
             ["item"] = "blueprint",
             ["entities"] = entities,
-            ["version"] = 562949954076672 // Factorio 2.0 default version
+            ["version"] = 562949958402048 // Factorio 2.0 version
         };
 
         if (label is not null)
