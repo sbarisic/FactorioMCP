@@ -1114,15 +1114,33 @@ Build a directed item-flow graph for the area around the player. Scans belts, in
 ---
 
 ### `TraceItemFlow`
-Trace the downstream flow of items from a specific entity using BFS. Follows inserter drops and belt outputs up to the given depth.
+Trace the downstream flow of items from a specific entity using BFS. Follows inserter drops and belt outputs up to the given depth. **Belt segments are automatically collapsed** into single nodes with length info — a 50-tile belt run counts as one hop with `belt_length: 50`, so depth budget is spent on machines and inserters, not individual belt tiles.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `x` | `double` | required | X coordinate of starting entity |
 | `y` | `double` | required | Y coordinate of starting entity |
-| `depth` | `int` | `5` | Maximum hops to follow downstream |
+| `depth` | `int` | `5` | Maximum hops to follow downstream (belt segments = 0 hops) |
 
-**Returns:** `{ "status", "start_name", "start_x", "start_y", "node_count", "nodes": [{ "name", "type", "x", "y", "depth" }], "edges": [{ "from_name", "from_x", "from_y", "to_name", "to_x", "to_y", "kind" }] }`
+**Returns:** `{ "status", "start_name", "start_x", "start_y", "node_count", "nodes": [{ "name", "type", "x", "y", "depth", "belt_length?", "end_x?", "end_y?" }], "edges": [{ "from_name", "from_x", "from_y", "to_name", "to_x", "to_y", "kind", "belt_length?" }] }`
+
+Edge kinds: `"belt_segment"` (collapsed belt run), `"belt"` (splitter/underground), `"inserter"`, `"drill_output"`
+
+---
+
+### `PreviewBeltPlacement`
+Preview what a transport belt at (x,y) facing direction D would connect to. Shows the output side (where items flow), three input sides (behind, left, right), nearby inserters, existing entities at position, and whether placement is possible. The belt equivalent of `PreviewInserterPlacement`.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `x` | `double` | required | X coordinate where belt would be placed |
+| `y` | `double` | required | Y coordinate where belt would be placed |
+| `direction` | `string` | `"north"` | Direction items flow (arrow direction): north, south, east, west |
+| `beltType` | `string` | `"transport-belt"` | Belt type for placement check |
+
+**Returns:** `{ "success", "belt_position", "direction", "belt_type", "output": { "x", "y", "entities" }, "input_behind": { "x", "y", "entities" }, "input_left": { "x", "y", "entities" }, "input_right": { "x", "y", "entities" }, "inserters": [{ "name", "x", "y", "role" }], "existing_at_position", "can_place" }`
+
+Inserter roles: `"picks_from_belt"`, `"drops_onto_belt"`
 
 ---
 

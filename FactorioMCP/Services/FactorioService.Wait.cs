@@ -173,7 +173,7 @@ internal sealed partial class FactorioService
             {{LuaJsonEscape}}
             {{LuaEntitySort}}
             local entities = game.connected_players[1].surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
-            sort_entities(entities)
+            sort_entities(entities, {{x}}, {{y}})
             local e = nil
             for _, ent in pairs(entities) do
                 if ent.type ~= "resource" then e = ent break end
@@ -244,7 +244,7 @@ internal sealed partial class FactorioService
             {{LuaJsonEscape}}
             {{LuaEntitySort}}
             local entities = game.connected_players[1].surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
-            sort_entities(entities)
+            sort_entities(entities, {{x}}, {{y}})
             local e = nil
             for _, ent in pairs(entities) do
                 if ent.type ~= "resource" then e = ent break end

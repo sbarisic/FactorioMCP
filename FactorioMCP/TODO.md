@@ -99,7 +99,7 @@ RCON connection settings are read from environment variables:
 
 ### Low Priority
 
-- [ ] **PreviewBeltPlacement tool** — A belt equivalent of `PreviewInserterPlacement` that shows what a transport belt at position (x,y) facing direction D would connect to: adjacent belts (input/output sides), inserter drop/pickup points, underground belt pairs, and splitter connections. Would help the AI verify belt layouts before committing placement, similar to how `PreviewInserterPlacement` validates inserter orientation. **(CPX 3)**
+- [x] **PreviewBeltPlacement tool** — ✅ **DONE** — Implemented in `FlowService.PreviewBeltPlacementAsync` and `FlowTools.PreviewBeltPlacement`. Shows output/input sides, nearby inserters, existing entities, and can_place check.
 
 ### ON HOLD
 
@@ -116,7 +116,7 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-- [ ] **Improve TraceItemFlow to produce useful end-to-end factory analysis** — Currently `TraceItemFlow` is nearly useless for understanding production chains. Three issues need fixing: **(1)** Each belt tile costs 1 depth hop, so a 10-tile belt consumes the entire depth budget before reaching any machine — belt segments should be collapsed into single nodes (e.g., "belt run, 5 tiles, west"). **(2)** Inserter drop-target search uses `radius=0.5` (`FlowService.cs` lines 56 and 171), which misses any machine larger than 1×1 because the entity center is farther than 0.5 from the drop position (e.g., electric furnace center is 0.8 tiles from drop point). Increase to `radius=1.5` or use `find_entities_filtered` with area/bounding-box check. **(3)** Machines (furnaces, assemblers) are dead ends — the trace should pass through them and continue to output inserters, including recipe/item info. The same `radius=0.5` bug exists in `GetFlowGraphAsync` (line 56). Ideal output would be a collapsed chain like: `chest → belt(4 tiles,west) → furnace(iron-ore→iron-plate) → belt(5 tiles,west) → assembler(iron-gear-wheel) → belt(6 tiles,west)`. **(CPX 3)**
+- [ ] **Improve TraceItemFlow to produce useful end-to-end factory analysis** — ✅ **PARTIALLY FIXED** — **(1)** Belt collapsing: ✅ Implemented — simple belt chains are collapsed into single "belt_segment" nodes with `belt_length`, `end_x`, `end_y` metadata; belt segments cost 0 depth hops. **(2)** Inserter drop-target radius: ✅ Fixed — increased from 0.5 to 1.5 in both `TraceItemFlowAsync` and `GetFlowGraphAsync`. **(3)** Machine pass-through: ⬜ Still needed — furnaces/assemblers are still dead ends; the trace should continue through them to output inserters, including recipe/item info. **(CPX 2, remaining)**
 
 ### Low Priority
 
@@ -171,7 +171,7 @@ RCON connection settings are read from environment variables:
 
 ### Active Bugs
 
-- [ ] **`sort_entities` doesn't sort by distance — entity operations target wrong entity** — The `LuaEntitySort` helper (`sort_entities` in `FactorioService.cs:26`) only pushes resources to the end of the list but does **not** sort non-resource entities by distance from the queried position. When `find_entities_filtered{position={x,y}, radius=1}` returns multiple non-resource entities (common when entities are on adjacent tiles), the first one in Factorio's arbitrary iteration order is selected — which is often **not** the entity at the exact queried coordinates. **Verified**: 3 of 4 test inserters at exact positions were missed by `InspectEntity`, which returned adjacent chests/poles instead. **Affected functions** (8 call sites in `FactorioService.Entity.cs`): `PlaceEntityAsync` (line 84), `MineEntityAtAsync` (line 129), `RotateEntityAsync` (line 176), `InsertItemsAsync` (line 244), `InspectEntityAsync` (line 312), `PlaceInserterAsync` (line 608), `InsertBetweenAsync` (lines 725, 737). **Fix**: Modify `sort_entities` to accept the query coordinates `(qx, qy)` and use distance as a tiebreaker within the non-resource group, then update all 8 call sites to pass the queried position. **(CPX 2)**
+- [ ] **`sort_entities` doesn't sort by distance — entity operations target wrong entity** — ✅ **FIXED** — `LuaEntitySort` now accepts `(t, qx, qy)` and sorts non-resource entities by distance from query position. All 12 call sites updated. Move to DONE.md on next cleanup.
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 

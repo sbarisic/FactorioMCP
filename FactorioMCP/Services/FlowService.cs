@@ -53,7 +53,7 @@ internal sealed class FlowService(RconClient rcon)
                     end
                     local ok_d, dpos = pcall(function() return ins.drop_position end)
                     if ok_d and dpos then
-                        local targets = surface.find_entities_filtered{position=dpos, radius=0.5, limit=3}
+                        local targets = surface.find_entities_filtered{position=dpos, radius=1.5, limit=5}
                         for _, tgt in pairs(targets) do
                             if tgt.valid and tgt ~= ins then
                                 add_edge(ins, tgt, "inserter_drop")
@@ -138,18 +138,71 @@ internal sealed class FlowService(RconClient rcon)
             local bfs_depths = {}
             bfs_entities[1] = start_ent
             bfs_depths[1] = 0
+            local belt_types_set = {}
+            belt_types_set["transport-belt"] = true
+            belt_types_set["fast-transport-belt"] = true
+            belt_types_set["express-transport-belt"] = true
+            belt_types_set["turbo-transport-belt"] = true
+            local function is_simple_belt(e)
+                return belt_types_set[e.type] ~= nil
+            end
             local function entity_key(e)
                 local uid = e.unit_number
                 if uid then return uid end
                 return e.name..":"..string.format("%.1f",e.position.x)..":"..string.format("%.1f",e.position.y)
             end
+            -- Follow a belt chain to its end, returning the last belt and the tile count
+            local function follow_belt_chain(first_belt)
+                local cur = first_belt
+                local count = 1
+                local belt_visited = {}
+                belt_visited[entity_key(cur)] = true
+                while true do
+                    local ok_nb, nb = pcall(function() return cur.belt_neighbours end)
+                    if not ok_nb or not nb then break end
+                    local outputs = nb.outputs or {}
+                    if #outputs ~= 1 then break end
+                    local nxt = outputs[1]
+                    if not nxt.valid then break end
+                    local nk = entity_key(nxt)
+                    if belt_visited[nk] then break end
+                    if not is_simple_belt(nxt) then break end
+                    belt_visited[nk] = true
+                    visited[nk] = true
+                    cur = nxt
+                    count = count + 1
+                end
+                return cur, count
+            end
+            local function get_inserter_targets(e)
+                local out_ents = {}
+                local out_kinds = {}
+                local nearby = surface.find_entities_filtered{type="inserter", position=e.position, radius=3}
+                for _, ins in pairs(nearby) do
+                    if ins.valid then
+                        local ok_p, src = pcall(function() return ins.pickup_target end)
+                        if ok_p and src and src.valid and entity_key(src) == entity_key(e) then
+                            local ok_d, dpos = pcall(function() return ins.drop_position end)
+                            if ok_d and dpos then
+                                local targets = surface.find_entities_filtered{position=dpos, radius=1.5, limit=5}
+                                for _, tgt in pairs(targets) do
+                                    if tgt.valid and tgt ~= ins then
+                                        out_ents[#out_ents+1] = tgt
+                                        out_kinds[#out_kinds+1] = "inserter"
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                return out_ents, out_kinds
+            end
             local function get_outputs(e)
                 local out_ents = {}
                 local out_kinds = {}
-                -- Belt outputs via belt_neighbours
-                if e.type == "transport-belt" or e.type == "fast-transport-belt" or
-                   e.type == "express-transport-belt" or e.type == "turbo-transport-belt" or
-                   e.type == "underground-belt" or e.type == "splitter" then
+                -- Belt outputs via belt_neighbours (handled by belt collapsing in BFS)
+                if is_simple_belt(e) or e.type == "underground-belt" or e.type == "splitter" then
                     local ok_nb, nb = pcall(function() return e.belt_neighbours end)
                     if ok_nb and nb then
                         for _, out_e in pairs(nb.outputs or {}) do
@@ -161,24 +214,10 @@ internal sealed class FlowService(RconClient rcon)
                     end
                 end
                 -- Inserters that pick from this entity
-                local nearby = surface.find_entities_filtered{type="inserter", position=e.position, radius=3}
-                for _, ins in pairs(nearby) do
-                    if ins.valid then
-                        local ok_p, src = pcall(function() return ins.pickup_target end)
-                        if ok_p and src and src.valid and entity_key(src) == entity_key(e) then
-                            local ok_d, dpos = pcall(function() return ins.drop_position end)
-                            if ok_d and dpos then
-                                local targets = surface.find_entities_filtered{position=dpos, radius=0.5, limit=3}
-                                for _, tgt in pairs(targets) do
-                                    if tgt.valid and tgt ~= ins then
-                                        out_ents[#out_ents+1] = tgt
-                                        out_kinds[#out_kinds+1] = "inserter"
-                                        break
-                                    end
-                                end
-                            end
-                        end
-                    end
+                local ins_ents, ins_kinds = get_inserter_targets(e)
+                for i = 1, #ins_ents do
+                    out_ents[#out_ents+1] = ins_ents[i]
+                    out_kinds[#out_kinds+1] = ins_kinds[i]
                 end
                 -- Mining drill drop output
                 if e.type == "mining-drill" then
@@ -196,10 +235,20 @@ internal sealed class FlowService(RconClient rcon)
                 end
                 return out_ents, out_kinds
             end
+            local function node_json(e, d, extra)
+                local s = '{"name":"'..esc(e.name)..'","type":"'..esc(e.type)..'","x":'..string.format("%.1f",e.position.x)..',"y":'..string.format("%.1f",e.position.y)..',"depth":'..d
+                if extra then s = s..extra end
+                return s..'}'
+            end
+            local function edge_json(from_e, to_e, kind, extra)
+                local s = '{"from_name":"'..esc(from_e.name)..'","from_x":'..string.format("%.1f",from_e.position.x)..',"from_y":'..string.format("%.1f",from_e.position.y)..',"to_name":"'..esc(to_e.name)..'","to_x":'..string.format("%.1f",to_e.position.x)..',"to_y":'..string.format("%.1f",to_e.position.y)..',"kind":"'..kind..'"'
+                if extra then s = s..extra end
+                return s..'}'
+            end
             -- BFS loop
             local start_key = entity_key(start_ent)
             visited[start_key] = true
-            nodes[#nodes+1] = '{"name":"'..esc(start_ent.name)..'","type":"'..esc(start_ent.type)..'","x":'..string.format("%.1f",start_ent.position.x)..',"y":'..string.format("%.1f",start_ent.position.y)..',"depth":0}'
+            nodes[#nodes+1] = node_json(start_ent, 0, nil)
             local head = 1
             while head <= #bfs_entities do
                 local cur_ent = bfs_entities[head]
@@ -211,11 +260,22 @@ internal sealed class FlowService(RconClient rcon)
                         local out_e = out_ents[i]
                         local kind = out_kinds[i]
                         local key = entity_key(out_e)
-                        edges[#edges+1] = '{"from_name":"'..esc(cur_ent.name)..'","from_x":'..string.format("%.1f",cur_ent.position.x)..',"from_y":'..string.format("%.1f",cur_ent.position.y)..',"to_name":"'..esc(out_e.name)..'","to_x":'..string.format("%.1f",out_e.position.x)..',"to_y":'..string.format("%.1f",out_e.position.y)..',"kind":"'..kind..'"}'
-                        if not visited[key] then
+                        -- Belt collapsing: follow simple belt chains into a single segment node
+                        if kind == "belt" and is_simple_belt(out_e) and not visited[key] then
+                            visited[key] = true
+                            local last_belt, belt_len = follow_belt_chain(out_e)
+                            -- The segment node represents the whole belt run
+                            local seg_extra = ',"belt_length":'..belt_len..',"end_x":'..string.format("%.1f",last_belt.position.x)..',"end_y":'..string.format("%.1f",last_belt.position.y)
+                            nodes[#nodes+1] = node_json(out_e, cur_depth, seg_extra)
+                            edges[#edges+1] = edge_json(cur_ent, out_e, "belt_segment", ',"belt_length":'..belt_len)
+                            -- Continue BFS from the end of the belt segment (same depth — belts are free)
+                            bfs_entities[#bfs_entities+1] = last_belt
+                            bfs_depths[#bfs_depths+1] = cur_depth
+                        elseif not visited[key] then
                             visited[key] = true
                             local next_depth = cur_depth + 1
-                            nodes[#nodes+1] = '{"name":"'..esc(out_e.name)..'","type":"'..esc(out_e.type)..'","x":'..string.format("%.1f",out_e.position.x)..',"y":'..string.format("%.1f",out_e.position.y)..',"depth":'..next_depth..'}'
+                            nodes[#nodes+1] = node_json(out_e, next_depth, nil)
+                            edges[#edges+1] = edge_json(cur_ent, out_e, kind, nil)
                             bfs_entities[#bfs_entities+1] = out_e
                             bfs_depths[#bfs_depths+1] = next_depth
                         end
@@ -223,6 +283,108 @@ internal sealed class FlowService(RconClient rcon)
                 end
             end
             rcon.print('{"status":"ok","start_name":"'..esc(start_ent.name)..'","start_x":'..string.format("%.1f",start_ent.position.x)..',"start_y":'..string.format("%.1f",start_ent.position.y)..',"node_count":'..#nodes..',"nodes":['..table.concat(nodes, ",")..'],"edges":['..table.concat(edges, ",")..']}'  )
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Preview what a transport belt placed at (x,y) facing the given direction would
+    /// connect to. Shows input belts, output belt, nearby inserters, and whether
+    /// placement is possible — the belt equivalent of PreviewInserterPlacement.
+    /// </summary>
+    public Task<string> PreviewBeltPlacementAsync(double x, double y, string direction, string beltType = "transport-belt", CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(direction);
+        ArgumentException.ThrowIfNullOrWhiteSpace(beltType);
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{FactorioService.LuaJsonEscape}}
+            local surface = game.connected_players[1].surface
+            local player = game.connected_players[1]
+            local dir = defines.direction.{{direction}}
+            local bx, by = {{x}}, {{y}}
+
+            if not dir then
+                rcon.print('{"success":false,"error":"invalid_direction","direction":"{{direction}}"}')
+                return
+            end
+
+            -- Direction offsets for belt output (items flow in the facing direction)
+            local offsets = {}
+            offsets[defines.direction.north]     = {dx=0,  dy=-1}
+            offsets[defines.direction.south]     = {dx=0,  dy=1}
+            offsets[defines.direction.east]      = {dx=1,  dy=0}
+            offsets[defines.direction.west]      = {dx=-1, dy=0}
+            local off = offsets[dir]
+            if not off then
+                rcon.print('{"success":false,"error":"belt_requires_cardinal","direction":"{{direction}}"}')
+                return
+            end
+
+            -- Output position (where items flow to)
+            local out_x, out_y = bx + off.dx, by + off.dy
+            -- Input positions (where items can flow from): behind and both sides
+            local behind_x, behind_y = bx - off.dx, by - off.dy
+            local left_x, left_y = bx - off.dy, by + off.dx
+            local right_x, right_y = bx + off.dy, by - off.dx
+
+            local function find_entities_at(px, py)
+                local parts = {}
+                local ents = surface.find_entities_filtered{position={px, py}, radius=0.6, limit=5}
+                for _, e in pairs(ents) do
+                    if e.name ~= "character" then
+                        parts[#parts+1] = '{"name":"'..esc(e.name)..'","type":"'..esc(e.type)..'"}'
+                    end
+                end
+                return parts
+            end
+
+            -- Check output side
+            local out_parts = find_entities_at(out_x, out_y)
+            -- Check input sides
+            local behind_parts = find_entities_at(behind_x, behind_y)
+            local left_parts = find_entities_at(left_x, left_y)
+            local right_parts = find_entities_at(right_x, right_y)
+
+            -- Find inserters that would interact with this belt position
+            local inserter_parts = {}
+            local nearby_inserters = surface.find_entities_filtered{type="inserter", position={bx, by}, radius=2}
+            for _, ins in pairs(nearby_inserters) do
+                if ins.valid then
+                    local ok_p, pp = pcall(function() return ins.pickup_position end)
+                    local ok_d, dp = pcall(function() return ins.drop_position end)
+                    local role = nil
+                    if ok_p and pp and math.abs(pp.x - bx) < 0.6 and math.abs(pp.y - by) < 0.6 then
+                        role = "picks_from_belt"
+                    elseif ok_d and dp and math.abs(dp.x - bx) < 0.6 and math.abs(dp.y - by) < 0.6 then
+                        role = "drops_onto_belt"
+                    end
+                    if role then
+                        inserter_parts[#inserter_parts+1] = '{"name":"'..esc(ins.name)..'","x":'..string.format("%.1f",ins.position.x)..',"y":'..string.format("%.1f",ins.position.y)..',"role":"'..role..'"}'
+                    end
+                end
+            end
+
+            -- Check if belt can be placed
+            local belt_name = "{{beltType}}"
+            local can_place = surface.can_place_entity{name=belt_name, position={bx, by}, force=player.force, direction=dir}
+
+            -- Check existing entity at belt position
+            local existing_parts = find_entities_at(bx, by)
+
+            rcon.print('{"success":true'..
+                ',"belt_position":{"x":'..bx..',"y":'..by..'}'..
+                ',"direction":"{{direction}}"'..
+                ',"belt_type":"'..belt_name..'"'..
+                ',"output":{"x":'..out_x..',"y":'..out_y..',"entities":['..table.concat(out_parts, ",")..']}'..
+                ',"input_behind":{"x":'..behind_x..',"y":'..behind_y..',"entities":['..table.concat(behind_parts, ",")..']}'..
+                ',"input_left":{"x":'..left_x..',"y":'..left_y..',"entities":['..table.concat(left_parts, ",")..']}'..
+                ',"input_right":{"x":'..right_x..',"y":'..right_y..',"entities":['..table.concat(right_parts, ",")..']}'..
+                ',"inserters":['..table.concat(inserter_parts, ",")..']'..
+                ',"existing_at_position":['..table.concat(existing_parts, ",")..']'..
+                ',"can_place":'..tostring(can_place)..
+                '}')
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);

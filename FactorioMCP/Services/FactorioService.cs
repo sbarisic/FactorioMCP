@@ -18,13 +18,14 @@ internal sealed partial class FactorioService(RconClient rcon)
     internal const string LuaJsonEscape = """local function esc(s) return s:gsub('\\', '\\\\'):gsub('"', '\\"') end""";
 
     /// <summary>
-    /// Lua helper that sorts entity list so non-resource entities come first and
-    /// filters out the player character entity. Prevents accidentally selecting
-    /// ore under a drill/furnace or selecting the player's own character.
-    /// Usage: <c>sort_entities(entities)</c> — mutates in place.
+    /// Lua helper that sorts entity list so non-resource entities come first,
+    /// nearest to the query position, and filters out the player character entity.
+    /// Prevents accidentally selecting ore under a drill/furnace or selecting the
+    /// player's own character.
+    /// Usage: <c>sort_entities(entities, qx, qy)</c> — mutates in place. qx/qy optional.
     /// </summary>
     internal const string LuaEntitySort = """
-        local function sort_entities(t)
+        local function sort_entities(t, qx, qy)
             local pc = game.connected_players[1].character
             local j = 1
             for i = 1, #t do
@@ -34,7 +35,13 @@ internal sealed partial class FactorioService(RconClient rcon)
             table.sort(t, function(a, b)
                 local a_res = a.type == "resource" and 1 or 0
                 local b_res = b.type == "resource" and 1 or 0
-                return a_res < b_res
+                if a_res ~= b_res then return a_res < b_res end
+                if qx and qy then
+                    local da = (a.position.x - qx)*(a.position.x - qx) + (a.position.y - qy)*(a.position.y - qy)
+                    local db = (b.position.x - qx)*(b.position.x - qx) + (b.position.y - qy)*(b.position.y - qy)
+                    return da < db
+                end
+                return false
             end)
         end
         """;

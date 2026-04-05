@@ -81,7 +81,7 @@ internal sealed partial class FactorioService
                 rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
                 return
             end
-            sort_entities(entities)
+            sort_entities(entities, {{x}}, {{y}})
             local e = entities[1]
             local name = esc(e.name)
             if e.type == "resource" then
@@ -126,7 +126,7 @@ internal sealed partial class FactorioService
                 rcon.print('{"success":false,"error":"no_entity","x":{{x}},"y":{{y}}}')
                 return
             end
-            sort_entities(entities)
+            sort_entities(entities, {{x}}, {{y}})
             local e = nil
             for _, ent in pairs(entities) do
                 if ent.type ~= "resource" then e = ent break end
@@ -173,7 +173,7 @@ internal sealed partial class FactorioService
                 return
             end
             local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
-            sort_entities(entities)
+            sort_entities(entities, {{x}}, {{y}})
             local e = nil
             for _, ent in pairs(entities) do
                 if ent.type ~= "resource" then e = ent break end
@@ -241,7 +241,7 @@ internal sealed partial class FactorioService
                 return
             end
             local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
-            sort_entities(entities)
+            sort_entities(entities, {{x}}, {{y}})
             local e = nil
             for _, ent in pairs(entities) do
                 if ent.type ~= "resource" then e = ent break end
@@ -309,7 +309,7 @@ internal sealed partial class FactorioService
                 return
             end
             local entities = player.surface.find_entities_filtered{position={{{x}},{{y}}}, radius=1}
-            sort_entities(entities)
+            sort_entities(entities, {{x}}, {{y}})
             local e = nil
             for _, ent in pairs(entities) do
                 if ent.type ~= "resource" then e = ent break end
@@ -605,7 +605,7 @@ internal sealed partial class FactorioService
             local player = game.connected_players[1]
             local surface = player.surface
             local target_entities = surface.find_entities_filtered{position={{{targetX}}, {{targetY}}}, radius=1}
-            sort_entities(target_entities)
+            sort_entities(target_entities, {{targetX}}, {{targetY}})
             local target = nil
             for _, e in pairs(target_entities) do
                 if e.type ~= "resource" then target = e break end
@@ -722,7 +722,7 @@ internal sealed partial class FactorioService
 
             -- Find source entity
             local src_entities = surface.find_entities_filtered{position={{{sourceX}}, {{sourceY}}}, radius=1}
-            sort_entities(src_entities)
+            sort_entities(src_entities, {{sourceX}}, {{sourceY}})
             local source = nil
             for _, e in pairs(src_entities) do
                 if e.type ~= "resource" then source = e break end
@@ -734,7 +734,7 @@ internal sealed partial class FactorioService
 
             -- Find destination entity
             local dst_entities = surface.find_entities_filtered{position={{{destX}}, {{destY}}}, radius=1}
-            sort_entities(dst_entities)
+            sort_entities(dst_entities, {{destX}}, {{destY}})
             local dest = nil
             for _, e in pairs(dst_entities) do
                 if e.type ~= "resource" then dest = e break end

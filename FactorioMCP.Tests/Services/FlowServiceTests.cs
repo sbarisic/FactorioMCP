@@ -189,4 +189,102 @@ public class FlowServiceTests
         Assert.Contains("resource", _rcon.LastCommand!);
         Assert.Contains("character", _rcon.LastCommand!);
     }
+
+    [Fact]
+    public async Task TraceItemFlowAsync_CollapsesBeltSegments()
+    {
+        await _service.TraceItemFlowAsync(0, 0);
+
+        Assert.Contains("belt_segment", _rcon.LastCommand!);
+        Assert.Contains("belt_length", _rcon.LastCommand!);
+        Assert.Contains("follow_belt_chain", _rcon.LastCommand!);
+    }
+
+    // ── PreviewBeltPlacementAsync ─────────────────────────────────────
+
+    [Fact]
+    public async Task PreviewBeltPlacementAsync_SendsSilentCommand()
+    {
+        await _service.PreviewBeltPlacementAsync(5, 10, "east");
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task PreviewBeltPlacementAsync_UsesProvidedCoordinates()
+    {
+        await _service.PreviewBeltPlacementAsync(15, -8, "north");
+
+        Assert.Contains("15", _rcon.LastCommand!);
+        Assert.Contains("-8", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewBeltPlacementAsync_UsesDirection()
+    {
+        await _service.PreviewBeltPlacementAsync(0, 0, "west");
+
+        Assert.Contains("defines.direction.west", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewBeltPlacementAsync_ShowsAllInputSides()
+    {
+        await _service.PreviewBeltPlacementAsync(0, 0, "north");
+
+        Assert.Contains("input_behind", _rcon.LastCommand!);
+        Assert.Contains("input_left", _rcon.LastCommand!);
+        Assert.Contains("input_right", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewBeltPlacementAsync_ShowsOutputSide()
+    {
+        await _service.PreviewBeltPlacementAsync(0, 0, "north");
+
+        Assert.Contains("output", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewBeltPlacementAsync_ChecksCanPlace()
+    {
+        await _service.PreviewBeltPlacementAsync(0, 0, "north");
+
+        Assert.Contains("can_place_entity", _rcon.LastCommand!);
+        Assert.Contains("can_place", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewBeltPlacementAsync_FindsNearbyInserters()
+    {
+        await _service.PreviewBeltPlacementAsync(0, 0, "north");
+
+        Assert.Contains("inserter", _rcon.LastCommand!);
+        Assert.Contains("picks_from_belt", _rcon.LastCommand!);
+        Assert.Contains("drops_onto_belt", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewBeltPlacementAsync_UsesBeltType()
+    {
+        await _service.PreviewBeltPlacementAsync(0, 0, "east", "fast-transport-belt");
+
+        Assert.Contains("fast-transport-belt", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PreviewBeltPlacementAsync_ThrowsOnEmptyDirection()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.PreviewBeltPlacementAsync(0, 0, ""));
+    }
+
+    [Fact]
+    public async Task PreviewBeltPlacementAsync_ShowsExistingEntities()
+    {
+        await _service.PreviewBeltPlacementAsync(0, 0, "south");
+
+        Assert.Contains("existing_at_position", _rcon.LastCommand!);
+    }
 }

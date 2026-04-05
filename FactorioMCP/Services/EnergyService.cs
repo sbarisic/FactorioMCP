@@ -112,7 +112,7 @@ internal sealed class EnergyService(RconClient rcon)
             {{FactorioService.LuaEntitySort}}
             local surface = game.connected_players[1].surface
             local entities = surface.find_entities_filtered{position={{{x}}, {{y}}}, radius=0.5, limit=5}
-            sort_entities(entities)
+            sort_entities(entities, {{x}}, {{y}})
             local e = entities[1]
             if not e then
                 rcon.print('{"status":"error","error":"no_entity","x":'..string.format("%.1f", {{x}})..',"y":'..string.format("%.1f", {{y}})..'}')
