@@ -95,6 +95,7 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
+- [ ] **Batch Entity Action Tools** — Add `mine_entity_multiple`, `inspect_entity_multiple`, `refuel_entity_multiple`, `insert_items_multiple` tools that accept arrays of targets and execute all actions in a single MCP call, returning when all complete or failing fast on first error. Wraps existing service methods (`MineEntityAtAsync`, `InspectEntityAsync`, `InsertItemsAsync`, refuel logic in `TaskTools`) with iteration and aggregated JSON results. Reduces LLM round-trips and aligns with "Minimize number of tool calls" design principle. **(CPX 3)**
 - [ ] **Smart Entity Placement** — `PlaceEntitySmart(entity, near)` e.g. place a stone-furnace near iron-ore. Backend picks best available position automatically. **(CPX 2)**
 - [ ] **Pickup Items** — `pickup_items(radius)`: simulate holding the 'F' key to collect items dropped on the ground within a radius. **(CPX 1)**
 - [ ] **Factory Analysis Tools** — `GetProductionStatus`: what's being produced, bottlenecks, idle machines. `FindUnpoweredEntities`: list entities without power. `FindIdleMachines`: list machines not working. `FindMissingInputs(x, y)`: returns which input items an assembler/furnace is missing. Essential for AI to understand and debug factory state. **(CPX 3)**
@@ -123,7 +124,7 @@ RCON connection settings are read from environment variables:
 
 ### Medium Priority
 
-*No medium priority items*
+- [ ] **FindBuildableArea Ore Patch Avoidance** — `FindBuildableAreaAsync` currently treats resource entities (ore patches) as non-blocking, returning positions on top of ore for all buildings. This wastes ore by covering it with non-mining buildings. Add an `allowOrePatches` parameter (default `false`) so only drill placements permit ore overlap. When `false`, remove `"resource"` from the `invert` filter so ore patches count as blocking. **(CPX 2)**
 
 ### Low Priority
 
