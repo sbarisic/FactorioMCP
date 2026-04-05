@@ -34,6 +34,22 @@ internal sealed class BlueprintTools(BlueprintService blueprints, GameCommandQue
     }
 
     [McpServerTool, Description(
+        "Place multiple ghost entities in a single call. Much more efficient than calling " +
+        "PlaceGhostEntity repeatedly — places N ghosts in one RCON round-trip. " +
+        "Input is a JSON array of placement entries. Returns placed/skipped counts and any errors. " +
+        "Use this for batch layout operations like placing an entire smelter line at once.")]
+    public Task<string> PlaceGhostBatch(
+        [Description("JSON array of placements: [{\"name\":\"stone-furnace\",\"x\":0,\"y\":0,\"direction\":\"north\"}, ...]. " +
+                     "Each entry needs 'name', 'x', 'y'. 'direction' defaults to 'north' if omitted.")]
+        string placementsJson,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(PlaceGhostBatch),
+            ct => blueprints.PlaceGhostBatchAsync(placementsJson, ct),
+            cancellationToken);
+    }
+
+    [McpServerTool, Description(
         "Build a blueprint from a blueprint string at the specified position. " +
         "Blueprint strings are base64-encoded strings that encode entity layouts " +
         "(e.g. copied from the game or generated). Entities are placed as ghosts " +

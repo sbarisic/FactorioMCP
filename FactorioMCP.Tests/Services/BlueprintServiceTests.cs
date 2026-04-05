@@ -276,6 +276,16 @@ public class BlueprintServiceTests
     }
 
     [Fact]
+    public async Task GetGhostEntitiesAsync_MapsDirectionToHumanReadableName()
+    {
+        await _service.GetGhostEntitiesAsync();
+
+        Assert.Contains("dir_names", _rcon.LastCommand!);
+        Assert.Contains("defines.direction", _rcon.LastCommand!);
+        Assert.DoesNotContain("g.direction or 0", _rcon.LastCommand!);
+    }
+
+    [Fact]
     public async Task GetGhostEntitiesAsync_OutputsJsonWithCount()
     {
         await _service.GetGhostEntitiesAsync();
@@ -461,18 +471,105 @@ public class BlueprintServiceTests
             () => _service.RevokeGhostEntityAsync(10, 20, radius: -1));
     }
 
+    // ── PlaceGhostBatchAsync ──────────────────────────────────────────
+
+    [Fact]
+    public async Task PlaceGhostBatchAsync_SendsSilentCommand()
+    {
+        await _service.PlaceGhostBatchAsync("[{\"name\":\"stone-furnace\",\"x\":0,\"y\":0}]");
+
+        Assert.NotNull(_rcon.LastCommand);
+        Assert.StartsWith("/silent-command", _rcon.LastCommand);
+    }
+
+    [Fact]
+    public async Task PlaceGhostBatchAsync_UsesJsonToTable()
+    {
+        await _service.PlaceGhostBatchAsync("[{\"name\":\"stone-furnace\",\"x\":0,\"y\":0}]");
+
+        Assert.Contains("helpers.json_to_table", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceGhostBatchAsync_CreatesEntityGhosts()
+    {
+        await _service.PlaceGhostBatchAsync("[{\"name\":\"stone-furnace\",\"x\":5,\"y\":10}]");
+
+        Assert.Contains("entity-ghost", _rcon.LastCommand!);
+        Assert.Contains("create_entity", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceGhostBatchAsync_ChecksCanPlaceEntity()
+    {
+        await _service.PlaceGhostBatchAsync("[{\"name\":\"stone-furnace\",\"x\":0,\"y\":0}]");
+
+        Assert.Contains("can_place_entity", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceGhostBatchAsync_BuildsDirectionMap()
+    {
+        await _service.PlaceGhostBatchAsync("[{\"name\":\"stone-furnace\",\"x\":0,\"y\":0}]");
+
+        Assert.Contains("defines.direction", _rcon.LastCommand!);
+        Assert.Contains("dir_map", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceGhostBatchAsync_ReportsPlacedAndSkippedCounts()
+    {
+        await _service.PlaceGhostBatchAsync("[{\"name\":\"stone-furnace\",\"x\":0,\"y\":0}]");
+
+        Assert.Contains("\"placed\"", _rcon.LastCommand!);
+        Assert.Contains("\"skipped\"", _rcon.LastCommand!);
+        Assert.Contains("\"total\"", _rcon.LastCommand!);
+        Assert.Contains("\"errors\"", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceGhostBatchAsync_EscapesSingleQuotes()
+    {
+        await _service.PlaceGhostBatchAsync("[{\"name\":\"stone-furnace\",\"x\":0,\"y\":0}]");
+
+        // Input JSON is escaped and embedded in Lua single-quoted string
+        Assert.Contains("pcall(helpers.json_to_table", _rcon.LastCommand!);
+    }
+
+    [Fact]
+    public async Task PlaceGhostBatchAsync_ThrowsOnNullInput()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => _service.PlaceGhostBatchAsync(null!));
+    }
+
+    [Fact]
+    public async Task PlaceGhostBatchAsync_ThrowsOnEmptyInput()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.PlaceGhostBatchAsync(""));
+    }
+
+    [Fact]
+    public async Task PlaceGhostBatchAsync_ThrowsOnWhitespaceInput()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.PlaceGhostBatchAsync("   "));
+    }
+
     // ── AllCommands_UseSilentCommandPrefix ─────────────────────────────
 
     [Fact]
     public async Task AllCommands_UseSilentCommandPrefix()
     {
         await _service.PlaceGhostEntityAsync("stone-furnace", 0, 0);
+        await _service.PlaceGhostBatchAsync("[{\"name\":\"stone-furnace\",\"x\":0,\"y\":0}]");
         await _service.PlaceBlueprintStringAsync("0eNqFake", 0, 0);
         await _service.GetGhostEntitiesAsync();
         await _service.CreateBlueprintFromAreaAsync(-10, -10, 10, 10);
         await _service.RevokeGhostEntityAsync(0, 0);
 
-        Assert.Equal(5, _rcon.AllCommands.Count);
+        Assert.Equal(6, _rcon.AllCommands.Count);
         Assert.All(_rcon.AllCommands, cmd => Assert.StartsWith("/silent-command", cmd));
     }
 

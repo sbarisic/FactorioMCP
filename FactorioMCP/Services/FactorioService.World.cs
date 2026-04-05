@@ -688,4 +688,126 @@ internal sealed partial class FactorioService
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
     }
+
+    /// <summary>
+    /// Query an entity prototype's properties: tile dimensions, max health,
+    /// crafting speed, mining speed, and other relevant attributes.
+    /// Uses <c>prototypes.entity[name]</c>.
+    /// </summary>
+    public Task<string> GetEntityPrototypeAsync(string entityName, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(entityName);
+
+        var escapedName = entityName.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            local name = "{{escapedName}}"
+            local proto = prototypes.entity[name]
+            if not proto then
+                rcon.print('{"success":false,"error":"unknown_entity","entity":"'..esc(name)..'"}')
+                return
+            end
+            local tw = proto.tile_width or 1
+            local th = proto.tile_height or 1
+            local parts = {}
+            parts[#parts+1] = '"entity":"'..esc(name)..'"'
+            parts[#parts+1] = '"tile_width":'..tw
+            parts[#parts+1] = '"tile_height":'..th
+            parts[#parts+1] = '"max_health":'..(proto.max_health or 0)
+            parts[#parts+1] = '"type":"'..esc(proto.type)..'"'
+            if proto.crafting_speed then
+                parts[#parts+1] = '"crafting_speed":'..proto.crafting_speed
+            end
+            if proto.mining_speed then
+                parts[#parts+1] = '"mining_speed":'..proto.mining_speed
+            end
+            if proto.energy_usage then
+                parts[#parts+1] = '"energy_usage":'..proto.energy_usage
+            end
+            if proto.collision_box then
+                local cb = proto.collision_box
+                parts[#parts+1] = '"collision_box":{"left_top_x":'..string.format("%.2f", cb.left_top.x)..',"left_top_y":'..string.format("%.2f", cb.left_top.y)..',"right_bottom_x":'..string.format("%.2f", cb.right_bottom.x)..',"right_bottom_y":'..string.format("%.2f", cb.right_bottom.y)..'}'
+            end
+            rcon.print('{"success":true,'..table.concat(parts, ",")..'}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
+
+    /// <summary>
+    /// Get per-tile occupancy information for a rectangular area.
+    /// Returns a grid of tiles indicating whether each is blocked and by which entity.
+    /// Uses <c>find_entities_filtered</c> and iterates the area tile by tile.
+    /// </summary>
+    public Task<string> GetAreaOccupancyAsync(
+        double x1,
+        double y1,
+        double x2,
+        double y2,
+        CancellationToken cancellationToken = default)
+    {
+        var lua = string.Create(CultureInfo.InvariantCulture, $$"""
+            {{LuaJsonEscape}}
+            local surface = game.connected_players[1].surface
+            local x1 = math.floor({{x1}})
+            local y1 = math.floor({{y1}})
+            local x2 = math.floor({{x2}})
+            local y2 = math.floor({{y2}})
+            if x1 > x2 then x1, x2 = x2, x1 end
+            if y1 > y2 then y1, y2 = y2, y1 end
+            local w = x2 - x1 + 1
+            local h = y2 - y1 + 1
+            if w * h > 10000 then
+                rcon.print('{"success":false,"error":"area_too_large","width":'..w..',"height":'..h..',"max_tiles":10000}')
+                return
+            end
+            local lt = {x=x1, y=y1}
+            local rb = {x=x2+1, y=y2+1}
+            local area_box = {left_top = lt, right_bottom = rb}
+            local entities = surface.find_entities_filtered{area = area_box}
+            local grid = {}
+            for ty = y1, y2 do
+                for tx = x1, x2 do
+                    local blocked = false
+                    local ename = nil
+                    for _, e in ipairs(entities) do
+                        if e.valid and e.type ~= "resource" then
+                            local cb = e.bounding_box
+                            if tx + 0.5 >= cb.left_top.x and tx + 0.5 < cb.right_bottom.x and ty + 0.5 >= cb.left_top.y and ty + 0.5 < cb.right_bottom.y then
+                                blocked = true
+                                ename = e.name
+                                break
+                            end
+                        end
+                    end
+                    local tile = surface.get_tile(tx, ty)
+                    local water = false
+                    if tile and tile.valid then
+                        local tp = tile.prototype
+                        if tp and tp.collision_mask then
+                            for layer, _ in pairs(tp.collision_mask.layers) do
+                                if layer == "water_tile" then
+                                    water = true
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    if water then blocked = true end
+                    local entry = '{"x":'..tx..',"y":'..ty..',"blocked":'..tostring(blocked)
+                    if ename then
+                        entry = entry..',"entity":"'..esc(ename)..'"'
+                    end
+                    if water then
+                        entry = entry..',"water":true'
+                    end
+                    grid[#grid+1] = entry..'}'
+                end
+            end
+            rcon.print('{"success":true,"x1":'..x1..',"y1":'..y1..',"x2":'..x2..',"y2":'..y2..',"width":'..w..',"height":'..h..',"tiles":['..table.concat(grid, ",")..']}')
+            """);
+
+        return rcon.ExecuteLuaAsync(lua, cancellationToken);
+    }
 }
