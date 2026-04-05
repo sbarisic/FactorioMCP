@@ -121,6 +121,8 @@ Items completed from the [TODO list](TODO.md).
 - [x] **Verified `walking_state` Supports 16-Direction Values (CPX 1)** — Live-tested all 8 cardinal and diagonal directions using Factorio 2's 16-direction enum values (0,2,4,6,8,10,12,14). All directions arrive successfully: North(0), Northeast(2), East(4), Southeast(6), South(8), Southwest(10), West(12), Northwest(14). `walking_state = {walking=true, direction=d}` accepts the full 16-direction range without issue. One SW test hit an obstacle (pipes) and returned "stuck" — retrying in open space succeeded immediately, confirming the stuck was path-related, not direction-related.
 - [x] **MCP Tools Error-on-Success Resolved (CPX 2)** — Live-tested all 4 affected tools (`place_entity`, `set_goal`, `insert_between`, `place_ghost_entity`) — all returned proper structured JSON without MCP SDK errors. The bug was not consistently reproducible and appears to have been fixed by prior refactoring (JSON parsing, coordinate standardization, Lua string escaping). Confirmed resolved through live testing.
 
+- [x] **Direction Oscillation on Straight-Line Paths (CPX 2)** — `CalculateDirection` in `PathfindingService.cs` caused direction to flip-flop between adjacent octants when walking straight lines with small lateral drift. Added hysteresis with a ~7.5° dead zone: cardinal directions use `tan(60°)` relaxed threshold to resist switching to diagonal, diagonal directions use `tan(75°)` strict threshold to resist switching to cardinal. Extracted `ComputeOctant` helper. 7 new hysteresis tests.
+
 ---
 
 ## Code Cleanup

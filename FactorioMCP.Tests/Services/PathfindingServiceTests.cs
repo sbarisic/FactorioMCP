@@ -219,6 +219,68 @@ public class PathfindingServiceTests
         Assert.Equal(4, result); // East
     }
 
+    // ── CalculateDirection Hysteresis ────────────────────────────────
+
+    [Fact]
+    public void CalculateDirection_CardinalWithSlightDrift_StaysCardinal()
+    {
+        // Walking North, slight drift east — ratio ady/adx ≈ 2.38 (just under standard 2.414)
+        // Without hysteresis this would switch to NE, but with previous=North it stays North
+        var result = PathfindingService.CalculateDirection(0, 0, 0.42, -1, previousDirection: 0);
+        Assert.Equal(0, result); // Stays North
+    }
+
+    [Fact]
+    public void CalculateDirection_CardinalWithLargeDrift_Switches()
+    {
+        // Walking North, large drift east — angle clearly in NE territory (past dead zone)
+        // ady/adx = 1.0/0.6 ≈ 1.67, below hysteresis threshold 1.732 → switches to NE
+        var result = PathfindingService.CalculateDirection(0, 0, 0.6, -1, previousDirection: 0);
+        Assert.Equal(2, result); // Switches to NE
+    }
+
+    [Fact]
+    public void CalculateDirection_DiagonalWithSlightDriftToCardinal_StaysDiagonal()
+    {
+        // Walking NE, slight drift toward North — ratio ady/adx ≈ 3.33 (just over standard 2.414)
+        // Without hysteresis this would switch to N, but with previous=NE it stays NE
+        var result = PathfindingService.CalculateDirection(0, 0, 3, -10, previousDirection: 2);
+        Assert.Equal(2, result); // Stays NE
+    }
+
+    [Fact]
+    public void CalculateDirection_DiagonalWithLargeDriftToCardinal_Switches()
+    {
+        // Walking NE, large drift toward North — angle clearly in N territory (past dead zone)
+        // ady/adx = 10/2.5 = 4.0 > hysteresis threshold 3.732 → switches to North
+        var result = PathfindingService.CalculateDirection(0, 0, 2.5, -10, previousDirection: 2);
+        Assert.Equal(0, result); // Switches to North
+    }
+
+    [Fact]
+    public void CalculateDirection_NoPreviousDirection_NoHysteresis()
+    {
+        // Without previousDirection, standard threshold applies — ratio 2.38 → NE
+        var result = PathfindingService.CalculateDirection(0, 0, 0.42, -1, previousDirection: null);
+        Assert.Equal(2, result); // NE (no hysteresis)
+    }
+
+    [Fact]
+    public void CalculateDirection_SameAsPrevious_ReturnsSame()
+    {
+        // Clear North direction with previous=North — trivially returns same
+        var result = PathfindingService.CalculateDirection(0, 0, 0, -10, previousDirection: 0);
+        Assert.Equal(0, result); // North
+    }
+
+    [Fact]
+    public void CalculateDirection_OppositeDirection_SwitchesImmediately()
+    {
+        // Walking North, now heading South — opposite direction, no dead zone prevents this
+        var result = PathfindingService.CalculateDirection(0, 0, 0, 10, previousDirection: 0);
+        Assert.Equal(8, result); // South
+    }
+
     // ── ParsePosition ───────────────────────────────────────────────
 
     [Fact]

@@ -178,7 +178,7 @@ RCON connection settings are read from environment variables:
 
 ### Active Bugs
 
-- [ ] **Direction oscillation on straight-line waypoint paths** — When following a straight-line path (e.g. due north), small lateral drift causes the player to cross `CalculateDirection` sector boundaries, making the walking direction flip-flop between two adjacent octants each poll cycle. Fix by adding hysteresis / dead zone to `CalculateDirection` in `PathfindingService.cs` so that the direction only changes when the angle moves significantly past the boundary, preventing jitter near sector edges. **(CPX 2)**
+*No active bugs*
 
 ### Uncategorized (Analyze and create TODO entries in above appropriate sections with priority. Do not fix or implement them just yet. Assign complexity points where applicable. Do not delete this section when you are done, just empty it)
 
