@@ -178,9 +178,9 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 
 ### High Priority
 
-- [ ] **Batch Ghost Placement** — `PlaceGhostBatchAsync` in `BlueprintService.cs` to place N ghosts in a single RCON call using a Lua `for` loop over `{inner_name, x, y, direction}` entries. Currently placing N ghosts requires N round-trips. New MCP tool: `PlaceGhostBatch(placementsJson)` → `{placed, skipped, errors[]}`. **(CPX 2)**
-- [ ] **Area Occupancy Grid Query** — New `GetAreaOccupancy(x1, y1, x2, y2)` tool returning per-tile `{x, y, blocked, entity_name?}` array. No existing tool provides a collision map for a rectangular area — `GetNearbyEntities` returns entity list but not a grid bitmap. Essential for layout planning. Add as Lua method in `FactorioService.World.cs` or new standalone service. **(CPX 2)**
-- [ ] **Entity Prototype Query** — New `GetEntityPrototype(entityName)` tool exposing `tile_width`, `tile_height`, `max_health`, `crafting_speed`, `mining_speed`. `PlaceEntitySmartAsync` (`FactorioService.Entity.cs:889`) already queries `prototypes.entity[name].tile_width` internally but never returns it. **(CPX 1)**
+- [x] **Batch Ghost Placement** — `PlaceGhostBatchAsync` in `BlueprintService.cs` to place N ghosts in a single RCON call using a Lua `for` loop over `{inner_name, x, y, direction}` entries. Currently placing N ghosts requires N round-trips. New MCP tool: `PlaceGhostBatch(placementsJson)` → `{placed, skipped, errors[]}`. **(CPX 2)**
+- [x] **Area Occupancy Grid Query** — New `GetAreaOccupancy(x1, y1, x2, y2)` tool returning per-tile `{x, y, blocked, entity_name?}` array. No existing tool provides a collision map for a rectangular area — `GetNearbyEntities` returns entity list but not a grid bitmap. Essential for layout planning. Add as Lua method in `FactorioService.World.cs` or new standalone service. **(CPX 2)**
+- [x] **Entity Prototype Query** — New `GetEntityPrototype(entityName)` tool exposing `tile_width`, `tile_height`, `max_health`, `crafting_speed`, `mining_speed`. `PlaceEntitySmartAsync` (`FactorioService.Entity.cs:889`) already queries `prototypes.entity[name].tile_width` internally but never returns it. **(CPX 1)**
 
 ### Medium Priority
 
@@ -205,7 +205,7 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 
 ### High Priority
 
-- [ ] **Fix GetGhostEntities direction output** — `BlueprintService.cs:117` returns `g.direction or 0` as raw integer instead of human-readable name (outputs `0`, `4` instead of `"north"`, `"east"`). Should map through `dir_names` lookup like `GetNearbyEntitiesAsync` (`FactorioService.World.cs:31`) does: `dir_names[v] = k` table for `defines.direction`. Simple one-line fix in the Lua template. **(CPX 1)**
+- [x] **Fix GetGhostEntities direction output** — `BlueprintService.cs:117` returns `g.direction or 0` as raw integer instead of human-readable name (outputs `0`, `4` instead of `"north"`, `"east"`). Should map through `dir_names` lookup like `GetNearbyEntitiesAsync` (`FactorioService.World.cs:31`) does: `dir_names[v] = k` table for `defines.direction`. Simple one-line fix in the Lua template. **(CPX 1)**
 
 ### Medium Priority
 
