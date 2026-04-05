@@ -209,7 +209,7 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 
 ### Medium Priority
 
-- [ ] **Improve TraceItemFlow to produce useful end-to-end factory analysis** — ✅ **PARTIALLY FIXED** — **(1)** Belt collapsing: ✅ Implemented — simple belt chains are collapsed into single "belt_segment" nodes with `belt_length`, `end_x`, `end_y` metadata; belt segments cost 0 depth hops. **(2)** Inserter drop-target radius: ✅ Fixed — increased from 0.5 to 1.5 in both `TraceItemFlowAsync` and `GetFlowGraphAsync`. **(3)** Machine pass-through: ⬜ Still needed — furnaces/assemblers are still dead ends; the trace should continue through them to output inserters, including recipe/item info. **(CPX 2, remaining)**
+- [ ] **Improve TraceItemFlow to produce useful end-to-end factory analysis** — ✅ **PARTIALLY FIXED** — **(1)** Belt collapsing: ✅ Implemented — simple belt chains are collapsed into single "belt_segment" nodes with `belt_length`, `end_x`, `end_y` metadata; belt segments cost 0 depth hops. **(2)** Inserter drop-target radius: ✅ Fixed — increased from 0.5 to 1.5 in both `TraceItemFlowAsync` and `GetFlowGraphAsync`. **(3)** Machine pass-through: ⬜ Still needed — furnaces/assemblers are still dead ends; the trace should continue through them to output inserters, including recipe/item info. **(4)** Underground belt traversal: ⬜ Still needed — trace stops at underground belt inputs instead of following the pair to the output end. Should use `belt_to_ground_type` and `neighbours` or positional search to traverse pairs during BFS. **(CPX 2, remaining)**
 
 ### Low Priority
 

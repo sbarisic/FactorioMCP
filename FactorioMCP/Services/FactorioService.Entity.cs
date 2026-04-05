@@ -40,14 +40,42 @@ internal sealed partial class FactorioService
                 rcon.print('{"success":false,"error":"missing_item","entity":"'..name..'"}')
                 return
             end
+            local belt_type = nil
+            local proto = prototypes.entity[name]
+            if proto and proto.type == "underground-belt" then
+                belt_type = "input"
+                local max_dist = proto.max_underground_distance or 10
+                local sr = max_dist + 1
+                local lt = {pos[1]-sr, pos[2]-sr}
+                local rb = {pos[1]+sr, pos[2]+sr}
+                for _, e in pairs(surface.find_entities_filtered{name=name, area={lt, rb}, force=player.force}) do
+                    if e.belt_to_ground_type == "input" and e.direction == dir then
+                        local ddx = pos[1] - e.position.x
+                        local ddy = pos[2] - e.position.y
+                        local ok = false
+                        if dir == defines.direction.west and ddx < 0 and ddy == 0 then ok = true
+                        elseif dir == defines.direction.east and ddx > 0 and ddy == 0 then ok = true
+                        elseif dir == defines.direction.north and ddy < 0 and ddx == 0 then ok = true
+                        elseif dir == defines.direction.south and ddy > 0 and ddx == 0 then ok = true end
+                        if ok and (math.abs(ddx) + math.abs(ddy)) <= max_dist then
+                            belt_type = "output"
+                            break
+                        end
+                    end
+                end
+            end
             player.remove_item{name=name, count=1}
-            local placed = surface.create_entity{name=name, position=pos, force=player.force, player=player, direction=dir}
+            local create_args = {name=name, position=pos, force=player.force, player=player, direction=dir}
+            if belt_type then create_args.type = belt_type end
+            local placed = surface.create_entity(create_args)
             if not placed then
                 player.insert{name=name, count=1}
                 rcon.print('{"success":false,"error":"placement_failed","entity":"'..name..'","x":'..pos[1]..',"y":'..pos[2]..'}')
                 return
             end
-            rcon.print('{"success":true,"entity":"'..name..'","x":'..pos[1]..',"y":'..pos[2]..'}')
+            local type_info = ""
+            if belt_type then type_info = ',"belt_type":"'..belt_type..'"' end
+            rcon.print('{"success":true,"entity":"'..name..'","x":'..pos[1]..',"y":'..pos[2]..type_info..'}')
             """);
 
         return rcon.ExecuteLuaAsync(lua, cancellationToken);
@@ -372,8 +400,13 @@ internal sealed partial class FactorioService
             if dir_name then
                 result = result..',"direction":"'..dir_name..'"'
             end
+            -- Underground belt type (input/output)
+            if e.type == "underground-belt" and e.belt_to_ground_type then
+                result = result..',"belt_to_ground_type":"'..tostring(e.belt_to_ground_type)..'"'
+            end
             -- Inserter pickup/drop info
             if e.type == "inserter" then
+
                 local offsets = {
                     [defines.direction.north]     = {dx=0,  dy=-1},
                     [defines.direction.south]     = {dx=0,  dy=1},
@@ -885,7 +918,32 @@ internal sealed partial class FactorioService
                 return
             end
             player.remove_item{name=name, count=1}
-            local placed = surface.create_entity{name=name, position={best.x, best.y}, force=player.force, player=player, direction=dir}
+            local belt_type = nil
+            if proto and proto.type == "underground-belt" then
+                belt_type = "input"
+                local max_dist = proto.max_underground_distance or 10
+                local sr = max_dist + 1
+                local lt = {best.x-sr, best.y-sr}
+                local rb = {best.x+sr, best.y+sr}
+                for _, e in pairs(surface.find_entities_filtered{name=name, area={lt, rb}, force=player.force}) do
+                    if e.belt_to_ground_type == "input" and e.direction == dir then
+                        local ddx = best.x - e.position.x
+                        local ddy = best.y - e.position.y
+                        local ok = false
+                        if dir == defines.direction.west and ddx < 0 and ddy == 0 then ok = true
+                        elseif dir == defines.direction.east and ddx > 0 and ddy == 0 then ok = true
+                        elseif dir == defines.direction.north and ddy < 0 and ddx == 0 then ok = true
+                        elseif dir == defines.direction.south and ddy > 0 and ddx == 0 then ok = true end
+                        if ok and (math.abs(ddx) + math.abs(ddy)) <= max_dist then
+                            belt_type = "output"
+                            break
+                        end
+                    end
+                end
+            end
+            local create_args = {name=name, position={best.x, best.y}, force=player.force, player=player, direction=dir}
+            if belt_type then create_args.type = belt_type end
+            local placed = surface.create_entity(create_args)
             if not placed then
                 player.insert{name=name, count=1}
                 rcon.print('{"success":false,"error":"placement_failed","entity":"'..name..'","x":'..best.x..',"y":'..best.y..'}')
