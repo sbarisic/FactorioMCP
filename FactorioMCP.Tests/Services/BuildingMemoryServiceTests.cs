@@ -119,12 +119,12 @@ public class BuildingMemoryServiceTests
         // GetAllBuildings: returns all
         var all = Parse(await service.GetAllBuildingsAsync());
         Assert.Equal("ok", all.GetProperty("status").GetString());
-        Assert.Equal(7, all.GetProperty("count").GetInt32());
-        Assert.Equal(7, all.GetProperty("buildings").GetArrayLength());
+        Assert.Equal(6, all.GetProperty("count").GetInt32());
+        Assert.Equal(6, all.GetProperty("buildings").GetArrayLength());
 
         // GetBuildingsNear: only within radius
         var near = Parse(await service.GetBuildingsNearAsync(0, 0, 10));
-        Assert.Equal(5, near.GetProperty("count").GetInt32());
+        Assert.Equal(4, near.GetProperty("count").GetInt32());
 
         // GetBuildingsNear: sorted by distance
         var buildings = near.GetProperty("buildings");

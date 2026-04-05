@@ -9,7 +9,7 @@ namespace FactorioMCP.Tools;
 /// Helps the AI plan crafting chains and research priorities.
 /// </summary>
 [McpServerToolType]
-internal sealed class RecipeTools(FactorioService factorio, GameCommandQueue queue)
+internal sealed class RecipeTools(FactorioService factorio, RecipeRateCalculatorService rateCalc, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Get details about a specific recipe — ingredients, products, crafting time, and category. " +
@@ -74,6 +74,26 @@ internal sealed class RecipeTools(FactorioService factorio, GameCommandQueue que
     {
         return queue.ExecuteAsync(nameof(PlanCraft),
             ct => factorio.PlanCraftAsync(item, count, ct),
+            cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Calculate how many crafting machines are needed to achieve a target production rate. " +
+        "Returns machines_needed, actual items/sec, and per-ingredient input/output rates. " +
+        "Auto-detects the appropriate machine type from the recipe category if not specified. " +
+        "Use this to plan assembly line throughput and factory sizing.")]
+    public Task<string> CalculateProductionRate(
+        [Description("Recipe name to calculate for (e.g. 'iron-gear-wheel', 'electronic-circuit', 'iron-plate')")]
+        string recipe,
+        [Description("Target production rate in items per second (e.g. 1.0 for one item per second)")]
+        double targetItemsPerSecond,
+        [Description("Optional machine entity name (e.g. 'assembling-machine-2', 'steel-furnace'). " +
+                     "If omitted, auto-detects based on recipe category.")]
+        string? machineType = null,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(CalculateProductionRate),
+            ct => rateCalc.CalculateProductionRateAsync(recipe, targetItemsPerSecond, machineType, ct),
             cancellationToken);
     }
 }

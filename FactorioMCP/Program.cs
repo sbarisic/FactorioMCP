@@ -24,6 +24,10 @@ builder.Services
     .AddSingleton<TrainService>()
     .AddSingleton<LogisticsService>()
     .AddSingleton<FlowService>()
+    .AddSingleton<RecipeRateCalculatorService>()
+    .AddSingleton<LayoutSynthesisService>()
+    .AddSingleton<ProductionPlannerService>()
+    .AddSingleton<BlueprintCodecService>()
     .AddSingleton<GameCommandQueue>()
     .AddHostedService<RconConnectionService>()
     .AddMcpServer(options =>

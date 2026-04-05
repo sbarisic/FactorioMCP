@@ -73,6 +73,10 @@ public class McpToolIntegrationTests
         services.AddSingleton<BeltPlannerService>();
         services.AddSingleton<VisionService>();
         services.AddSingleton<FlowService>();
+        services.AddSingleton<RecipeRateCalculatorService>();
+        services.AddSingleton<LayoutSynthesisService>();
+        services.AddSingleton<ProductionPlannerService>();
+        services.AddSingleton<BlueprintCodecService>();
 
         var tempPath = Path.Combine(Path.GetTempPath(), $"goals-di-{Guid.NewGuid():N}.json");
         services.AddSingleton(new GoalPlannerService(tempPath));

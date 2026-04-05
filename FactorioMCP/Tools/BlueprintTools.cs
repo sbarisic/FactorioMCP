@@ -10,7 +10,7 @@ namespace FactorioMCP.Tools;
 /// scanning for existing ghosts, capturing areas as blueprints, and revoking ghosts.
 /// </summary>
 [McpServerToolType]
-internal sealed class BlueprintTools(BlueprintService blueprints, GameCommandQueue queue)
+internal sealed class BlueprintTools(BlueprintService blueprints, BlueprintCodecService codec, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Place a ghost entity (construction plan) at the specified position. " +
@@ -147,6 +147,36 @@ internal sealed class BlueprintTools(BlueprintService blueprints, GameCommandQue
     {
         return queue.ExecuteAsync(nameof(ValidateGhostPlacements),
             ct => blueprints.ValidateGhostPlacementsAsync(radius, centerX, centerY, ct),
+            cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Decode a Factorio blueprint string into readable JSON. " +
+        "Use this to analyze player blueprints — understand what entities are in them, " +
+        "check layouts, count machines, and verify designs. " +
+        "Supports blueprints, blueprint books, deconstruction planners, and upgrade planners.")]
+    public Task<string> DecodeBlueprintString(
+        [Description("The blueprint string to decode (starts with '0', base64-encoded)")]
+        string blueprintString,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(DecodeBlueprintString),
+            _ => Task.FromResult(codec.DecodeBlueprintString(blueprintString)),
+            cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Encode a JSON object into a Factorio blueprint string that can be imported into the game. " +
+        "Input must be valid blueprint JSON with a 'blueprint' or 'blueprint_book' root key. " +
+        "Use this to create shareable blueprint strings from planned layouts.")]
+    public Task<string> EncodeBlueprintString(
+        [Description("Blueprint JSON to encode. Must have a 'blueprint' or 'blueprint_book' root key. " +
+                     "Example: {\"blueprint\":{\"item\":\"blueprint\",\"entities\":[{\"entity_number\":1,\"name\":\"transport-belt\",\"position\":{\"x\":0.5,\"y\":0.5},\"direction\":2}],\"version\":562949954076672}}")]
+        string blueprintJson,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(EncodeBlueprintString),
+            _ => Task.FromResult(codec.EncodeBlueprintString(blueprintJson)),
             cancellationToken);
     }
 }

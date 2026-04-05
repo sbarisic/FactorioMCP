@@ -55,7 +55,8 @@ FactorioMCP.Tests → FactorioMCP
 | Building Memory | ✅ Functional | Tracks placed buildings with spatial queries, auto-tracking on place/mine, labels, and JSON file persistence |
 | Vision Service | ✅ Functional | Annotated screenshots with entity bounding box overlays, inserter direction arrows, numbered labels, and structured map legends for vision-model analysis |
 | Flow Service | ✅ Functional | Item flow tracing (belt chains, inserter connections, drill outputs), flow graph visualization, belt placement preview, and factory connection summary |
-| MCP Tools | ✅ Functional | Movement, inventory/crafting, entity placement/mining, entity interaction (insert/remove items, inspect), world scanning, proximity checking, chat message, goal planning, energy management, research, building memory, vision screenshots, task primitives (gather/refuel/smelt) tools exposed via MCP SDK |
+| Production Planning | ✅ Functional | Recipe rate calculation, smelter line layout synthesis, full production chain planning with machine counts/belt tiers/resource patches, and layout-to-blueprint export |
+| MCP Tools | ✅ Functional | Movement, inventory/crafting, entity placement/mining, entity interaction (insert/remove items, inspect), world scanning, proximity checking, chat message, goal planning, energy management, research, building memory, vision screenshots, task primitives (gather/refuel/smelt), production planning, blueprint decode/encode tools exposed via MCP SDK |
 | MCP Hosting | ✅ Functional | Program.cs wiring with DI, configuration, stdio transport |
 | Realistic Behaviors | ✅ Functional | Walking with real physics, crafting with real queue, proximity validation on place/mine, wait/polling for crafting completion, position arrival, and game tick timing — no cheating |
 
@@ -178,15 +179,11 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 
 ### High Priority
 
-- [x] **Batch Ghost Placement** — `PlaceGhostBatchAsync` in `BlueprintService.cs` to place N ghosts in a single RCON call using a Lua `for` loop over `{inner_name, x, y, direction}` entries. Currently placing N ghosts requires N round-trips. New MCP tool: `PlaceGhostBatch(placementsJson)` → `{placed, skipped, errors[]}`. **(CPX 2)**
-- [x] **Area Occupancy Grid Query** — New `GetAreaOccupancy(x1, y1, x2, y2)` tool returning per-tile `{x, y, blocked, entity_name?}` array. No existing tool provides a collision map for a rectangular area — `GetNearbyEntities` returns entity list but not a grid bitmap. Essential for layout planning. Add as Lua method in `FactorioService.World.cs` or new standalone service. **(CPX 2)**
-- [x] **Entity Prototype Query** — New `GetEntityPrototype(entityName)` tool exposing `tile_width`, `tile_height`, `max_health`, `crafting_speed`, `mining_speed`. `PlaceEntitySmartAsync` (`FactorioService.Entity.cs:889`) already queries `prototypes.entity[name].tile_width` internally but never returns it. **(CPX 1)**
+- [x] **Blueprint String Decode/Encode** — New `BlueprintCodecService` (pure C#). Tools: `DecodeBlueprintString(blueprintString)` → parsed JSON with entity counts, positions, directions, recipes, labels. `EncodeBlueprintString(blueprintJson)` → blueprint string. Supports blueprints, blueprint books, deconstruction/upgrade planners. **(CPX 2)**
 
 ### Medium Priority
 
-- [ ] **Recipe Rate Calculator** — New `RecipeRateCalculatorService` (pure C#). Tool: `CalculateProductionRate(recipe, targetItemsPerSecond, machineType?)` → `{machines_needed, items_per_second_actual, inputs_per_second[], outputs_per_second[]}`. `PlanCraftAsync` (`FactorioService.Planning.cs`) gives ingredient ratios but not machine-count-per-rate calculations. Fetch recipe data via existing `GetRecipeDetailsAsync`, cache per session. **(CPX 2)**
-- [ ] **Smelter Line Layout Synthesis** — New `LayoutSynthesisService` (pure C# geometry). Tool: `PlanSmelterLine(originX, originY, furnaceCount, furnaceName, inserterName, beltName)` → `PlacementInstruction[]` JSON (no placement). Standard pattern: furnace row, input belt (west), output belt (east), inbound/outbound inserters, power poles every 7 tiles. Uses occupancy grid to avoid collisions. **(CPX 3)**
-- [ ] **Production Planner** — New `ProductionPlannerService` orchestrating: `PlanCraftAsync` → `RecipeRateCalculatorService` → `FindBestResourcePatchAsync` → returns `ProductionPlan` with stages (ore→plates, plates→gears). Tool: `PlanProduction(targetItem, targetRatePerSecond)` → full plan JSON without placing anything. **(CPX 3)**
+- [x] **Blueprint Integration with Production Planning** — `ExportLayoutAsBlueprint(instructionsJson, label?)` tool converts `PlacementInstruction[]` → importable blueprint string. Decode output feeds into analysis. Added `BlueprintCodecService` to `ProductionTools` and `BlueprintTools`. **(CPX 3)**
 
 ### Low Priority
 
@@ -205,7 +202,7 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 
 ### High Priority
 
-- [x] **Fix GetGhostEntities direction output** — `BlueprintService.cs:117` returns `g.direction or 0` as raw integer instead of human-readable name (outputs `0`, `4` instead of `"north"`, `"east"`). Should map through `dir_names` lookup like `GetNearbyEntitiesAsync` (`FactorioService.World.cs:31`) does: `dir_names[v] = k` table for `defines.direction`. Simple one-line fix in the Lua template. **(CPX 1)**
+*All high priority improvements completed — see [DONE.md](DONE.md)*
 
 ### Medium Priority
 
@@ -253,7 +250,7 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 
 #### Medium Priority
 
-- [ ] **Add data models for build planning** — New records in `Models/`: `PlacementInstruction(EntityName, X, Y, Direction, Role, RecipeOrFilter?, PlanId?)`, `ProductionPlan(Id, TargetItem, TargetRate, Stages[])`, `ProductionStage(InputItem, OutputItem, Recipe, MachineType, MachineCount, InputRate, OutputRate, BeltTier)`, `OccupancyMap(OriginX, OriginY, Width, Height, Cells[,])`. Extend `TrackedBuilding` with `Role` and `PlanId` optional fields. **(CPX 2)**
+*All medium priority refactoring completed — see [DONE.md](DONE.md)*
 
 #### Low Priority
 
@@ -343,14 +340,14 @@ Entities per smelter line: furnaces + input belt (west) + output belt (east) + i
 
 ### New Tools Needed for MVP
 
-| Tool | Service | Type |
-|------|---------|------|
-| `GetAreaOccupancy` | `FactorioService.World.cs` or standalone | Lua + C# |
-| `GetEntityPrototype` | `FactorioService.World.cs` | Lua |
-| `CalculateProductionRate` | `RecipeRateCalculatorService` | Pure C# |
-| `PlanSmelterLine` | `LayoutSynthesisService` | Pure C# |
-| `PlanProduction` | `ProductionPlannerService` | C# + Lua |
-| `PlaceGhostBatch` | `BlueprintService` (extend) | Lua |
+| Tool | Service | Type | Status |
+|------|---------|------|--------|
+| `GetAreaOccupancy` | `FactorioService.World.cs` | Lua + C# | ✅ Done |
+| `GetEntityPrototype` | `FactorioService.World.cs` | Lua | ✅ Done |
+| `CalculateProductionRate` | `RecipeRateCalculatorService` | Lua | ✅ Done |
+| `PlanSmelterLine` | `LayoutSynthesisService` | Pure C# | ✅ Done |
+| `PlanProduction` | `ProductionPlannerService` | Lua | ✅ Done |
+| `PlaceGhostBatch` | `BlueprintService` (extend) | Lua | ✅ Done |
 
 ## Blueprint/Ghost Tooling Audit
 

@@ -631,6 +631,61 @@ Recursively plan a full crafting chain for an item. Expands the recipe tree show
 
 ---
 
+## Production Planning
+
+### `CalculateProductionRate`
+Calculate how many machines are needed to achieve a target production rate for a recipe.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `recipe` | `string` | required | Recipe name (e.g. `"iron-gear-wheel"`) |
+| `targetItemsPerSecond` | `double` | required | Desired output rate in items/second |
+| `machineType` | `string?` | auto-detect | Machine prototype name. If omitted, auto-detected from recipe category |
+
+**Returns:** `{ "recipe", "machine_type", "crafting_speed", "target_items_per_second", "machines_needed", "items_per_second_actual", "inputs_per_second": [{ "name", "rate" }], "outputs_per_second": [{ "name", "rate" }] }`
+
+---
+
+### `PlanSmelterLine`
+Generate a smelter line layout as placement instructions without placing anything. Standard pattern: input belt (west) → inbound inserter → furnace → outbound inserter → output belt (east), stacked vertically.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `originX` | `double` | required | X coordinate of the layout origin (top-left) |
+| `originY` | `double` | required | Y coordinate of the layout origin (top-left) |
+| `furnaceCount` | `int` | required | Number of furnaces in the line |
+| `furnaceName` | `string` | `"stone-furnace"` | Furnace prototype (`stone-furnace`, `steel-furnace`, `electric-furnace`) |
+| `inserterName` | `string` | `"burner-inserter"` | Inserter prototype for input/output sides |
+| `beltName` | `string` | `"transport-belt"` | Belt prototype for input/output lines |
+
+**Returns:** `{ "placement_instructions": [{ "entity_name", "x", "y", "direction", "role" }], "total_entities", "width", "height" }`
+
+---
+
+### `PlanProduction`
+Plan a full production chain for a target item at a desired rate. Recursively expands the recipe tree, calculates machine counts per stage, determines belt tiers, and locates nearby resource patches for raw inputs.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `targetItem` | `string` | required | Target item to produce (e.g. `"electronic-circuit"`) |
+| `targetRatePerSecond` | `double` | required | Desired output rate in items/second |
+
+**Returns:** `{ "target_item", "target_rate_per_second", "stages": [{ "input_item", "output_item", "recipe", "machine_type", "machine_count", "input_rate", "output_rate", "belt_tier" }], "resource_patches": [{ "resource", "center_x", "center_y", "amount" }] }`
+
+---
+
+### `ExportLayoutAsBlueprint`
+Convert placement instructions (from `PlanSmelterLine` or manual layouts) into a Factorio blueprint string that can be imported into the game or shared.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `instructionsJson` | `string` | required | JSON array of placement instructions: `[{"entity_name":"stone-furnace","x":0,"y":0,"direction":"north"}, ...]` |
+| `label` | `string?` | none | Optional label for the blueprint |
+
+**Returns:** `{ "success", "blueprint_string", "entity_count", "final_size" }`
+
+---
+
 ## Energy & Power
 
 ### `GetElectricNetwork`
@@ -724,6 +779,28 @@ Validate ghost entity placements in an area. Checks each ghost for blocked posit
 | `radius` | `double` | `50` | Search radius |
 | `centerX` | `double?` | player pos | |
 | `centerY` | `double?` | player pos | |
+
+---
+
+### `DecodeBlueprintString`
+Decode a Factorio blueprint string into readable JSON. Returns entity counts, positions, directions (as names), recipes, labels, and a full entity summary. Supports blueprints, blueprint books, deconstruction planners, and upgrade planners. Use this to analyze player blueprints.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `blueprintString` | `string` | required | Blueprint string (starts with `0`, base64-encoded) |
+
+**Returns:** `{ "success", "type", "label", "entity_count", "entity_summary": { "entity-name": count }, "entities": [{ "name", "x", "y", "direction", "recipe?" }], "raw_json" }`
+
+---
+
+### `EncodeBlueprintString`
+Encode a JSON object into a Factorio blueprint string that can be imported into the game. Input must have a `blueprint` or `blueprint_book` root key.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `blueprintJson` | `string` | required | Blueprint JSON with `blueprint` or `blueprint_book` root key |
+
+**Returns:** `{ "success", "blueprint_string", "json_size", "compressed_size", "final_size" }`
 
 ---
 
