@@ -14,5 +14,109 @@
     "direction": "west",
     "label": null,
     "placed_at": "2026-04-05T14:50:38.3741917Z"
+  },
+  {
+    "entity_name": "small-electric-pole",
+    "x": 39.5,
+    "y": -58.5,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T15:29:15.2909561Z"
+  },
+  {
+    "entity_name": "small-electric-pole",
+    "x": 42.5,
+    "y": -55.5,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T15:33:01.6733422Z"
+  },
+  {
+    "entity_name": "express-transport-belt",
+    "x": 42.5,
+    "y": -56.5,
+    "direction": "west",
+    "label": null,
+    "placed_at": "2026-04-05T15:33:11.8893954Z"
+  },
+  {
+    "entity_name": "express-transport-belt",
+    "x": 41.5,
+    "y": -56.5,
+    "direction": "west",
+    "label": null,
+    "placed_at": "2026-04-05T15:33:11.9396838Z"
+  },
+  {
+    "entity_name": "express-transport-belt",
+    "x": 40.5,
+    "y": -56.5,
+    "direction": "west",
+    "label": null,
+    "placed_at": "2026-04-05T15:33:11.9561432Z"
+  },
+  {
+    "entity_name": "express-transport-belt",
+    "x": 39.5,
+    "y": -56.5,
+    "direction": "west",
+    "label": null,
+    "placed_at": "2026-04-05T15:33:11.9901357Z"
+  },
+  {
+    "entity_name": "express-underground-belt",
+    "x": 38.5,
+    "y": -56.5,
+    "direction": "west",
+    "label": null,
+    "placed_at": "2026-04-05T15:33:44.739328Z"
+  },
+  {
+    "entity_name": "express-transport-belt",
+    "x": 34.5,
+    "y": -60.5,
+    "direction": "west",
+    "label": null,
+    "placed_at": "2026-04-05T15:35:27.0734628Z"
+  },
+  {
+    "entity_name": "express-transport-belt",
+    "x": 33.5,
+    "y": -60.5,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-05T15:35:27.1232859Z"
+  },
+  {
+    "entity_name": "express-transport-belt",
+    "x": 33.5,
+    "y": -58.5,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-05T15:35:27.1394278Z"
+  },
+  {
+    "entity_name": "express-transport-belt",
+    "x": 33.5,
+    "y": -59.5,
+    "direction": "south",
+    "label": null,
+    "placed_at": "2026-04-05T15:35:27.1572273Z"
+  },
+  {
+    "entity_name": "express-transport-belt",
+    "x": 39.5,
+    "y": -59.5,
+    "direction": "north",
+    "label": null,
+    "placed_at": "2026-04-05T15:38:39.9073659Z"
+  },
+  {
+    "entity_name": "express-underground-belt",
+    "x": 34.5,
+    "y": -56.5,
+    "direction": "west",
+    "label": null,
+    "placed_at": "2026-04-05T15:38:39.9725055Z"
   }
 ]

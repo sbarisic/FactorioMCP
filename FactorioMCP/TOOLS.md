@@ -140,6 +140,8 @@ Place an entity from inventory at map coordinates. Validates proximity, inventor
 
 **Returns:** `{ "success": true, "entity", "x", "y" }` or `{ "success": false, "error": "out_of_range"|"invalid_position"|"missing_item" }`
 
+> **Underground belts:** Input/output type is auto-detected. If an unpaired input belt of the same type and direction exists within range, the new belt is placed as "output" (exit). Otherwise it's placed as "input" (entrance). Response includes `"belt_type": "input"|"output"` for underground belts.
+
 ---
 
 ### `MineEntity`
@@ -273,7 +275,7 @@ Take items from a machine into the player inventory.
 ---
 
 ### `InspectEntity`
-Inspect entity status, inventory contents, fuel, recipe, health. For inserters, also shows pickup/drop tile positions.
+Inspect entity status, inventory contents, fuel, recipe, health. For inserters, also shows pickup/drop tile positions. For underground belts, includes `belt_to_ground_type` (`"input"` or `"output"`).
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
