@@ -179,11 +179,11 @@ These were analyzed and confirmed to be well-designed, non-overlapping, and usef
 
 ### High Priority
 
-- [x] **Blueprint String Decode/Encode** — New `BlueprintCodecService` (pure C#). Tools: `DecodeBlueprintString(blueprintString)` → parsed JSON with entity counts, positions, directions, recipes, labels. `EncodeBlueprintString(blueprintJson)` → blueprint string. Supports blueprints, blueprint books, deconstruction/upgrade planners. **(CPX 2)**
+*All high priority features completed — see [DONE.md](DONE.md)*
 
 ### Medium Priority
 
-- [x] **Blueprint Integration with Production Planning** — `ExportLayoutAsBlueprint(instructionsJson, label?)` tool converts `PlacementInstruction[]` → importable blueprint string. Decode output feeds into analysis. Added `BlueprintCodecService` to `ProductionTools` and `BlueprintTools`. **(CPX 3)**
+*All medium priority features completed — see [DONE.md](DONE.md)*
 
 ### Low Priority
 

@@ -28,6 +28,7 @@ builder.Services
     .AddSingleton<LayoutSynthesisService>()
     .AddSingleton<ProductionPlannerService>()
     .AddSingleton<BlueprintCodecService>()
+    .AddSingleton<BlueprintAnalysisService>()
     .AddSingleton<GameCommandQueue>()
     .AddHostedService<RconConnectionService>()
     .AddMcpServer(options =>

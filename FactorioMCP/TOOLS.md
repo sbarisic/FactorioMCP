@@ -804,6 +804,32 @@ Encode a JSON object into a Factorio blueprint string that can be imported into 
 
 ---
 
+### `AnalyzeBlueprint`
+Analyze a blueprint string for layout quality and item flow — entirely offline, no need to place it in-game. Decodes the blueprint, builds a flow graph from entity positions and directions, traces belt chains, identifies inserter connections, and detects layout issues.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `blueprintString` | `string` | required | Blueprint string (starts with `0`, base64-encoded) |
+
+**Returns:** `{ "success", "label", "entity_count", "entity_summary", "categories" (machines/belts/inserters/power/logistics/other), "dimensions" (min/max/width/height), "flow_graph" { "edge_count", "edges": [{ "from_entity", "from_name", "to_entity", "to_name", "type" }] }, "belt_chains": [{ "length", "belt_type", "start_x/y", "end_x/y" }], "issue_count", "issues": [{ "entity_number", "name", "x", "y", "issue", "message" }] }`
+
+**Issues detected:** `orphaned_inserter` (no pickup or drop), `no_pickup_target`, `no_drop_target`, `dead_end_belt` (receives items but outputs to nothing).
+
+---
+
+### `TraceBlueprintFlow`
+Trace item flow from a specific entity in a blueprint. BFS from the given entity number, following belt connections and inserter drop paths. Belt-to-belt hops are free (don't count toward depth).
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `blueprintString` | `string` | required | Blueprint string to trace |
+| `startEntityNumber` | `int` | required | Entity number to start from (from `AnalyzeBlueprint` output) |
+| `maxDepth` | `int` | `10` | Max depth (belt hops are free) |
+
+**Returns:** `{ "success", "start_entity", "start_name", "node_count", "edge_count", "nodes": [{ "entity_number", "name", "x", "y", "direction", "recipe", "depth" }], "edges": [{ "from_entity", "from_name", "to_entity", "to_name", "type" }] }`
+
+---
+
 ## Belt Planning
 
 ### `PlanBeltRoute`

@@ -10,7 +10,7 @@ namespace FactorioMCP.Tools;
 /// scanning for existing ghosts, capturing areas as blueprints, and revoking ghosts.
 /// </summary>
 [McpServerToolType]
-internal sealed class BlueprintTools(BlueprintService blueprints, BlueprintCodecService codec, GameCommandQueue queue)
+internal sealed class BlueprintTools(BlueprintService blueprints, BlueprintCodecService codec, BlueprintAnalysisService analysis, GameCommandQueue queue)
 {
     [McpServerTool, Description(
         "Place a ghost entity (construction plan) at the specified position. " +
@@ -177,6 +177,43 @@ internal sealed class BlueprintTools(BlueprintService blueprints, BlueprintCodec
     {
         return queue.ExecuteAsync(nameof(EncodeBlueprintString),
             _ => Task.FromResult(codec.EncodeBlueprintString(blueprintJson)),
+            cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Analyze a blueprint string for layout quality and item flow. " +
+        "Decodes the blueprint, builds a flow graph from entity positions and directions, " +
+        "traces belt chains, identifies inserter connections (pickup/drop targets), " +
+        "and detects issues like orphaned inserters or dead-end belts. " +
+        "Works entirely offline — no need to place the blueprint in-game first. " +
+        "Use this when a player shares a blueprint and asks 'is my layout OK?'")]
+    public Task<string> AnalyzeBlueprint(
+        [Description("The blueprint string to analyze (starts with '0', base64-encoded)")]
+        string blueprintString,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(AnalyzeBlueprint),
+            _ => Task.FromResult(analysis.AnalyzeBlueprint(blueprintString)),
+            cancellationToken);
+    }
+
+    [McpServerTool, Description(
+        "Trace item flow from a specific entity in a blueprint. " +
+        "Performs a breadth-first search from the given entity number, following " +
+        "belt connections and inserter drop paths downstream. Belt-to-belt hops are free " +
+        "(don't count toward depth), so the trace focuses on machine-to-machine flow. " +
+        "Use after AnalyzeBlueprint to drill into a specific flow path.")]
+    public Task<string> TraceBlueprintFlow(
+        [Description("The blueprint string to trace (starts with '0', base64-encoded)")]
+        string blueprintString,
+        [Description("Entity number to start tracing from (from AnalyzeBlueprint output)")]
+        int startEntityNumber,
+        [Description("Maximum depth to trace (belt hops are free). Default 10.")]
+        int maxDepth = 10,
+        CancellationToken cancellationToken = default)
+    {
+        return queue.ExecuteAsync(nameof(TraceBlueprintFlow),
+            _ => Task.FromResult(analysis.TraceBlueprintFlow(blueprintString, startEntityNumber, maxDepth)),
             cancellationToken);
     }
 }
