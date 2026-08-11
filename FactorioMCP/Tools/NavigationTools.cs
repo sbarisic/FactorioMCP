@@ -59,8 +59,8 @@ internal sealed class NavigationTools(FactorioService factorio, PathfindingServi
         string resourceName,
         [Description("Search radius in tiles (default 200)")]
         double radius = 200,
-        [Description("Stop when within this many tiles of the patch center (default 5.0)")]
-        double tolerance = 5.0,
+        [Description("Stop when within this many tiles of the patch center (default 3.0)")]
+        double tolerance = 3.0,
         [Description("Maximum walk time in seconds before giving up (default 60)")]
         double timeoutSeconds = 60,
         CancellationToken cancellationToken = default)

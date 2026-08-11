@@ -151,7 +151,7 @@ public class NavigationToolsTests
         var queue = new GameCommandQueue();
         var tools = CreateTools(factorio, pathfinding, buildingMemory, queue);
 
-        var result = await tools.MoveToResource("iron-ore", tolerance: 5.0);
+        var result = await tools.MoveToResource("iron-ore");
 
         Assert.Contains("\"success\":true", result);
         Assert.Contains("\"target_type\":\"resource\"", result);
